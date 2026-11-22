@@ -23,6 +23,8 @@ type CLI struct {
 	Status        StatusCmd        `cmd:"" help:"Show archive contents, last update and whether it works"`
 	Update        UpdateCmd        `cmd:"" help:"Update local archives"`
 	Search        SearchCmd        `cmd:"" help:"Search local archives"`
+	Around        AroundCmd        `cmd:"" help:"Find related records across archives around a link, date, or trip"`
+	Index         IndexCmd         `cmd:"" help:"Inspect or rebuild the unified search index"`
 	Who           WhoCmd           `cmd:"" help:"Find a person"`
 	Conversations ConversationsCmd `cmd:"" help:"List conversations"`
 	Messages      MessagesCmd      `cmd:"" help:"List messages in a conversation"`

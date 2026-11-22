@@ -24,8 +24,8 @@ import (
 type App struct{}
 
 var (
-	_ trawlkit.CanonicalRecordOpener          = (*App)(nil)
-	_ trawlkit.ShortReferenceSnapshotProvider = (*App)(nil)
+	_ trawlkit.CanonicalRecordOpener      = (*App)(nil)
+	_ trawlkit.ArchiveIndexChangeExporter = (*App)(nil)
 )
 
 func New() *App                                                                   { return &App{} }

@@ -421,51 +421,6 @@ func (s *Store) MergeObserved(
 	return updateStats, tx.Commit()
 }
 
-func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
-	var candidates []trawlkit.ShortReferenceAssignmentCandidate
-	chatRows, err := s.db.QueryContext(ctx, `select account_scoped_conversation_identifier_for_conversation_across_telegram_migrations from chats order by id`)
-	if err != nil {
-		return nil, err
-	}
-	for chatRows.Next() {
-		var convID string
-		if err := chatRows.Scan(&convID); err != nil {
-			_ = chatRows.Close()
-			return nil, err
-		}
-		chatRef := ChatRef(convID)
-		if chatRef == "" {
-			continue
-		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(chatRef),
-		})
-	}
-	if err := errors.Join(chatRows.Err(), chatRows.Close()); err != nil {
-		return nil, err
-	}
-	msgRows, err := s.db.QueryContext(ctx, `select source_pk from messages order by rowid`)
-	if err != nil {
-		return nil, err
-	}
-	for msgRows.Next() {
-		var sourcePK int64
-		if err := msgRows.Scan(&sourcePK); err != nil {
-			_ = msgRows.Close()
-			return nil, err
-		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-				MessageRef(sourcePK),
-			),
-		})
-	}
-	if err := errors.Join(msgRows.Err(), msgRows.Close()); err != nil {
-		return nil, err
-	}
-	return candidates, nil
-}
-
 func accountScopedConversationIdentifierAcrossTelegramMigrations(chat Chat) string {
 	accountScopedConversationIdentifierForConversationAcrossTelegramMigrations :=
 		strings.TrimSpace(chat.AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations)

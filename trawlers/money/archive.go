@@ -542,30 +542,6 @@ func classifyMovementDiff(old []byte, record proto.Message) (added, changed bool
 	return false, !proto.Equal(oldRecord, record), nil
 }
 
-func (*App) ListArchiveRecordReferencesForShortReferences(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
-	if req.OpenedTrawlerArchiveStore == nil {
-		return nil, false, nil
-	}
-	rows, err := req.OpenedTrawlerArchiveStore.DB().QueryContext(ctx, "SELECT reference FROM money_accounts UNION SELECT reference FROM money_movements")
-	if err != nil {
-		return nil, false, err
-	}
-	defer func() { _ = rows.Close() }()
-	var references []trawlkit.ShortReferenceAssignmentCandidate
-	for rows.Next() {
-		var reference string
-		if err := rows.Scan(&reference); err != nil {
-			return nil, false, err
-		}
-		canonical := trawlkit.NewCanonicalArchiveRecordReference(reference)
-		references = append(references, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment:       canonical,
-			CurrentRecordReferenceReturnedWhenShortReferenceIsResolved: canonical,
-		})
-	}
-	return references, false, rows.Err()
-}
-
 func (app *App) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {
 	first, firstError := app.applyCompletedImports(ctx, req)
 	if firstError != nil {

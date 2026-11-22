@@ -11,9 +11,11 @@ import (
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	commandcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/unifiedindex"
 )
 
 func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targetTrawlerCommand, globals globalOptions, wireChild bool) (result executionResult) {
@@ -53,7 +55,7 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 		defer func() { _ = st.Close() }()
 	}
 	coreShortRefOpenMode := selectCoreShortReferenceOpenMode(command, st, wireChild)
-	coreShortRefStore, err := openCoreShortReferenceStore(ctx, paths.TrawlerArchivePaths, coreShortRefOpenMode)
+	coreShortRefStore, err := openCoreShortReferenceStore(ctx, paths, coreShortRefOpenMode)
 	if err != nil {
 		return executionResult{err: err}
 	}
@@ -143,11 +145,20 @@ func (r runner) buildExecutionRequest(
 	coreShortRefOpenMode coreShortReferenceStoreOpenMode,
 	wireChild bool,
 ) *TrawlerCommandExecutionRequest {
+	decl := trawler.RegisteredTrawlerDeclaration()
+	trawlerID := RegisteredTrawlerIdentityText(decl.RegisteredTrawler)
+	displayName := strings.TrimSpace(decl.RegisteredTrawlerDisplayName)
+	if displayName == "" {
+		displayName = trawlerID
+	}
 	req := &TrawlerCommandExecutionRequest{
-		OpenedTrawlerArchiveStore: st,
-		TrawlerArchivePaths:       paths.TrawlerArchivePaths,
-		TrawlerCommandLog:         runLog,
-		coreShortReferenceStore:   coreShortRefStore,
+		OpenedTrawlerArchiveStore:     st,
+		TrawlerArchivePaths:           paths.TrawlerArchivePaths,
+		TrawlerCommandLog:             runLog,
+		coreShortReferenceStore:       coreShortRefStore,
+		registeredTrawlerIdentityText: trawlerID,
+		registeredTrawlerDisplayName:  displayName,
+		stateRoot:                     paths.StateRoot,
 		ReportTrawlerCommandProgress: func(progress Progress) {
 			logProgress(runLog, progress)
 		},
@@ -157,19 +168,20 @@ func (r runner) buildExecutionRequest(
 			_ = writeChildFrame(r.opts.stdout, childProgressFrame(progress))
 		}
 	}
-	attachShortReferenceReplay(trawler, command, st, coreShortRefStore, coreShortRefOpenMode, req)
+	attachShortReferenceReplay(trawler, command, paths, st, coreShortRefStore, coreShortRefOpenMode, req)
 	return req
 }
 
 func attachShortReferenceReplay(
 	trawler Trawler,
 	command targetTrawlerCommand,
+	paths resolvedTrawlerArchivePaths,
 	st *store.Store,
 	coreShortRefStore *store.Store,
 	coreShortRefOpenMode coreShortReferenceStoreOpenMode,
 	req *TrawlerCommandExecutionRequest,
 ) {
-	snapshotProvider, ok := trawler.(ShortReferenceSnapshotProvider)
+	exporter, ok := trawler.(ArchiveIndexChangeExporter)
 	if !ok || coreShortRefStore == nil || coreShortRefOpenMode != coreShortReferenceStoreReadWrite || st == nil || command.writesNoFiles {
 		return
 	}
@@ -179,11 +191,27 @@ func attachShortReferenceReplay(
 			return nil
 		}
 		replayed = true
-		candidates, completeSnapshot, replayErr := snapshotProvider.ListArchiveRecordReferencesForShortReferences(replayCtx, req)
-		if replayErr != nil {
+		var batches []*indexcontract.ArchiveIndexChangeBatch
+		if replayErr := exporter.ExportArchiveIndexChanges(replayCtx, req, "", func(batch *indexcontract.ArchiveIndexChangeBatch) error {
+			if batch != nil {
+				batches = append(batches, batch)
+			}
+			return nil
+		}); replayErr != nil {
 			return replayErr
 		}
-		return publishShortReferenceCandidatesToCoreStore(replayCtx, coreShortRefStore, candidates, completeSnapshot)
+		if len(batches) == 0 {
+			return nil
+		}
+		return publishIndexChangeBatchesToCoreStore(
+			replayCtx,
+			coreShortRefStore,
+			paths.StateRoot,
+			req.registeredTrawlerIdentityText,
+			req.registeredTrawlerDisplayName,
+			paths.TrawlerArchivePath,
+			batches,
+		)
 	}
 }
 
@@ -198,14 +226,14 @@ func (r runner) executePreparedCommand(
 	if command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE {
 		report, err := executeUpdate(ctx, trawler, req)
 		if err == nil {
-			err = r.publishOrStreamShortReferencesAfterMutation(ctx, trawler, req, wireChild)
+			err = r.publishOrStreamIndexChangesAfterMutation(ctx, trawler, paths, req, wireChild)
 		}
 		return executionResult{updateReport: report, err: err}
 	}
 	if peopleReconcile, ok := command.sharedOperationExecution.(*executePeopleReconciliationOperation); ok {
 		err := peopleReconcile.execute(ctx, trawler, req)
 		if err == nil {
-			err = r.publishOrStreamShortReferencesAfterMutation(ctx, trawler, req, wireChild)
+			err = r.publishOrStreamIndexChangesAfterMutation(ctx, trawler, paths, req, wireChild)
 		}
 		return executionResult{updateReport: peopleReconcile.report, err: err}
 	}
@@ -214,7 +242,7 @@ func (r runner) executePreparedCommand(
 		return executionResult{err: err}
 	}
 	if command.mutates {
-		if err := r.publishOrStreamShortReferencesAfterMutation(ctx, trawler, req, wireChild); err != nil {
+		if err := r.publishOrStreamIndexChangesAfterMutation(ctx, trawler, paths, req, wireChild); err != nil {
 			return executionResult{err: err}
 		}
 	}
@@ -265,43 +293,61 @@ func finalizeCommandExecutionResult(
 	}
 }
 
-func (r runner) publishOrStreamShortReferencesAfterMutation(
+func (r runner) publishOrStreamIndexChangesAfterMutation(
 	ctx context.Context,
 	trawler Trawler,
+	paths resolvedTrawlerArchivePaths,
 	req *TrawlerCommandExecutionRequest,
 	wireChild bool,
 ) error {
-	snapshotProvider, ok := trawler.(ShortReferenceSnapshotProvider)
+	exporter, ok := trawler.(ArchiveIndexChangeExporter)
 	if !ok {
 		return nil
 	}
-	candidates, completeSnapshot, err := snapshotProvider.ListArchiveRecordReferencesForShortReferences(ctx, req)
-	if err != nil {
-		return err
-	}
-	if !wireChild {
-		if req.coreShortReferenceStore == nil {
-			return nil
-		}
-		return publishShortReferenceCandidatesToCoreStore(ctx, req.coreShortReferenceStore, candidates, completeSnapshot)
-	}
-	if len(candidates) == 0 {
-		return writeChildFrame(r.opts.stdout, childShortReferenceBatchFrame(nil, completeSnapshot))
-	}
-	for start := 0; start < len(candidates); start += shortReferenceWireBatchSize {
-		end := start + shortReferenceWireBatchSize
-		if end > len(candidates) {
-			end = len(candidates)
-		}
-		isLast := end == len(candidates)
-		if err := writeChildFrame(
-			r.opts.stdout,
-			childShortReferenceBatchFrame(candidates[start:end], completeSnapshot && isLast),
-		); err != nil {
+	sinceCursor := ""
+	if wireChild {
+		sinceCursor = strings.TrimSpace(os.Getenv(childIndexSinceCursorEnv))
+	} else if req.coreShortReferenceStore != nil {
+		cursor, hasIndexed, err := unifiedindex.ReadTrawlerIndexCursor(ctx, req.coreShortReferenceStore.DB(), req.registeredTrawlerIdentityText)
+		if err != nil {
 			return err
 		}
+		if hasIndexed {
+			sinceCursor = cursor
+		}
 	}
-	return nil
+	if wireChild {
+		return exporter.ExportArchiveIndexChanges(ctx, req, sinceCursor, func(batch *indexcontract.ArchiveIndexChangeBatch) error {
+			if batch == nil {
+				return nil
+			}
+			return writeChildFrame(r.opts.stdout, childArchiveIndexChangeBatchFrame(batch))
+		})
+	}
+	if req.coreShortReferenceStore == nil {
+		return nil
+	}
+	var batches []*indexcontract.ArchiveIndexChangeBatch
+	if err := exporter.ExportArchiveIndexChanges(ctx, req, sinceCursor, func(batch *indexcontract.ArchiveIndexChangeBatch) error {
+		if batch != nil {
+			batches = append(batches, batch)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if len(batches) == 0 {
+		return nil
+	}
+	return publishIndexChangeBatchesToCoreStore(
+		ctx,
+		req.coreShortReferenceStore,
+		paths.StateRoot,
+		req.registeredTrawlerIdentityText,
+		req.registeredTrawlerDisplayName,
+		paths.TrawlerArchivePath,
+		batches,
+	)
 }
 
 func validateBespokeArgs(command TrawlerCommand, args []string) error {

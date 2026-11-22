@@ -4,6 +4,7 @@ import (
 	"context"
 
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
+	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
@@ -68,13 +69,17 @@ type CanonicalRecordOpener interface {
 	) (*open.OpenRecord, error)
 }
 
-// ShortReferenceSnapshotProvider lists committed archive record references so
-// core maintains the short-reference index without reading private databases.
-type ShortReferenceSnapshotProvider interface {
-	ListArchiveRecordReferencesForShortReferences(
+// ArchiveIndexChangeExporter streams committed archive record changes, short
+// references, tombstones, and mechanical join windows so core maintains
+// index.db (short references, unified search, and cross-plugin joins) without
+// opening the trawler's private database.
+type ArchiveIndexChangeExporter interface {
+	ExportArchiveIndexChanges(
 		ctx context.Context,
 		req *TrawlerCommandExecutionRequest,
-	) ([]ShortReferenceAssignmentCandidate, bool, error)
+		sinceOpaqueCursor string,
+		emit func(*indexcontract.ArchiveIndexChangeBatch) error,
+	) error
 }
 
 type TrawlerSpecificOpenedRecordPresentationActionBuilder interface {

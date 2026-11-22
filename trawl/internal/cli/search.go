@@ -13,7 +13,7 @@ import (
 
 type SearchCmd struct {
 	Query   []string `arg:"" optional:"" name:"words" help:"Words to find; optional with --who, --after or --before"`
-	Trawler string   `name:"trawler" placeholder:"TRAWLERS" help:"Trawler names, separated by commas"`
+	Trawler string   `name:"trawler" aliases:"source" placeholder:"TRAWLERS" help:"Trawler names, separated by commas"`
 	Limit   int      `name:"limit" default:"20" placeholder:"COUNT" help:"Maximum number of results"`
 	After   string   `name:"after" placeholder:"DATE" help:"${on_or_after_date_option_description}"`
 	Before  string   `name:"before" placeholder:"DATE" help:"${on_or_before_date_option_description}"`
@@ -99,15 +99,27 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		}
 		selectedTrawlers = trawlersApplicableToResolvedPerson
 	}
-	adapters := r.federationSearchTrawlers(selectedTrawlers)
-	if whoResolved != nil {
-		adapters = applyExactResolvedPersonFiltersToSearchTrawlers(
-			adapters,
+	var response *federation.FederatedTrawlerSearchOperation
+	if r.canonicalObserver != nil {
+		adapters := r.federationSearchTrawlers(selectedTrawlers)
+		if whoResolved != nil {
+			adapters = applyExactResolvedPersonFiltersToSearchTrawlers(
+				adapters,
+				resolvedWhoName(whoResolved),
+				resolvedPersonMatchFactsFromTrawlers,
+			)
+		}
+		response = r.canonicalSearch(adapters, crawlQuery, limit)
+	} else {
+		response = r.runUnifiedAndFederatedSearch(
+			r.ctx,
+			selectedTrawlers,
+			crawlQuery,
+			limit,
 			resolvedWhoName(whoResolved),
 			resolvedPersonMatchFactsFromTrawlers,
 		)
 	}
-	response := r.canonicalSearch(adapters, crawlQuery, limit)
 	if searchWasExplicitlyScopedToOneTrawler {
 		if err := userInputErrorFromFederatedTrawlerOperationFailures(response.GetOperationFailures()); err != nil {
 			return err

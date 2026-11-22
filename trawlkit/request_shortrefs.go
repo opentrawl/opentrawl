@@ -219,7 +219,6 @@ func (r *TrawlerCommandExecutionRequest) LocalShortReferencesForCanonicalArchive
 	if db == nil {
 		return nil, errors.New("short reference store is not open")
 	}
-	index := shortref.NewSQLiteIndex(db)
 	canonical := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		canonicalArchiveRecordReference := CanonicalArchiveRecordReferenceText(ref)
@@ -228,13 +227,13 @@ func (r *TrawlerCommandExecutionRequest) LocalShortReferencesForCanonicalArchive
 		}
 		canonical = append(canonical, canonicalArchiveRecordReference)
 	}
-	aliases, err := shortRefAliases(ctx, index, canonical)
+	aliases, err := r.readShortRefAliases(ctx, db, canonical)
 	if err != nil {
 		return nil, err
 	}
 	if len(aliases) < len(uniqueStrings(canonical)) && r.replayShortReferences != nil {
 		if replayErr := r.replayShortReferences(ctx); replayErr == nil {
-			aliases, err = shortRefAliases(ctx, index, canonical)
+			aliases, err = r.readShortRefAliases(ctx, db, canonical)
 			if err != nil {
 				return nil, err
 			}
@@ -309,15 +308,25 @@ func (r *TrawlerCommandExecutionRequest) lookupShortRef(ctx context.Context, ali
 	if db == nil {
 		return nil, errors.New("short reference store is not open")
 	}
+	if r.coreShortReferenceStore != nil && strings.TrimSpace(r.registeredTrawlerIdentityText) != "" {
+		return shortref.NewScopedSQLiteIndex(db, r.registeredTrawlerIdentityText).Lookup(ctx, alias)
+	}
 	return shortref.NewSQLiteIndex(db).Lookup(ctx, alias)
 }
 
-func shortRefAliases(ctx context.Context, index *shortref.SQLiteIndex, refs []string) (map[string]string, error) {
+func (r *TrawlerCommandExecutionRequest) readShortRefAliases(
+	ctx context.Context,
+	db shortref.SQLiteDB,
+	refs []string,
+) (map[string]string, error) {
 	refs = uniqueStrings(refs)
 	if len(refs) == 0 {
 		return nil, nil
 	}
-	return index.Aliases(ctx, refs)
+	if r.coreShortReferenceStore != nil && strings.TrimSpace(r.registeredTrawlerIdentityText) != "" {
+		return shortref.NewScopedSQLiteIndex(db, r.registeredTrawlerIdentityText).Aliases(ctx, refs)
+	}
+	return shortref.NewSQLiteIndex(db).Aliases(ctx, refs)
 }
 
 func shortRefLookupEntries(entries []shortref.ShortReferenceEntry, reservedAliases map[string]struct{}) []shortref.ShortReferenceEntry {

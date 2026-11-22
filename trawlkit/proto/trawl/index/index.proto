@@ -1,0 +1,151 @@
+syntax = "proto3";
+
+package trawl.index;
+
+import "trawl/identity/identity.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index;index";
+
+// ArchiveRecordKind classifies the source-native record kind carried by one
+// indexed archive record so core ranking, presentation, and downstream layers
+// can distinguish record shapes without reading plugin databases.
+enum ArchiveRecordKind {
+  ARCHIVE_RECORD_KIND_UNSPECIFIED = 0;
+  ARCHIVE_RECORD_KIND_EMAIL = 1;
+  ARCHIVE_RECORD_KIND_CHAT_MESSAGE = 2;
+  ARCHIVE_RECORD_KIND_SOCIAL_POST = 3;
+  ARCHIVE_RECORD_KIND_NOTE = 4;
+  ARCHIVE_RECORD_KIND_CALENDAR_EVENT = 5;
+  ARCHIVE_RECORD_KIND_PHOTO = 6;
+  ARCHIVE_RECORD_KIND_FINANCIAL_MOVEMENT = 7;
+  ARCHIVE_RECORD_KIND_PERSON = 8;
+}
+
+// ObservedArchiveRecordRole records an explicit role observed by the source
+// archive itself (never guessed by heuristics), such as whether a social post
+// was authored, bookmarked, or liked.
+enum ObservedArchiveRecordRole {
+  OBSERVED_ARCHIVE_RECORD_ROLE_UNSPECIFIED = 0;
+  OBSERVED_ARCHIVE_RECORD_ROLE_AUTHORED = 1;
+  OBSERVED_ARCHIVE_RECORD_ROLE_RECEIVED = 2;
+  OBSERVED_ARCHIVE_RECORD_ROLE_BOOKMARK = 3;
+  OBSERVED_ARCHIVE_RECORD_ROLE_MENTION = 4;
+  OBSERVED_ARCHIVE_RECORD_ROLE_LIKE = 5;
+  OBSERVED_ARCHIVE_RECORD_ROLE_DIRECT_MESSAGE = 6;
+  OBSERVED_ARCHIVE_RECORD_ROLE_REPLY_CONTEXT = 7;
+  OBSERVED_ARCHIVE_RECORD_ROLE_OTHER = 8;
+}
+
+// MechanicalJoinAnchorKind identifies a deterministic mechanical join fact
+// observed in or extracted from an archive record.
+enum MechanicalJoinAnchorKind {
+  MECHANICAL_JOIN_ANCHOR_KIND_UNSPECIFIED = 0;
+  MECHANICAL_JOIN_ANCHOR_KIND_RFC5322_MESSAGE_IDENTIFIER = 1;
+  MECHANICAL_JOIN_ANCHOR_KIND_REGISTRABLE_DOMAIN = 2;
+  MECHANICAL_JOIN_ANCHOR_KIND_EXACT_MINOR_UNIT_AMOUNT = 3;
+  MECHANICAL_JOIN_ANCHOR_KIND_BOOKING_OR_ORDER_CODE = 4;
+}
+
+// ArchiveRecordParticipant identifies one observed person or account linked to
+// an indexed archive record.
+message ArchiveRecordParticipant {
+  string display_name = 1;
+  string address_or_handle = 2;
+  string participant_role = 3;
+}
+
+// MechanicalJoinAnchor records one exact mechanical anchor for cross-plugin
+// joins in core index.db.
+message MechanicalJoinAnchor {
+  MechanicalJoinAnchorKind anchor_kind = 1;
+  string anchor_value = 2;
+}
+
+// FinancialMovementIndexFacts carries structured monetary fields observed by
+// the money archive for display and exact amount-based cross-plugin joins.
+message FinancialMovementIndexFacts {
+  string exact_decimal_amount = 1;
+  string iso_4217_currency_code = 2;
+  int64 signed_minor_units = 3;
+  bool has_signed_minor_units = 4;
+  int64 absolute_minor_units = 5;
+  bool has_absolute_minor_units = 6;
+  string original_foreign_exact_decimal_amount = 7;
+  string original_foreign_iso_4217_currency_code = 8;
+  int64 original_foreign_absolute_minor_units = 9;
+  bool has_original_foreign_absolute_minor_units = 10;
+  string booking_calendar_date = 11;
+  string counterparty_display_name = 12;
+  string movement_description = 13;
+  string merchant_city_name = 14;
+  string merchant_country_name = 15;
+  bool movement_is_pending = 16;
+}
+
+// IndexedArchiveTimeWindow records one observed multi-day time window (such as
+// an Apple Photos trip) for cross-plugin temporal joins.
+message IndexedArchiveTimeWindow {
+  string time_window_identifier = 1;
+  string time_window_kind = 2;
+  string place_title = 3;
+  string date_title = 4;
+  int64 start_unix_seconds = 5;
+  int64 end_unix_seconds = 6;
+  trawl.identity.CanonicalArchiveRecordReference related_record_reference = 7;
+}
+
+// IndexedArchiveRecordUpsert carries one committed archive record exported by
+// a trawler for atomic registration in core index.db (short reference, full
+// text index, and mechanical join tables).
+message IndexedArchiveRecordUpsert {
+  trawl.identity.CanonicalArchiveRecordReference stable_record_reference = 1;
+  trawl.identity.CanonicalArchiveRecordReference resolved_record_reference = 2;
+  trawl.identity.RecordAnchorIdentifier record_anchor = 3;
+  ArchiveRecordKind record_kind = 4;
+  ObservedArchiveRecordRole observed_source_role = 5;
+
+  // Opaque conversation or thread identifier (for example chat_identifier,
+  // chat_jid, or Gmail thread_id), kept separate from human display titles so
+  // core can collapse threads and build chat sessions accurately.
+  string conversation_or_thread_identifier = 6;
+
+  // Human-readable container or source context (for example chat title, folder
+  // name, sender address, calendar title, or place name).
+  string display_context_title = 7;
+
+  int64 occurred_unix_seconds = 8;
+  bool has_occurred_time = 9;
+  bool has_time_of_day = 10;
+  int32 utc_offset_seconds = 11;
+  int64 end_unix_seconds = 12;
+  bool has_end_time = 13;
+
+  string title = 14;
+  string body_text = 15;
+  string metadata_text = 16;
+
+  repeated ArchiveRecordParticipant participants = 17;
+  repeated string observed_source_labels = 18;
+  repeated string status_labels = 19;
+  repeated MechanicalJoinAnchor mechanical_join_anchors = 20;
+  FinancialMovementIndexFacts financial_movement_facts = 21;
+}
+
+// ShortReferenceOnlyRegistrationEntry registers a canonical archive reference
+// (such as a chat, calendar, note version, or financial account) that needs a
+// core short reference link without being indexed as a searchable record row.
+message ShortReferenceOnlyRegistrationEntry {
+  trawl.identity.CanonicalArchiveRecordReference stable_record_reference = 1;
+  trawl.identity.CanonicalArchiveRecordReference resolved_record_reference = 2;
+}
+
+// ArchiveIndexChangeBatch streams committed archive record changes, short
+// references, tombstones, and mechanical join windows from a trawler to core.
+message ArchiveIndexChangeBatch {
+  repeated IndexedArchiveRecordUpsert upserts = 1;
+  repeated ShortReferenceOnlyRegistrationEntry short_reference_only_entries = 2;
+  repeated trawl.identity.CanonicalArchiveRecordReference deleted_record_references = 3;
+  repeated IndexedArchiveTimeWindow time_windows = 4;
+  bool complete_snapshot_replacement = 5;
+  string next_opaque_cursor = 6;
+}

@@ -38,6 +38,7 @@ package worker
 import (
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
+	index "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	step "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
@@ -178,7 +179,7 @@ func (x *ReconcilePeople) GetTrawlerPeopleSnapshot() *person.TrawlerPeopleSnapsh
 
 // Frame is one message on the stream. Exactly one field is set. The parent
 // switches on which one to learn whether the child is still working
-// (Progress, Log, ShortReferenceBatch) or done (Result).
+// (Progress, Log, ArchiveIndexChangeBatch) or done (Result).
 type Frame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Kind:
@@ -186,7 +187,7 @@ type Frame struct {
 	//	*Frame_Progress
 	//	*Frame_Log
 	//	*Frame_Result
-	//	*Frame_ShortReferenceBatch
+	//	*Frame_ArchiveIndexChangeBatch
 	Kind          isFrame_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -256,10 +257,10 @@ func (x *Frame) GetResult() *Result {
 	return nil
 }
 
-func (x *Frame) GetShortReferenceBatch() *ShortReferenceBatch {
+func (x *Frame) GetArchiveIndexChangeBatch() *index.ArchiveIndexChangeBatch {
 	if x != nil {
-		if x, ok := x.Kind.(*Frame_ShortReferenceBatch); ok {
-			return x.ShortReferenceBatch
+		if x, ok := x.Kind.(*Frame_ArchiveIndexChangeBatch); ok {
+			return x.ArchiveIndexChangeBatch
 		}
 	}
 	return nil
@@ -281,8 +282,8 @@ type Frame_Result struct {
 	Result *Result `protobuf:"bytes,3,opt,name=result,proto3,oneof"`
 }
 
-type Frame_ShortReferenceBatch struct {
-	ShortReferenceBatch *ShortReferenceBatch `protobuf:"bytes,4,opt,name=short_reference_batch,json=shortReferenceBatch,proto3,oneof"`
+type Frame_ArchiveIndexChangeBatch struct {
+	ArchiveIndexChangeBatch *index.ArchiveIndexChangeBatch `protobuf:"bytes,4,opt,name=archive_index_change_batch,json=archiveIndexChangeBatch,proto3,oneof"`
 }
 
 func (*Frame_Progress) isFrame_Kind() {}
@@ -291,114 +292,7 @@ func (*Frame_Log) isFrame_Kind() {}
 
 func (*Frame_Result) isFrame_Kind() {}
 
-func (*Frame_ShortReferenceBatch) isFrame_Kind() {}
-
-type ShortReferenceRegistrationEntry struct {
-	state                   protoimpl.MessageState                    `protogen:"open.v1"`
-	StableRecordReference   *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=stable_record_reference,json=stableRecordReference,proto3" json:"stable_record_reference,omitempty"`
-	ResolvedRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,2,opt,name=resolved_record_reference,json=resolvedRecordReference,proto3" json:"resolved_record_reference,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
-}
-
-func (x *ShortReferenceRegistrationEntry) Reset() {
-	*x = ShortReferenceRegistrationEntry{}
-	mi := &file_trawl_worker_worker_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ShortReferenceRegistrationEntry) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ShortReferenceRegistrationEntry) ProtoMessage() {}
-
-func (x *ShortReferenceRegistrationEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_worker_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ShortReferenceRegistrationEntry.ProtoReflect.Descriptor instead.
-func (*ShortReferenceRegistrationEntry) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *ShortReferenceRegistrationEntry) GetStableRecordReference() *identity.CanonicalArchiveRecordReference {
-	if x != nil {
-		return x.StableRecordReference
-	}
-	return nil
-}
-
-func (x *ShortReferenceRegistrationEntry) GetResolvedRecordReference() *identity.CanonicalArchiveRecordReference {
-	if x != nil {
-		return x.ResolvedRecordReference
-	}
-	return nil
-}
-
-// ShortReferenceBatch streams committed archive record references from a
-// supervised child so the parent updates the core-owned short-reference index
-// without opening the trawler's private database.
-type ShortReferenceBatch struct {
-	state                       protoimpl.MessageState             `protogen:"open.v1"`
-	Entries                     []*ShortReferenceRegistrationEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
-	CompleteSnapshotReplacement bool                               `protobuf:"varint,2,opt,name=complete_snapshot_replacement,json=completeSnapshotReplacement,proto3" json:"complete_snapshot_replacement,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
-}
-
-func (x *ShortReferenceBatch) Reset() {
-	*x = ShortReferenceBatch{}
-	mi := &file_trawl_worker_worker_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ShortReferenceBatch) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ShortReferenceBatch) ProtoMessage() {}
-
-func (x *ShortReferenceBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_worker_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ShortReferenceBatch.ProtoReflect.Descriptor instead.
-func (*ShortReferenceBatch) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *ShortReferenceBatch) GetEntries() []*ShortReferenceRegistrationEntry {
-	if x != nil {
-		return x.Entries
-	}
-	return nil
-}
-
-func (x *ShortReferenceBatch) GetCompleteSnapshotReplacement() bool {
-	if x != nil {
-		return x.CompleteSnapshotReplacement
-	}
-	return false
-}
+func (*Frame_ArchiveIndexChangeBatch) isFrame_Kind() {}
 
 // Progress is a heartbeat with a human breadcrumb, emitted as a long command
 // advances. Its arrival resets the parent's no-progress watchdog. Its
@@ -428,7 +322,7 @@ type Progress struct {
 
 func (x *Progress) Reset() {
 	*x = Progress{}
-	mi := &file_trawl_worker_worker_proto_msgTypes[5]
+	mi := &file_trawl_worker_worker_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -440,7 +334,7 @@ func (x *Progress) String() string {
 func (*Progress) ProtoMessage() {}
 
 func (x *Progress) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_worker_proto_msgTypes[5]
+	mi := &file_trawl_worker_worker_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -453,7 +347,7 @@ func (x *Progress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Progress.ProtoReflect.Descriptor instead.
 func (*Progress) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{5}
+	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Progress) GetPhase() string {
@@ -499,7 +393,7 @@ type Log struct {
 
 func (x *Log) Reset() {
 	*x = Log{}
-	mi := &file_trawl_worker_worker_proto_msgTypes[6]
+	mi := &file_trawl_worker_worker_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -511,7 +405,7 @@ func (x *Log) String() string {
 func (*Log) ProtoMessage() {}
 
 func (x *Log) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_worker_proto_msgTypes[6]
+	mi := &file_trawl_worker_worker_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -524,7 +418,7 @@ func (x *Log) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Log.ProtoReflect.Descriptor instead.
 func (*Log) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{6}
+	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Log) GetText() string {
@@ -552,7 +446,7 @@ type Result struct {
 
 func (x *Result) Reset() {
 	*x = Result{}
-	mi := &file_trawl_worker_worker_proto_msgTypes[7]
+	mi := &file_trawl_worker_worker_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -564,7 +458,7 @@ func (x *Result) String() string {
 func (*Result) ProtoMessage() {}
 
 func (x *Result) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_worker_proto_msgTypes[7]
+	mi := &file_trawl_worker_worker_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -577,7 +471,7 @@ func (x *Result) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Result.ProtoReflect.Descriptor instead.
 func (*Result) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{7}
+	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Result) GetSuccess() isResult_Success {
@@ -650,7 +544,7 @@ type Error struct {
 
 func (x *Error) Reset() {
 	*x = Error{}
-	mi := &file_trawl_worker_worker_proto_msgTypes[8]
+	mi := &file_trawl_worker_worker_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -662,7 +556,7 @@ func (x *Error) String() string {
 func (*Error) ProtoMessage() {}
 
 func (x *Error) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_worker_worker_proto_msgTypes[8]
+	mi := &file_trawl_worker_worker_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -675,7 +569,7 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
-	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{8}
+	return file_trawl_worker_worker_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Error) GetCode() string {
@@ -710,25 +604,19 @@ var File_trawl_worker_worker_proto protoreflect.FileDescriptor
 
 const file_trawl_worker_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x19trawl/worker/worker.proto\x12\ftrawl.worker\x1a\x1btrawl/command/command.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x19trawl/person/person.proto\x1a#trawl/photos/step/photos_step.proto\x1a\x19trawl/update/update.proto\"b\n" +
+	"\x19trawl/worker/worker.proto\x12\ftrawl.worker\x1a\x1btrawl/command/command.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x17trawl/index/index.proto\x1a\x19trawl/person/person.proto\x1a#trawl/photos/step/photos_step.proto\x1a\x19trawl/update/update.proto\"b\n" +
 	"\aRequest\x12J\n" +
 	"\x10reconcile_people\x18\x01 \x01(\v2\x1d.trawl.worker.ReconcilePeopleH\x00R\x0freconcilePeopleB\v\n" +
 	"\toperation\"\xd1\x01\n" +
 	"\x0fReconcilePeople\x12a\n" +
 	"\x17people_snapshot_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\x15peopleSnapshotTrawler\x12[\n" +
-	"\x17trawler_people_snapshot\x18\x02 \x01(\v2#.trawl.person.TrawlerPeopleSnapshotR\x15trawlerPeopleSnapshot\"\xf5\x01\n" +
+	"\x17trawler_people_snapshot\x18\x02 \x01(\v2#.trawl.person.TrawlerPeopleSnapshotR\x15trawlerPeopleSnapshot\"\x81\x02\n" +
 	"\x05Frame\x124\n" +
 	"\bprogress\x18\x01 \x01(\v2\x16.trawl.worker.ProgressH\x00R\bprogress\x12%\n" +
 	"\x03log\x18\x02 \x01(\v2\x11.trawl.worker.LogH\x00R\x03log\x12.\n" +
-	"\x06result\x18\x03 \x01(\v2\x14.trawl.worker.ResultH\x00R\x06result\x12W\n" +
-	"\x15short_reference_batch\x18\x04 \x01(\v2!.trawl.worker.ShortReferenceBatchH\x00R\x13shortReferenceBatchB\x06\n" +
-	"\x04kind\"\xf7\x01\n" +
-	"\x1fShortReferenceRegistrationEntry\x12g\n" +
-	"\x17stable_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x15stableRecordReference\x12k\n" +
-	"\x19resolved_record_reference\x18\x02 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x17resolvedRecordReference\"\xa2\x01\n" +
-	"\x13ShortReferenceBatch\x12G\n" +
-	"\aentries\x18\x01 \x03(\v2-.trawl.worker.ShortReferenceRegistrationEntryR\aentries\x12B\n" +
-	"\x1dcomplete_snapshot_replacement\x18\x02 \x01(\bR\x1bcompleteSnapshotReplacement\"d\n" +
+	"\x06result\x18\x03 \x01(\v2\x14.trawl.worker.ResultH\x00R\x06result\x12c\n" +
+	"\x1aarchive_index_change_batch\x18\x04 \x01(\v2$.trawl.index.ArchiveIndexChangeBatchH\x00R\x17archiveIndexChangeBatchB\x06\n" +
+	"\x04kind\"d\n" +
 	"\bProgress\x12\x14\n" +
 	"\x05phase\x18\x01 \x01(\tR\x05phase\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\x03R\x04done\x12\x14\n" +
@@ -759,44 +647,39 @@ func file_trawl_worker_worker_proto_rawDescGZIP() []byte {
 	return file_trawl_worker_worker_proto_rawDescData
 }
 
-var file_trawl_worker_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_trawl_worker_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_trawl_worker_worker_proto_goTypes = []any{
-	(*Request)(nil),                                  // 0: trawl.worker.Request
-	(*ReconcilePeople)(nil),                          // 1: trawl.worker.ReconcilePeople
-	(*Frame)(nil),                                    // 2: trawl.worker.Frame
-	(*ShortReferenceRegistrationEntry)(nil),          // 3: trawl.worker.ShortReferenceRegistrationEntry
-	(*ShortReferenceBatch)(nil),                      // 4: trawl.worker.ShortReferenceBatch
-	(*Progress)(nil),                                 // 5: trawl.worker.Progress
-	(*Log)(nil),                                      // 6: trawl.worker.Log
-	(*Result)(nil),                                   // 7: trawl.worker.Result
-	(*Error)(nil),                                    // 8: trawl.worker.Error
-	(*identity.RegisteredTrawlerIdentity)(nil),       // 9: trawl.identity.RegisteredTrawlerIdentity
-	(*person.TrawlerPeopleSnapshot)(nil),             // 10: trawl.person.TrawlerPeopleSnapshot
-	(*identity.CanonicalArchiveRecordReference)(nil), // 11: trawl.identity.CanonicalArchiveRecordReference
-	(*update.TrawlerArchiveUpdateReport)(nil),        // 12: trawl.update.TrawlerArchiveUpdateReport
-	(*command.TrawlerCommandResponse)(nil),           // 13: trawl.command.TrawlerCommandResponse
-	(step.PhotosStepName)(0),                         // 14: trawl.photos.step.PhotosStepName
+	(*Request)(nil),         // 0: trawl.worker.Request
+	(*ReconcilePeople)(nil), // 1: trawl.worker.ReconcilePeople
+	(*Frame)(nil),           // 2: trawl.worker.Frame
+	(*Progress)(nil),        // 3: trawl.worker.Progress
+	(*Log)(nil),             // 4: trawl.worker.Log
+	(*Result)(nil),          // 5: trawl.worker.Result
+	(*Error)(nil),           // 6: trawl.worker.Error
+	(*identity.RegisteredTrawlerIdentity)(nil), // 7: trawl.identity.RegisteredTrawlerIdentity
+	(*person.TrawlerPeopleSnapshot)(nil),       // 8: trawl.person.TrawlerPeopleSnapshot
+	(*index.ArchiveIndexChangeBatch)(nil),      // 9: trawl.index.ArchiveIndexChangeBatch
+	(*update.TrawlerArchiveUpdateReport)(nil),  // 10: trawl.update.TrawlerArchiveUpdateReport
+	(*command.TrawlerCommandResponse)(nil),     // 11: trawl.command.TrawlerCommandResponse
+	(step.PhotosStepName)(0),                   // 12: trawl.photos.step.PhotosStepName
 }
 var file_trawl_worker_worker_proto_depIdxs = []int32{
 	1,  // 0: trawl.worker.Request.reconcile_people:type_name -> trawl.worker.ReconcilePeople
-	9,  // 1: trawl.worker.ReconcilePeople.people_snapshot_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	10, // 2: trawl.worker.ReconcilePeople.trawler_people_snapshot:type_name -> trawl.person.TrawlerPeopleSnapshot
-	5,  // 3: trawl.worker.Frame.progress:type_name -> trawl.worker.Progress
-	6,  // 4: trawl.worker.Frame.log:type_name -> trawl.worker.Log
-	7,  // 5: trawl.worker.Frame.result:type_name -> trawl.worker.Result
-	4,  // 6: trawl.worker.Frame.short_reference_batch:type_name -> trawl.worker.ShortReferenceBatch
-	11, // 7: trawl.worker.ShortReferenceRegistrationEntry.stable_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	11, // 8: trawl.worker.ShortReferenceRegistrationEntry.resolved_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	3,  // 9: trawl.worker.ShortReferenceBatch.entries:type_name -> trawl.worker.ShortReferenceRegistrationEntry
-	12, // 10: trawl.worker.Result.update:type_name -> trawl.update.TrawlerArchiveUpdateReport
-	13, // 11: trawl.worker.Result.trawler_command_response:type_name -> trawl.command.TrawlerCommandResponse
-	8,  // 12: trawl.worker.Result.error:type_name -> trawl.worker.Error
-	14, // 13: trawl.worker.Error.photos_steps_not_built:type_name -> trawl.photos.step.PhotosStepName
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	7,  // 1: trawl.worker.ReconcilePeople.people_snapshot_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	8,  // 2: trawl.worker.ReconcilePeople.trawler_people_snapshot:type_name -> trawl.person.TrawlerPeopleSnapshot
+	3,  // 3: trawl.worker.Frame.progress:type_name -> trawl.worker.Progress
+	4,  // 4: trawl.worker.Frame.log:type_name -> trawl.worker.Log
+	5,  // 5: trawl.worker.Frame.result:type_name -> trawl.worker.Result
+	9,  // 6: trawl.worker.Frame.archive_index_change_batch:type_name -> trawl.index.ArchiveIndexChangeBatch
+	10, // 7: trawl.worker.Result.update:type_name -> trawl.update.TrawlerArchiveUpdateReport
+	11, // 8: trawl.worker.Result.trawler_command_response:type_name -> trawl.command.TrawlerCommandResponse
+	6,  // 9: trawl.worker.Result.error:type_name -> trawl.worker.Error
+	12, // 10: trawl.worker.Error.photos_steps_not_built:type_name -> trawl.photos.step.PhotosStepName
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_trawl_worker_worker_proto_init() }
@@ -811,9 +694,9 @@ func file_trawl_worker_worker_proto_init() {
 		(*Frame_Progress)(nil),
 		(*Frame_Log)(nil),
 		(*Frame_Result)(nil),
-		(*Frame_ShortReferenceBatch)(nil),
+		(*Frame_ArchiveIndexChangeBatch)(nil),
 	}
-	file_trawl_worker_worker_proto_msgTypes[7].OneofWrappers = []any{
+	file_trawl_worker_worker_proto_msgTypes[5].OneofWrappers = []any{
 		(*Result_Update)(nil),
 		(*Result_TrawlerCommandResponse)(nil),
 	}
@@ -823,7 +706,7 @@ func file_trawl_worker_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_worker_worker_proto_rawDesc), len(file_trawl_worker_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

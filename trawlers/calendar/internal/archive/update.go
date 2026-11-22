@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
@@ -59,49 +58,6 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		return stateStore.Set(ctx, updateSource, updateEntity, updateSourceModified, sourceModifiedAt)
 	})
 	return stats, err
-}
-
-func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
-	var candidates []trawlkit.ShortReferenceAssignmentCandidate
-	calRows, err := s.store.DB().QueryContext(ctx, `select calendar_id from calendars order by calendar_id`)
-	if err != nil {
-		return nil, err
-	}
-	for calRows.Next() {
-		var calendarID string
-		if err := calRows.Scan(&calendarID); err != nil {
-			_ = calRows.Close()
-			return nil, err
-		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-				CalendarCanonicalRecordReferenceForIdentifier(CalendarIdentifier(calendarID)),
-			),
-		})
-	}
-	if err := errors.Join(calRows.Err(), calRows.Close()); err != nil {
-		return nil, err
-	}
-	eventRows, err := s.store.DB().QueryContext(ctx, `select event_uid from events order by event_uid`)
-	if err != nil {
-		return nil, err
-	}
-	for eventRows.Next() {
-		var eventUID string
-		if err := eventRows.Scan(&eventUID); err != nil {
-			_ = eventRows.Close()
-			return nil, err
-		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-				RefForUID(eventUID),
-			),
-		})
-	}
-	if err := errors.Join(eventRows.Err(), eventRows.Close()); err != nil {
-		return nil, err
-	}
-	return candidates, nil
 }
 
 func upsertCalendar(ctx context.Context, tx *sql.Tx, calendar Calendar, runID string) error {

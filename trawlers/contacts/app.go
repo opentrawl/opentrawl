@@ -14,6 +14,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
@@ -29,13 +30,13 @@ type App struct {
 type Crawler = App
 
 var (
-	_ trawlkit.Trawler                        = (*App)(nil)
-	_ trawlkit.Updater                        = (*App)(nil)
-	_ trawlkit.Searcher                       = (*App)(nil)
-	_ trawlkit.WhoMatcher                     = (*App)(nil)
-	_ trawlkit.PeopleReconciler               = (*App)(nil)
-	_ trawlkit.CanonicalRecordOpener          = (*App)(nil)
-	_ trawlkit.ShortReferenceSnapshotProvider = (*App)(nil)
+	_ trawlkit.Trawler                    = (*App)(nil)
+	_ trawlkit.Updater                    = (*App)(nil)
+	_ trawlkit.Searcher                   = (*App)(nil)
+	_ trawlkit.WhoMatcher                 = (*App)(nil)
+	_ trawlkit.PeopleReconciler           = (*App)(nil)
+	_ trawlkit.CanonicalRecordOpener      = (*App)(nil)
+	_ trawlkit.ArchiveIndexChangeExporter = (*App)(nil)
 )
 
 func New() *App {
@@ -62,19 +63,17 @@ func (a *App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclarati
 	}
 }
 
-func (a *App) ListArchiveRecordReferencesForShortReferences(
+func (a *App) ExportArchiveIndexChanges(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	sinceOpaqueCursor string,
+	emit func(*indexcontract.ArchiveIndexChangeBatch) error,
+) error {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
-		return nil, false, archiveErr(fmt.Errorf("open archive: %w", err))
+		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	candidates, err := st.ListShortReferenceCandidates(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	return candidates, true, nil
+	return st.ExportArchiveIndexChanges(ctx, sinceOpaqueCursor, emit)
 }
 
 func (*App) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {

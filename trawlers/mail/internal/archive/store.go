@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/mail/internal/applemailsource"
-	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
@@ -433,30 +432,6 @@ func markArchivedMailMessageDeletedFromSource(ctx context.Context, tx *sql.Tx, i
 		return fmt.Errorf("mark message deleted from source: %w", err)
 	}
 	return nil
-}
-
-func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `select id from messages order by id`)
-	if err != nil {
-		return nil, err
-	}
-	var candidates []trawlkit.ShortReferenceAssignmentCandidate
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			_ = rows.Close()
-			return nil, err
-		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-				MailMessageRecordReference(ArchivedMailMessageIdentifier(id)),
-			),
-		})
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
-		return nil, err
-	}
-	return candidates, nil
 }
 
 func MailMessageRecordReference(identifier ArchivedMailMessageIdentifier) string {

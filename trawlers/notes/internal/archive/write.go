@@ -3,11 +3,9 @@ package archive
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/projection"
-	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func (s *Store) ApplyUpdate(ctx context.Context, batch UpdateBatch) (UpdateStats, error) {
@@ -72,50 +70,6 @@ func (s *Store) ApplyUpdate(ctx context.Context, batch UpdateBatch) (UpdateStats
 		return nil
 	})
 	return stats, err
-}
-
-func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
-	var candidates []trawlkit.ShortReferenceAssignmentCandidate
-	noteRows, err := s.store.DB().QueryContext(ctx, `select note_id from notes order by note_id`)
-	if err != nil {
-		return nil, err
-	}
-	for noteRows.Next() {
-		var noteID string
-		if err := noteRows.Scan(&noteID); err != nil {
-			_ = noteRows.Close()
-			return nil, err
-		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(RefForNote(noteID)),
-		})
-	}
-	if err := errors.Join(noteRows.Err(), noteRows.Close()); err != nil {
-		return nil, err
-	}
-	versionRows, err := s.store.DB().QueryContext(ctx, `select note_id, zdata_sha256 from note_versions order by note_id, zdata_sha256`)
-	if err != nil {
-		return nil, err
-	}
-	for versionRows.Next() {
-		var noteID, sha string
-		if err := versionRows.Scan(&noteID, &sha); err != nil {
-			_ = versionRows.Close()
-			return nil, err
-		}
-		candidates = append(candidates,
-			trawlkit.ShortReferenceAssignmentCandidate{
-				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(RefForNote(noteID)),
-			},
-			trawlkit.ShortReferenceAssignmentCandidate{
-				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(RefForVersion(noteID, sha)),
-			},
-		)
-	}
-	if err := errors.Join(versionRows.Err(), versionRows.Close()); err != nil {
-		return nil, err
-	}
-	return candidates, nil
 }
 
 func upsertAttachment(ctx context.Context, tx *sql.Tx, att AttachmentInsert, seenAt string) error {

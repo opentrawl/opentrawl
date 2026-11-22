@@ -50,11 +50,13 @@ func (r *Runtime) appSearchResponse(
 	canonicalSearchQuery trawlkit.Query,
 	maximumReturnedSearchMatchCount int,
 ) *federationcontract.FederatedTrawlerSearchOperation {
-	response := federation.Search(
+	response := r.runUnifiedAndFederatedSearch(
 		ctx,
-		r.federationSearchTrawlers(trawlers),
+		trawlers,
 		canonicalSearchQuery,
-		uint32(maximumReturnedSearchMatchCount),
+		maximumReturnedSearchMatchCount,
+		"",
+		nil,
 	)
 	for _, match := range response.GetSearchMatchesInDisplayOrder() {
 		render.PrepareSearchMatchMonetaryAmountForApp(match.GetSearchMatchPresentation())

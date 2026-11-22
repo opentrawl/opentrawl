@@ -46,6 +46,7 @@ type TrawlerArchivePaths struct {
 	TrawlerConfigurationPath       TrawlerConfigurationFilePath
 	TrawlerLogDirectoryPath        string
 	TrawlerShortReferenceIndexPath string
+	UnifiedArchiveIndexPath        string
 }
 
 type TrawlerCommandExecutionRequest struct {
@@ -57,6 +58,9 @@ type TrawlerCommandExecutionRequest struct {
 	RequestedRecordAnchor             *RecordAnchorIdentifier
 	readOnlyShortReferenceCatalog     []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 	coreShortReferenceStore           *store.Store
+	registeredTrawlerIdentityText     string
+	registeredTrawlerDisplayName      string
+	stateRoot                         string
 	replayShortReferences             func(context.Context) error
 }
 

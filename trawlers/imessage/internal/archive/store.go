@@ -14,7 +14,6 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/addressbook"
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
-	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -271,49 +270,6 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 		}
 		return replaceUpdateState(ctx, tx, data, updatedAt)
 	})
-}
-
-func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
-	var candidates []trawlkit.ShortReferenceAssignmentCandidate
-	msgRows, err := s.store.DB().QueryContext(ctx, `select source_rowid from messages order by source_rowid`)
-	if err != nil {
-		return nil, err
-	}
-	for msgRows.Next() {
-		var rowID int64
-		if err := msgRows.Scan(&rowID); err != nil {
-			_ = msgRows.Close()
-			return nil, err
-		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-				MessageRef(strconv.FormatInt(rowID, 10)),
-			),
-		})
-	}
-	if err := errors.Join(msgRows.Err(), msgRows.Close()); err != nil {
-		return nil, err
-	}
-	chatRows, err := s.store.DB().QueryContext(ctx, `select source_rowid from chats order by source_rowid`)
-	if err != nil {
-		return nil, err
-	}
-	for chatRows.Next() {
-		var rowID int64
-		if err := chatRows.Scan(&rowID); err != nil {
-			_ = chatRows.Close()
-			return nil, err
-		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-				ChatRef(strconv.FormatInt(rowID, 10)),
-			),
-		})
-	}
-	if err := errors.Join(chatRows.Err(), chatRows.Close()); err != nil {
-		return nil, err
-	}
-	return candidates, nil
 }
 
 func updateContactNames(ctx context.Context, options UpdateOptions) ([]addressbook.ContactName, error) {

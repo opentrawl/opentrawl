@@ -160,12 +160,20 @@ func searchResultRowFromPresentation(
 	if amount := presentation.GetMatchingRecordMonetaryAmount(); amount != nil {
 		row.moneyAmountText = FormatExactMonetaryAmount(amount)
 		row.what = ""
-		row.match = row.moneyAmountText + " · " + row.match
+		if row.match != "" {
+			row.match = row.moneyAmountText + " · " + row.match
+		} else {
+			row.match = row.moneyAmountText
+		}
 		row.moneyAmountMustRemainWhole = true
 	}
 	for labelIndex := len(presentation.GetMatchingRecordStatusLabels()) - 1; labelIndex >= 0; labelIndex-- {
 		if statusLabel := strings.TrimSpace(presentation.GetMatchingRecordStatusLabels()[labelIndex]); statusLabel != "" {
-			row.match = statusLabel + " · " + row.match
+			if row.match != "" {
+				row.match = statusLabel + " · " + row.match
+			} else {
+				row.match = statusLabel
+			}
 		}
 	}
 	return row

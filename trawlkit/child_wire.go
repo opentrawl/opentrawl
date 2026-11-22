@@ -67,19 +67,11 @@ func childFrameToProto(frame childFrame) (*worker.Frame, error) {
 		return &worker.Frame{
 			Kind: &worker.Frame_Log{Log: &worker.Log{Text: frame.logText}},
 		}, nil
-	case childFrameShortReferenceBatch:
-		entries := make([]*worker.ShortReferenceRegistrationEntry, 0, len(frame.shortReferenceBatch))
-		for _, candidate := range frame.shortReferenceBatch {
-			entries = append(entries, &worker.ShortReferenceRegistrationEntry{
-				StableRecordReference:   candidate.StableRecordReferenceUsedForShortReferenceAssignment,
-				ResolvedRecordReference: candidate.CurrentRecordReferenceReturnedWhenShortReferenceIsResolved,
-			})
-		}
+	case childFrameArchiveIndexChangeBatch:
 		return &worker.Frame{
-			Kind: &worker.Frame_ShortReferenceBatch{ShortReferenceBatch: &worker.ShortReferenceBatch{
-				Entries:                     entries,
-				CompleteSnapshotReplacement: frame.shortReferenceBatchCompleteSnapshot,
-			}},
+			Kind: &worker.Frame_ArchiveIndexChangeBatch{
+				ArchiveIndexChangeBatch: frame.archiveIndexChangeBatch,
+			},
 		}, nil
 	case childFrameResult:
 		result := &worker.Result{}
@@ -118,24 +110,11 @@ func childFrameFromProto(frame *worker.Frame) (childFrame, error) {
 			return childFrame{}, errors.New("log frame missing log")
 		}
 		return childLogFrame(kind.Log.GetText()), nil
-	case *worker.Frame_ShortReferenceBatch:
-		if kind.ShortReferenceBatch == nil {
-			return childFrame{}, errors.New("short reference batch frame missing batch")
+	case *worker.Frame_ArchiveIndexChangeBatch:
+		if kind.ArchiveIndexChangeBatch == nil {
+			return childFrame{}, errors.New("archive index change batch frame missing batch")
 		}
-		candidates := make([]ShortReferenceAssignmentCandidate, 0, len(kind.ShortReferenceBatch.GetEntries()))
-		for _, entry := range kind.ShortReferenceBatch.GetEntries() {
-			if entry == nil {
-				continue
-			}
-			candidates = append(candidates, ShortReferenceAssignmentCandidate{
-				StableRecordReferenceUsedForShortReferenceAssignment:       entry.GetStableRecordReference(),
-				CurrentRecordReferenceReturnedWhenShortReferenceIsResolved: entry.GetResolvedRecordReference(),
-			})
-		}
-		return childShortReferenceBatchFrame(
-			candidates,
-			kind.ShortReferenceBatch.GetCompleteSnapshotReplacement(),
-		), nil
+		return childArchiveIndexChangeBatchFrame(kind.ArchiveIndexChangeBatch), nil
 	case *worker.Frame_Result:
 		if kind.Result == nil {
 			return childFrame{}, errors.New("result frame missing result")

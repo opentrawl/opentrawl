@@ -31,6 +31,7 @@ func resolveTrawlerArchivePaths(stateRoot string, registeredTrawlerDeclaration R
 		TrawlerConfigurationPath:       TrawlerConfigurationFilePath(filepath.Join(base, "config.toml")),
 		TrawlerLogDirectoryPath:        filepath.Join(base, "logs"),
 		TrawlerShortReferenceIndexPath: filepath.Join(root, "shortrefs", registeredTrawlerIdentityText+".db"),
+		UnifiedArchiveIndexPath:        filepath.Join(root, "index.db"),
 	}
 	if strings.TrimSpace(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerArchivePath) != "" {
 		paths.TrawlerArchivePath = config.ExpandHome(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerArchivePath)
