@@ -99,6 +99,9 @@ func (operation *executeTrawlerStatusOperation) execute(ctx context.Context, tra
 }
 
 func (e TrawlerExecutor) Status(ctx context.Context, trawler Trawler) (*status.TrawlerStatusResponse, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginStatus(ctx, e.opts)
+	}
 	command, err := sharedTrawlerOperationTargetCommand(
 		trawler,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
@@ -118,6 +121,9 @@ func (e TrawlerExecutor) Search(
 	trawler Trawler,
 	query Query,
 ) (*search.TrawlerSearchResponse, []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginSearch(ctx, e.opts, query)
+	}
 	command, err := sharedTrawlerOperationTargetCommand(
 		trawler,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
@@ -330,6 +336,9 @@ func (e TrawlerExecutor) OpenRecord(
 	localShortReference *LocalTrawlerShortReference,
 	recordAnchor *RecordAnchorIdentifier,
 ) (*open.OpenRecord, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginOpenRecord(ctx, e.opts, localShortReference, recordAnchor)
+	}
 	command, err := sharedTrawlerOperationTargetCommand(
 		trawler,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
@@ -366,6 +375,9 @@ func (operation *executeExactPersonMessageCountOperation) execute(ctx context.Co
 }
 
 func (e TrawlerExecutor) CountPersonMessages(ctx context.Context, trawler Trawler, personFilter *person.ExactPersonMessageCountRequest) (*person.ExactPersonMessageCountResponse, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginCountPersonMessages(ctx, e.opts, personFilter)
+	}
 	command, err := sharedTrawlerOperationTargetCommand(trawler, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO)
 	if err != nil {
 		return nil, err
@@ -399,6 +411,9 @@ func (operation *executeTrawlerPersonMatchOperation) execute(ctx context.Context
 }
 
 func (e TrawlerExecutor) Who(ctx context.Context, trawler Trawler, query string) (*person.TrawlerPersonMatchResponse, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginWho(ctx, e.opts, query)
+	}
 	command, err := sharedTrawlerOperationTargetCommand(
 		trawler,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO,
@@ -467,6 +482,9 @@ func (e TrawlerExecutor) Conversations(
 	trawler Trawler,
 	query ConversationQuery,
 ) (*conversation.ConversationListResponse, []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginConversations(ctx, e.opts, query)
+	}
 	command, err := sharedTrawlerOperationTargetCommand(
 		trawler,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
@@ -488,6 +506,9 @@ func (e TrawlerExecutor) Messages(
 	trawler Trawler,
 	query TrawlerMessageListQuery,
 ) (*message.MessageListResponse, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginMessages(ctx, e.opts, query)
+	}
 	command, err := sharedTrawlerOperationTargetCommand(
 		trawler,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
@@ -522,6 +543,9 @@ func (operation *executeTrawlerPeopleSnapshotOperation) execute(ctx context.Cont
 }
 
 func (e TrawlerExecutor) PeopleSnapshot(ctx context.Context, trawler Trawler) (*person.TrawlerPeopleSnapshot, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginPeopleSnapshot(ctx, e.opts)
+	}
 	operation := &executeTrawlerPeopleSnapshotOperation{}
 	command := targetTrawlerCommand{name: "people", storeMode: storeRead}
 	if err := e.runSharedTrawlerOperation(ctx, trawler, command, operation); err != nil {
@@ -560,6 +584,9 @@ func (e TrawlerExecutor) ReconcilePeople(
 }
 
 func (e TrawlerExecutor) Update(ctx context.Context, trawler Trawler, args []string) (*update.TrawlerArchiveUpdateReport, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginUpdate(ctx, e.opts, args)
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -590,6 +617,9 @@ func (e TrawlerExecutor) ExecuteDeclaredTrawlerCommand(
 	render.TrawlerCommandRenderContext,
 	error,
 ) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginDeclaredCommand(ctx, e.opts, trawlerCommandArguments)
+	}
 	command, err := resolveTrawlerCommand(trawler, trawlerCommandArguments)
 	if err != nil {
 		return nil, nil, render.TrawlerCommandRenderContext{}, err

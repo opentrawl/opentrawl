@@ -151,7 +151,7 @@ key_bytes="$(printf '%s' "$sparkle_public_key" | openssl base64 -d -A 2>/dev/nul
   exit 1
 }
 
-mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
+mkdir -p "$contents/MacOS" "$contents/Helpers/plugins" "$contents/Frameworks" "$contents/Resources"
 
 app_entitlements=()
 if [[ -n "$provisioning_profile" ]]; then
@@ -214,6 +214,15 @@ swift_bin="$(host_swift build \
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
 ln -s ../MacOS/Trawl "$contents/Helpers/trawl"
 
+echo "Building bundled standalone trawler plugins"
+MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
+  CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=$deployment_target" \
+  CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=$deployment_target" \
+  "$repo_root/scripts/build-bundled-plugins" \
+  --output-dir "$contents/Helpers/plugins" \
+  --arch arm64 \
+  --trimpath
+
 sparkle_framework="$(find "$swift_scratch/artifacts" -type d -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
 [[ -n "$sparkle_framework" ]] || {
   echo "build-release: SwiftPM did not produce Sparkle.framework" >&2
@@ -250,6 +259,10 @@ rewrite_and_check_libraries() {
   done < <(otool -L "$binary" | awk 'NR > 1 { print $1 }')
 }
 rewrite_and_check_libraries "$contents/MacOS/Trawl"
+while IFS= read -r plugin_binary; do
+  chmod +x "$plugin_binary"
+  rewrite_and_check_libraries "$plugin_binary"
+done < <(find "$contents/Helpers/plugins" -mindepth 1 -maxdepth 1 -type f -name 'trawl-*' | sort)
 
 echo "Compiling the app icon"
 xcrun actool \
@@ -315,6 +328,9 @@ codesign "${sign_args[@]}" --preserve-metadata=entitlements "$sparkle/Versions/B
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Autoupdate"
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Updater.app"
 codesign "${sign_args[@]}" "$sparkle"
+while IFS= read -r plugin_binary; do
+  codesign "${sign_args[@]}" "$plugin_binary"
+done < <(find "$contents/Helpers/plugins" -mindepth 1 -maxdepth 1 -type f -name 'trawl-*' | sort)
 codesign "${sign_args[@]}" ${app_entitlements[@]+"${app_entitlements[@]}"} "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 

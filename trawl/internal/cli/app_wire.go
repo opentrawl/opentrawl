@@ -57,7 +57,7 @@ func executeAppWire(
 }
 
 func (r *Runtime) runAppStatus() error {
-	registeredTrawlerManifestSnapshot := buildRegisteredTrawlerManifestSnapshot(true)
+	registeredTrawlerManifestSnapshot := buildRegisteredTrawlerManifestSnapshotForContext(r.ctx, r.stateRoot, true)
 	return writeAppResponse(r.appWireProtobufFrameStream, r.appStatusResponse(r.ctx, registeredTrawlerManifestSnapshot))
 }
 

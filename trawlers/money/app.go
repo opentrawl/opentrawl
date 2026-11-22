@@ -15,6 +15,7 @@ import (
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -26,10 +27,19 @@ type App struct{}
 var (
 	_ trawlkit.CanonicalRecordOpener      = (*App)(nil)
 	_ trawlkit.ArchiveIndexChangeExporter = (*App)(nil)
+	_ trawlkit.PluginCapabilityDeclarator = (*App)(nil)
 )
 
 func New() *App                                                                   { return &App{} }
 func (*App) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error { return nil }
+func (*App) DeclaredPluginCapabilities() *plugincontract.PluginDeclaredCapabilities {
+	return &plugincontract.PluginDeclaredCapabilities{
+		DeclaredNetworkHosts:             []string{"api.enablebanking.com:443"},
+		DeclaredReadSecretKeys:           []string{"enable_banking_private_key_pem"},
+		DeclaredConfigReadPathFields:     []string{"enable_banking.private_key_file", "enable_banking.connections.session_file"},
+		SupportsArchiveIndexChangeExport: true,
+	}
+}
 func (*App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
 	return trawlkit.RegisteredTrawlerDeclaration{
 		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity("money"),

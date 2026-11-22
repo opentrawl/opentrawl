@@ -7,10 +7,15 @@ char *trawl_native_currency(const char *decimal, const char *currency, int signe
         NSString *decimalText = [NSString stringWithUTF8String:decimal];
         NSDecimalNumber *amount = [NSDecimalNumber decimalNumberWithString:decimalText
                                                                   locale:@{NSLocaleDecimalSeparator: @"."}];
+        NSString *currencyCode = [NSString stringWithUTF8String:currency];
         NSNumberFormatter *currencyFormatter = [[NSNumberFormatter alloc] init];
         currencyFormatter.locale = NSLocale.autoupdatingCurrentLocale;
         currencyFormatter.numberStyle = NSNumberFormatterCurrencyStyle;
-        currencyFormatter.currencyCode = [NSString stringWithUTF8String:currency];
+        currencyFormatter.currencyCode = currencyCode;
+        if (currencyFormatter.positivePrefix == nil && currencyFormatter.negativePrefix == nil) {
+            currencyFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US"];
+            currencyFormatter.currencyCode = currencyCode;
+        }
 
         NSDictionary *numberSymbols = [[NSUserDefaults standardUserDefaults] objectForKey:@"AppleICUNumberSymbols"];
         NSString *decimalSeparator = numberSymbols[@"10"] ?: numberSymbols[@"0"];
@@ -31,8 +36,13 @@ char *trawl_native_currency(const char *decimal, const char *currency, int signe
         }
 
         BOOL negative = [amount compare:NSDecimalNumber.zero] == NSOrderedAscending;
-        NSString *prefix = negative ? currencyFormatter.negativePrefix : currencyFormatter.positivePrefix;
-        NSString *suffix = negative ? currencyFormatter.negativeSuffix : currencyFormatter.positiveSuffix;
+        NSString *prefix = (negative ? currencyFormatter.negativePrefix : currencyFormatter.positivePrefix) ?: @"";
+        NSString *suffix = (negative ? currencyFormatter.negativeSuffix : currencyFormatter.positiveSuffix) ?: @"";
+        if (prefix.length == 0 && suffix.length == 0 && currencyCode.length > 0) {
+            prefix = negative
+                ? [NSString stringWithFormat:@"%@ −", currencyCode]
+                : [NSString stringWithFormat:@"%@ ", currencyCode];
+        }
         prefix = [prefix stringByReplacingOccurrencesOfString:@"-" withString:@"−"];
         suffix = [suffix stringByReplacingOccurrencesOfString:@"-" withString:@"−"];
         if (signed_movement && [amount compare:NSDecimalNumber.zero] == NSOrderedDescending) {
@@ -41,8 +51,8 @@ char *trawl_native_currency(const char *decimal, const char *currency, int signe
         NSDecimalNumber *magnitude = negative
             ? [amount decimalNumberByMultiplyingBy:[NSDecimalNumber decimalNumberWithString:@"-1"]]
             : amount;
-        NSString *rendered = [NSString stringWithFormat:@"%@%@%@", prefix,
-                                                       [numberFormatter stringFromNumber:magnitude], suffix];
+        NSString *formattedMagnitude = [numberFormatter stringFromNumber:magnitude] ?: decimalText;
+        NSString *rendered = [NSString stringWithFormat:@"%@%@%@", prefix, formattedMagnitude, suffix];
         char *result = strdup(rendered.UTF8String);
         [numberFormatter release];
         [currencyFormatter release];

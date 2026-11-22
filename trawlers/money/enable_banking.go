@@ -116,10 +116,16 @@ func bankingDate(text string) *presentation.CalendarDate {
 func bankingAmount(amount enableBankingAmount) *contract.ExactMonetaryAmount {
 	return &contract.ExactMonetaryAmount{ExactDecimalAmount: amount.Amount, Iso_4217CurrencyCode: amount.Currency}
 }
-func enableBankingToken(settings *enableBankingSettings) (string, error) {
-	encoded, err := os.ReadFile(settings.PrivateKeyFile)
-	if err != nil {
-		return "", err
+func enableBankingToken(req *trawlkit.TrawlerCommandExecutionRequest, settings *enableBankingSettings) (string, error) {
+	var encoded []byte
+	if req != nil && len(req.BrokeredSecrets["enable_banking_private_key_pem"]) > 0 {
+		encoded = req.BrokeredSecrets["enable_banking_private_key_pem"]
+	} else {
+		var err error
+		encoded, err = os.ReadFile(settings.PrivateKeyFile)
+		if err != nil {
+			return "", err
+		}
 	}
 	block, _ := pem.Decode(encoded)
 	if block == nil {
@@ -231,7 +237,7 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 	if err != nil {
 		return err
 	}
-	token, err := enableBankingToken(settings)
+	token, err := enableBankingToken(req, settings)
 	if err != nil {
 		return err
 	}
@@ -244,8 +250,12 @@ func collectEnableBankingConnection(ctx context.Context, req *trawlkit.TrawlerCo
 	if err != nil {
 		return err
 	}
+	httpClient := req.PluginHTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 90 * time.Second}
+	}
 	api := &enableBankingClient{
-		httpClient:   &http.Client{Timeout: 90 * time.Second},
+		httpClient:   httpClient,
 		token:        token,
 		originalsDir: originals,
 	}

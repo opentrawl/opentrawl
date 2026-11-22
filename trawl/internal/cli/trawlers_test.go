@@ -7,9 +7,9 @@ func TestRegisteredTrawlerCatalogBuildsWithoutErrors(t *testing.T) {
 	if snapshot.registeredTrawlerCatalogConstructionError != nil {
 		t.Fatalf("buildRegisteredTrawlerManifestSnapshot returned error: %v", snapshot.registeredTrawlerCatalogConstructionError)
 	}
-	if len(snapshot.registeredTrawlerCatalogEntries) != len(trawlerFactories) {
+	if len(snapshot.registeredTrawlerCatalogEntries) < len(trawlerFactories) {
 		t.Fatalf(
-			"catalog entry count = %d, want %d",
+			"catalog entry count = %d, want at least %d",
 			len(snapshot.registeredTrawlerCatalogEntries),
 			len(trawlerFactories),
 		)

@@ -10,6 +10,13 @@ import (
 
 // Manifest returns the protobuf manifest used by API and app surfaces.
 func Manifest(trawler Trawler) (*federation.RegisteredTrawlerManifest, error) {
+	if provider, ok := trawler.(ExternalPluginManifestProvider); ok {
+		manifest := provider.ExternalPluginManifest()
+		if manifest == nil {
+			return nil, fmt.Errorf("external plugin manifest is nil")
+		}
+		return proto.Clone(manifest).(*federation.RegisteredTrawlerManifest), nil
+	}
 	registeredTrawlerDeclaration := trawler.RegisteredTrawlerDeclaration()
 	registeredTrawlerCommandName := strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerCommandName)
 	if registeredTrawlerCommandName == "" {

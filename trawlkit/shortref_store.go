@@ -110,6 +110,9 @@ func SyncTrawlerArchiveIndex(
 	trawler Trawler,
 	forceFullRebuild bool,
 ) (bool, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExecuteExternalPluginSyncArchiveIndex(ctx, stateRoot, forceFullRebuild)
+	}
 	exporter, ok := trawler.(ArchiveIndexChangeExporter)
 	if !ok {
 		return false, nil

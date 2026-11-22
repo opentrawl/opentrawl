@@ -291,9 +291,45 @@ func LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
 	return nil
 }
 
+func (r *TrawlerCommandExecutionRequest) SetPreResolvedLocalShortReferences(canonicalReferenceByLocalShortRef map[string]string) {
+	if r == nil {
+		return
+	}
+	if len(canonicalReferenceByLocalShortRef) == 0 {
+		r.preResolvedLocalShortReferences = nil
+		return
+	}
+	copied := make(map[string]string, len(canonicalReferenceByLocalShortRef))
+	for alias, canonical := range canonicalReferenceByLocalShortRef {
+		trimmedAlias := strings.TrimSpace(alias)
+		trimmedCanonical := strings.TrimSpace(canonical)
+		if trimmedAlias != "" && trimmedCanonical != "" {
+			copied[trimmedAlias] = trimmedCanonical
+		}
+	}
+	r.preResolvedLocalShortReferences = copied
+}
+
 func (r *TrawlerCommandExecutionRequest) lookupShortRef(ctx context.Context, alias string) ([]string, error) {
 	if r == nil {
 		return nil, errors.New("trawler command request is missing")
+	}
+	if len(r.preResolvedLocalShortReferences) > 0 {
+		if canonical, exact := r.preResolvedLocalShortReferences[alias]; exact {
+			return []string{canonical}, nil
+		}
+		var matches []string
+		for preAlias, canonical := range r.preResolvedLocalShortReferences {
+			if strings.HasPrefix(preAlias, alias) {
+				matches = append(matches, canonical)
+			}
+		}
+		if len(matches) > 0 {
+			return matches, nil
+		}
+		if r.shortReferenceDB() == nil && r.readOnlyShortReferenceCatalog == nil {
+			return nil, nil
+		}
 	}
 	if r.readOnlyShortReferenceCatalog != nil {
 		var matches []string

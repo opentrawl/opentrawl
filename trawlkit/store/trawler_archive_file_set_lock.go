@@ -19,6 +19,10 @@ func AcquireExclusiveTrawlerArchiveFileSetLock(trawlerArchivePath string) (*Traw
 	return acquireTrawlerArchiveFileSetLock(trawlerArchivePath, syscall.LOCK_EX)
 }
 
+func AcquireSharedTrawlerArchiveFileSetLock(trawlerArchivePath string) (*TrawlerArchiveFileSetLock, error) {
+	return acquireSharedTrawlerArchiveFileSetLock(trawlerArchivePath)
+}
+
 func acquireSharedTrawlerArchiveFileSetLock(trawlerArchivePath string) (*TrawlerArchiveFileSetLock, error) {
 	lock, err := acquireTrawlerArchiveFileSetLock(trawlerArchivePath, syscall.LOCK_SH|syscall.LOCK_NB)
 	if errors.Is(err, syscall.EWOULDBLOCK) {

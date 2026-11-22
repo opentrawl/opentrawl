@@ -16,11 +16,10 @@ type InstalledTrawler struct {
 	Trawler                   trawlkit.Trawler
 }
 
-// discoverInstalledTrawlers projects the explicit registrations into the
-// installed trawler model.
+// discoverInstalledTrawlers projects the explicit registrations and discovered
+// standalone plugins into the installed trawler model.
 func discoverInstalledTrawlers(ctx context.Context) []InstalledTrawler {
-	_ = ctx
-	return buildRegisteredTrawlerManifestSnapshot(false).installedTrawlers
+	return buildRegisteredTrawlerManifestSnapshotForContext(ctx, "", false).installedTrawlers
 }
 
 func installedTrawlerIdentityText(trawler InstalledTrawler) string {

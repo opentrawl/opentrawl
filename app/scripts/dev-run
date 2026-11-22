@@ -101,12 +101,19 @@ swift_binary_directory="$(host_swift build \
 
 mkdir -p \
   "$staged_contents/MacOS" \
-  "$staged_contents/Helpers" \
+  "$staged_contents/Helpers/plugins" \
   "$staged_contents/Frameworks" \
   "$staged_contents/Resources"
 cp "$swift_binary_directory/Trawl" "$staged_contents/MacOS/Trawl"
 ln -s ../MacOS/Trawl "$staged_contents/Helpers/trawl"
 chmod +x "$staged_contents/MacOS/Trawl"
+
+echo "Building bundled standalone trawler plugins"
+(
+  cd "$repository_root"
+  devenv shell -- "$repository_root/scripts/build-bundled-plugins" \
+    --output-dir "$staged_contents/Helpers/plugins"
+)
 
 sparkle_framework="$(find "$swift_scratch_path/artifacts" -type d \
   -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
@@ -120,14 +127,20 @@ plutil -create xml1 "$development_entitlements"
   -c "Add :com.apple.security.cs.disable-library-validation bool true" \
   "$development_entitlements"
 
-# The Nix Go toolchain may record its own resolver path. The app
-# uses the equivalent macOS platform library so it runs outside the dev shell.
-nix_resolver="$(otool -L "$staged_contents/MacOS/Trawl" \
-  | sed -n 's#^[[:space:]]*\(/nix/store/[^ ]*/libresolv\.9\.dylib\).*#\1#p')"
-if [[ -n "$nix_resolver" ]]; then
-  install_name_tool -change "$nix_resolver" /usr/lib/libresolv.9.dylib \
-    "$staged_contents/MacOS/Trawl"
-fi
+rewrite_nix_resolver() {
+  local binary="$1"
+  local nix_resolver
+  nix_resolver="$(otool -L "$binary" \
+    | sed -n 's#^[[:space:]]*\(/nix/store/[^ ]*/libresolv\.9\.dylib\).*#\1#p')"
+  if [[ -n "$nix_resolver" ]]; then
+    install_name_tool -change "$nix_resolver" /usr/lib/libresolv.9.dylib "$binary"
+  fi
+}
+rewrite_nix_resolver "$staged_contents/MacOS/Trawl"
+while IFS= read -r plugin_binary; do
+  chmod +x "$plugin_binary"
+  rewrite_nix_resolver "$plugin_binary"
+done < <(find "$staged_contents/Helpers/plugins" -mindepth 1 -maxdepth 1 -type f -name 'trawl-*' | sort)
 
 echo "Compiling the app icon"
 xcrun actool \
@@ -183,6 +196,10 @@ codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none "$sparkle/Versions/B/Updater.app"
 codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none "$sparkle"
+while IFS= read -r plugin_binary; do
+  codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
+    --options runtime --timestamp=none "$plugin_binary"
+done < <(find "$staged_contents/Helpers/plugins" -mindepth 1 -maxdepth 1 -type f -name 'trawl-*' | sort)
 codesign --force --sign "$signing_identity" --keychain "$signing_keychain" \
   --options runtime --timestamp=none --entitlements "$development_entitlements" \
   "$staged_app"

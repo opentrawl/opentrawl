@@ -2,6 +2,7 @@ package trawlkit
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
@@ -56,12 +57,24 @@ type TrawlerCommandExecutionRequest struct {
 	TrawlerCommandLog                 *cklog.Run
 	ReportTrawlerCommandProgress      func(Progress)
 	RequestedRecordAnchor             *RecordAnchorIdentifier
-	readOnlyShortReferenceCatalog     []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
-	coreShortReferenceStore           *store.Store
-	registeredTrawlerIdentityText     string
-	registeredTrawlerDisplayName      string
-	stateRoot                         string
-	replayShortReferences             func(context.Context) error
+	// PluginHTTPClient is routed through the host loopback CONNECT proxy when
+	// running inside a standalone plugin process.
+	PluginHTTPClient *http.Client
+	// BrokeredSecrets holds approved secret values passed over stdin by the
+	// host secret broker for the current standalone plugin invocation.
+	BrokeredSecrets map[string][]byte
+	// RecordSecretMutation asks the host secret broker to save or delete one
+	// approved writable secret key for the current standalone plugin.
+	RecordSecretMutation func(secretKey string, secretBytes []byte, deleteSecret bool) error
+	// RequestOpenBrowserURL asks the host to open an approved HTTPS sign-in URL.
+	RequestOpenBrowserURL           func(url string) error
+	preResolvedLocalShortReferences map[string]string
+	readOnlyShortReferenceCatalog   []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
+	coreShortReferenceStore         *store.Store
+	registeredTrawlerIdentityText   string
+	registeredTrawlerDisplayName    string
+	stateRoot                       string
+	replayShortReferences           func(context.Context) error
 }
 
 type ShortReferenceAssignmentCandidate struct {

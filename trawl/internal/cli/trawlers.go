@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,12 +12,12 @@ import (
 	contacts "github.com/opentrawl/opentrawl/trawlers/contacts"
 	imessage "github.com/opentrawl/opentrawl/trawlers/imessage"
 	mail "github.com/opentrawl/opentrawl/trawlers/mail"
-	money "github.com/opentrawl/opentrawl/trawlers/money"
 	notes "github.com/opentrawl/opentrawl/trawlers/notes"
 	photos "github.com/opentrawl/opentrawl/trawlers/photos"
 	telegram "github.com/opentrawl/opentrawl/trawlers/telegram"
 	whatsapp "github.com/opentrawl/opentrawl/trawlers/whatsapp"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/pluginruntime"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/twitter"
 	"google.golang.org/protobuf/proto"
@@ -52,7 +53,6 @@ type registeredTrawlerManifestSnapshot struct {
 // beta visibility stays the same in help, operations, namespaces and AppWire.
 // The environment override enables local development beyond the beta set.
 var trawlerFactories = []trawlerRegistration{
-	{factory: func() trawlkit.Trawler { return money.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return imessage.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return whatsapp.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return telegram.New() }, beta: true},
@@ -73,6 +73,14 @@ func macAppBranding(symbolName, accentColor, bundleIdentifier, artworkBundleIden
 }
 
 func buildRegisteredTrawlerManifestSnapshot(
+	includeDisabledTrawlersInRegisteredTrawlerCatalog bool,
+) registeredTrawlerManifestSnapshot {
+	return buildRegisteredTrawlerManifestSnapshotForContext(context.Background(), "", includeDisabledTrawlersInRegisteredTrawlerCatalog)
+}
+
+func buildRegisteredTrawlerManifestSnapshotForContext(
+	ctx context.Context,
+	stateRoot string,
 	includeDisabledTrawlersInRegisteredTrawlerCatalog bool,
 ) registeredTrawlerManifestSnapshot {
 	snapshot := registeredTrawlerManifestSnapshot{
@@ -128,7 +136,47 @@ func buildRegisteredTrawlerManifestSnapshot(
 			RegisteredTrawlerIsEnabled:    registeredTrawlerManifestEntry.registeredTrawlerIsEnabled,
 		})
 	}
+	appendDiscoveredExternalPluginsToSnapshot(ctx, stateRoot, seenRegisteredTrawlerIdentities, &snapshot)
 	return snapshot
+}
+
+func appendDiscoveredExternalPluginsToSnapshot(
+	ctx context.Context,
+	stateRoot string,
+	builtInIdentities map[string]struct{},
+	snapshot *registeredTrawlerManifestSnapshot,
+) {
+	discovered := pluginruntime.DiscoverExternalPlugins(ctx, stateRoot, builtInIdentities)
+	for _, plugin := range discovered {
+		manifest := plugin.Manifest.GetRegisteredTrawlerManifest()
+		discoveryErr := plugin.DiscoveryError
+		if discoveryErr == nil && manifest == nil {
+			discoveryErr = errors.New("external plugin manifest is nil")
+		}
+		if discoveryErr == nil {
+			manifest = proto.Clone(manifest).(*federation.RegisteredTrawlerManifest)
+			id := trawlkit.RegisteredTrawlerIdentityText(manifest.GetRegisteredTrawler())
+			discoveryErr = validateTrawlerPresentation(
+				id,
+				manifest.GetRegisteredTrawlerDisplayName(),
+				manifest.GetTrawlerBranding(),
+				manifest.GetSourceFreshnessDependency(),
+			)
+		}
+		snapshot.installedTrawlers = append(snapshot.installedTrawlers, InstalledTrawler{
+			RegisteredTrawlerManifest: manifest,
+			TrawlerDiscoveryError:     discoveryErr,
+			Trawler:                   plugin.Trawler,
+		})
+		if discoveryErr != nil {
+			continue
+		}
+		snapshot.registeredTrawlerCatalogEntries = append(snapshot.registeredTrawlerCatalogEntries, &federation.RegisteredTrawlerCatalogEntry{
+			RegisteredTrawlerManifest:     manifest,
+			RegisteredTrawlerReleaseState: federation.RegisteredTrawlerReleaseState_REGISTERED_TRAWLER_RELEASE_STATE_AVAILABLE,
+			RegisteredTrawlerIsEnabled:    true,
+		})
+	}
 }
 
 func buildRegisteredTrawlerManifestEntry(registration trawlerRegistration) registeredTrawlerManifestEntry {

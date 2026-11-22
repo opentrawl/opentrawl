@@ -93,6 +93,9 @@ func parseTargetTrawlerCommandFlags(targetCommand targetTrawlerCommand) (targetT
 }
 
 func DeclaredTrawlerCommandWritesNoFiles(trawler Trawler, arguments []string) (bool, error) {
+	if external, ok := trawler.(ExternalPluginExecutor); ok {
+		return external.ExternalPluginDeclaredCommandWritesNoFiles(arguments)
+	}
 	targetCommand, err := resolveTrawlerCommand(trawler, arguments)
 	if err != nil {
 		return false, err

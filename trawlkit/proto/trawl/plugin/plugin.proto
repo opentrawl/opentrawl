@@ -1,0 +1,248 @@
+// Package trawl.plugin defines the raw length-delimited binary protobuf wire
+// protocol between the OpenTrawl host (trawl CLI and Mac app) and standalone
+// out-of-process trawler plugin executables.
+//
+// Framing. The host writes exactly one length-delimited PluginInvocationRequest
+// to the plugin's stdin and closes stdin. The plugin writes zero or more
+// length-delimited PluginStreamFrame messages to stdout (Progress, Log,
+// ArchiveIndexChangeBatch, SecretMutation, OpenBrowserURLNotice), followed by
+// exactly one terminal PluginStreamFrame carrying PluginInvocationResult, and
+// then exits.
+syntax = "proto3";
+
+package trawl.plugin;
+
+import "google/protobuf/timestamp.proto";
+import "trawl/command/command.proto";
+import "trawl/conversation/conversation.proto";
+import "trawl/federation/federation.proto";
+import "trawl/identity/identity.proto";
+import "trawl/index/index.proto";
+import "trawl/message/message.proto";
+import "trawl/open/open.proto";
+import "trawl/person/person.proto";
+import "trawl/search/search.proto";
+import "trawl/status/status.proto";
+import "trawl/update/update.proto";
+import "trawl/worker/worker.proto";
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin;plugin";
+
+// SelfHostedNetworkHostApproval records a user-approved exception to the
+// proxy's default block on private, loopback, link-local, and CGNAT/Tailscale
+// IP addresses for one exact hostname and port.
+message SelfHostedNetworkHostApproval {
+  string host_and_port = 1;
+  repeated string allowed_ip_prefixes = 2;
+}
+
+// PluginDeclaredCapabilities lists the sandboxed resources and optional
+// shared operations that a standalone plugin executable declares during
+// zero-privilege manifest probing.
+message PluginDeclaredCapabilities {
+  repeated string declared_network_hosts = 1;
+  repeated string declared_self_hosted_network_hosts = 2;
+  repeated string declared_read_secret_keys = 3;
+  repeated string declared_write_secret_keys = 4;
+  repeated string declared_read_paths = 5;
+  repeated string declared_auth_origins = 6;
+  // Dotted TOML paths inside the plugin's host-owned read-only config.toml
+  // whose string values name existing read-only credential files (honoured only
+  // for bundled first-party plugins; user-installed plugins use trust.pb).
+  repeated string declared_config_read_path_fields = 7;
+  bool supports_archive_index_change_export = 8;
+  bool supports_who_person_matching = 9;
+  bool supports_person_message_counting = 10;
+  bool supports_conversation_listing = 11;
+  bool supports_message_listing = 12;
+  bool supports_people_snapshot_export = 13;
+}
+
+// PluginManifestResponse is returned by a plugin when probed with
+// PluginManifestOperationRequest under a zero-disk, zero-network sandbox.
+message PluginManifestResponse {
+  trawl.federation.RegisteredTrawlerManifest registered_trawler_manifest = 1;
+  PluginDeclaredCapabilities declared_capabilities = 2;
+}
+
+// PluginTrustRecord is stored by the host at
+// <stateRoot>/plugins/<plugin_identifier>/trust.pb (mode 0600, host-owned) to
+// pin a user-installed plugin executable's SHA-256 hash and user-approved
+// capability grants.
+message PluginTrustRecord {
+  string plugin_identifier = 1;
+  string approved_binary_sha256_hex = 2;
+  repeated string approved_read_paths = 3;
+  repeated string approved_network_hosts = 4;
+  repeated SelfHostedNetworkHostApproval approved_self_hosted_network_hosts = 5;
+  repeated string approved_read_secret_keys = 6;
+  repeated string approved_write_secret_keys = 7;
+  repeated string approved_auth_origins = 8;
+  string approved_archive_directory_override = 9;
+}
+
+// CachedPluginManifestRecord stores a verified manifest keyed by the plugin
+// executable's SHA-256 digest so startup discovery avoids re-spawning plugins.
+message CachedPluginManifestRecord {
+  string executable_sha256_hex = 1;
+  PluginManifestResponse plugin_manifest = 2;
+}
+
+// PluginProxyConnectionGrant carries the ephemeral per-invocation loopback
+// HTTP CONNECT proxy address and random authentication token on stdin.
+message PluginProxyConnectionGrant {
+  string loopback_proxy_address = 1;
+  string proxy_authentication_token = 2;
+}
+
+// PluginSecretEntry delivers one brokered secret value to a plugin over stdin.
+message PluginSecretEntry {
+  string secret_key = 1;
+  bytes secret_bytes = 2;
+}
+
+// PluginSecretMutation asks the host secret broker to store or delete one
+// declared writable secret key in the plugin's isolated Keychain namespace.
+message PluginSecretMutation {
+  string secret_key = 1;
+  bytes secret_bytes = 2;
+  bool delete_secret = 3;
+}
+
+// ResolvedLocalShortReferenceMapping supplies the canonical record reference
+// for a local short reference resolved by the host before plugin invocation.
+message ResolvedLocalShortReferenceMapping {
+  trawl.identity.LocalTrawlerShortReference local_short_reference = 1;
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 2;
+}
+
+message PluginManifestOperationRequest {}
+
+message PluginStatusOperationRequest {}
+
+message PluginUpdateOperationRequest {
+  repeated string update_arguments = 1;
+  string since_opaque_index_cursor = 2;
+}
+
+message PluginSearchOperationRequest {
+  string query_text = 1;
+  uint32 result_limit = 2;
+  google.protobuf.Timestamp after_time = 3;
+  google.protobuf.Timestamp before_time = 4;
+  bool after_time_is_set = 5;
+  bool before_time_is_set = 6;
+  string person_filter_text = 7;
+  repeated trawl.person.ExactPersonFilterIdentifier exact_person_filter_identifiers = 8;
+  bool search_total_is_lower_bound_when_result_limit_is_reached = 9;
+}
+
+message PluginOpenRecordOperationRequest {
+  trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 1;
+  trawl.identity.RecordAnchorIdentifier requested_record_anchor = 2;
+}
+
+message PluginExportArchiveIndexChangesOperationRequest {
+  string since_opaque_index_cursor = 1;
+}
+
+message PluginBespokeCommandOperationRequest {
+  repeated string command_arguments = 1;
+  string since_opaque_index_cursor = 2;
+}
+
+message PluginWhoOperationRequest {
+  string query_text = 1;
+}
+
+message PluginConversationsOperationRequest {
+  uint32 result_limit = 1;
+  bool include_all_conversations = 2;
+  string person_filter_text = 3;
+  repeated trawl.person.ExactPersonFilterIdentifier exact_person_filter_identifiers = 4;
+}
+
+message PluginMessagesOperationRequest {
+  trawl.identity.LocalTrawlerShortReference local_conversation_short_reference = 1;
+  uint32 result_limit = 2;
+  google.protobuf.Timestamp after_time = 3;
+  google.protobuf.Timestamp before_time = 4;
+  bool after_time_is_set = 5;
+  bool before_time_is_set = 6;
+}
+
+message PluginPeopleSnapshotOperationRequest {}
+
+// PluginInvocationRequest is the single length-delimited protobuf message
+// written to a standalone plugin executable's stdin.
+message PluginInvocationRequest {
+  oneof operation {
+    PluginManifestOperationRequest manifest = 1;
+    PluginStatusOperationRequest status = 2;
+    PluginUpdateOperationRequest update = 3;
+    PluginSearchOperationRequest search = 4;
+    PluginOpenRecordOperationRequest open_record = 5;
+    PluginExportArchiveIndexChangesOperationRequest export_archive_index_changes = 6;
+    PluginBespokeCommandOperationRequest bespoke_command = 7;
+    PluginWhoOperationRequest who = 8;
+    trawl.person.ExactPersonMessageCountRequest count_person_messages = 9;
+    PluginConversationsOperationRequest conversations = 10;
+    PluginMessagesOperationRequest messages = 11;
+    PluginPeopleSnapshotOperationRequest people_snapshot = 12;
+  }
+
+  string archive_directory_path = 20;
+  string archive_database_path = 21;
+  string configuration_file_path = 22;
+  repeated string approved_read_paths = 23;
+  repeated ResolvedLocalShortReferenceMapping pre_resolved_local_short_references = 24;
+  repeated PluginSecretEntry brokered_secrets = 25;
+  PluginProxyConnectionGrant network_proxy_grant = 26;
+  int32 verbosity_level = 27;
+  bool is_internal_app_request = 28;
+}
+
+// PluginOpenBrowserURLNotice asks the host to open an HTTPS URL whose origin
+// matches the plugin's approved auth origins.
+message PluginOpenBrowserURLNotice {
+  string url = 1;
+}
+
+// PluginArchiveIndexExportCompleted is the terminal success payload for an
+// export_archive_index_changes operation.
+message PluginArchiveIndexExportCompleted {
+  bool exported_any_batches = 1;
+}
+
+// PluginInvocationResult is the terminal payload of a plugin invocation.
+message PluginInvocationResult {
+  oneof success {
+    PluginManifestResponse manifest = 1;
+    trawl.status.TrawlerStatusResponse status = 2;
+    trawl.update.TrawlerArchiveUpdateReport update = 3;
+    trawl.search.TrawlerSearchResponse search = 4;
+    trawl.open.OpenRecord open_record = 5;
+    PluginArchiveIndexExportCompleted archive_index_export_completed = 6;
+    trawl.command.TrawlerCommandResponse trawler_command_response = 7;
+    trawl.person.TrawlerPersonMatchResponse who = 8;
+    trawl.person.ExactPersonMessageCountResponse count_person_messages = 9;
+    trawl.conversation.ConversationListResponse conversations = 10;
+    trawl.message.MessageListResponse messages = 11;
+    trawl.person.TrawlerPeopleSnapshot people_snapshot = 12;
+  }
+
+  trawl.worker.Error error = 20;
+}
+
+// PluginStreamFrame is one length-delimited message emitted by a plugin
+// executable on stdout.
+message PluginStreamFrame {
+  oneof kind {
+    trawl.worker.Progress progress = 1;
+    trawl.worker.Log log = 2;
+    trawl.index.ArchiveIndexChangeBatch archive_index_change_batch = 3;
+    PluginSecretMutation secret_mutation = 4;
+    PluginOpenBrowserURLNotice open_browser_url = 5;
+    PluginInvocationResult result = 6;
+  }
+}

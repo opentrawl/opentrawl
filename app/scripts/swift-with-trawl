@@ -47,5 +47,8 @@ swift_environment=(HOME="${HOME:-/tmp}" PATH="/usr/bin:/bin:/usr/sbin:/sbin")
 if [[ "${OPENTRAWL_SKIP_WINDOW_FOCUS_TESTS:-}" == "1" ]]; then
   swift_environment+=(OPENTRAWL_SKIP_WINDOW_FOCUS_TESTS=1)
 fi
+if [[ -n "${OPENTRAWL_PLUGIN_DIRS:-}" ]]; then
+  swift_environment+=("OPENTRAWL_PLUGIN_DIRS=$OPENTRAWL_PLUGIN_DIRS")
+fi
 /usr/bin/env -i "${swift_environment[@]}" \
   /usr/bin/xcrun swift "$@" --package-path "$app_directory" -Xlinker "$command_line_archive"
