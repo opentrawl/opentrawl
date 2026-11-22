@@ -28,14 +28,14 @@ const (
 
 var ErrAmbiguousTwitterSyncSource = errors.New("both X web session and official API credentials exist; set source = \"web_session\" or source = \"official_api\" in config.toml")
 
-type Config struct {
+type TwitterCrawlerConfiguration struct {
 	Source           string `toml:"source"`
 	Handle           string `toml:"handle"`
 	UserID           string `toml:"user_id"`
 	MonthlyBudgetUSD string `toml:"monthly_budget_usd"`
 }
 
-func (c Config) Validate() error {
+func (c TwitterCrawlerConfiguration) Validate() error {
 	if _, err := parseTwitterSyncSource(c.Source); err != nil {
 		return err
 	}

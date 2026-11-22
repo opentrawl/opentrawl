@@ -157,21 +157,19 @@ func (s *Store) ResolveMailPersonCandidates(ctx context.Context, personQuery str
 	if err != nil {
 		return nil, err
 	}
-	matches := []MailPersonCandidate{}
-	for _, candidate := range candidates {
-		rank, matched := candidate.matcherCandidate().MatchRank(personQuery)
-		if !matched {
-			continue
+	ranked := whomatch.RankMatches(personQuery, candidates, MailPersonCandidate.matcherCandidate)
+	sort.SliceStable(ranked, func(left, right int) bool {
+		if ranked[left].Rank != ranked[right].Rank {
+			return ranked[left].Rank.BetterThan(ranked[right].Rank)
 		}
-		candidate.matchRank = rank
+		return ranked[left].Item.LatestMessageTime.After(ranked[right].Item.LatestMessageTime)
+	})
+	matches := make([]MailPersonCandidate, 0, len(ranked))
+	for _, match := range ranked {
+		candidate := match.Item
+		candidate.matchRank = match.Rank
 		matches = append(matches, candidate)
 	}
-	sort.SliceStable(matches, func(left, right int) bool {
-		if matches[left].matchRank != matches[right].matchRank {
-			return matches[left].matchRank.BetterThan(matches[right].matchRank)
-		}
-		return matches[left].LatestMessageTime.After(matches[right].LatestMessageTime)
-	})
 	return matches, nil
 }
 

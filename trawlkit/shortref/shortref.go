@@ -25,7 +25,7 @@ const (
 	negligibleCollisionPairRate = 0.01
 )
 
-type Entry struct {
+type ShortReferenceEntry struct {
 	FullRef string
 	Alias   string
 }
@@ -77,7 +77,7 @@ func ValidAlias(alias string) bool {
 	return true
 }
 
-func Build(fullRefs iter.Seq[string]) ([]Entry, error) {
+func Build(fullRefs iter.Seq[string]) ([]ShortReferenceEntry, error) {
 	if fullRefs == nil {
 		return nil, nil
 	}
@@ -88,7 +88,7 @@ func Build(fullRefs iter.Seq[string]) ([]Entry, error) {
 	return buildWithAlias(refs, 0, Alias)
 }
 
-func BuildSlice(fullRefs []string) ([]Entry, error) {
+func BuildSlice(fullRefs []string) ([]ShortReferenceEntry, error) {
 	return Build(func(yield func(string) bool) {
 		for _, fullRef := range fullRefs {
 			if !yield(fullRef) {
@@ -100,16 +100,16 @@ func BuildSlice(fullRefs []string) ([]Entry, error) {
 
 // BuildSliceAvoidingAliases builds display entries whose aliases do not collide
 // with reservedAliases.
-func BuildSliceAvoidingAliases(fullRefs []string, reservedAliases map[string]struct{}) ([]Entry, error) {
+func BuildSliceAvoidingAliases(fullRefs []string, reservedAliases map[string]struct{}) ([]ShortReferenceEntry, error) {
 	return buildWithAliasAvoidingAliases(fullRefs, 0, Alias, reservedAliases)
 }
 
-func LookupEntries(displayEntries []Entry) []Entry {
-	seen := make(map[Entry]struct{})
-	lookupEntries := make([]Entry, 0, len(displayEntries))
+func LookupEntries(displayEntries []ShortReferenceEntry) []ShortReferenceEntry {
+	seen := make(map[ShortReferenceEntry]struct{})
+	lookupEntries := make([]ShortReferenceEntry, 0, len(displayEntries))
 	for _, entry := range displayEntries {
 		for length := MinLength; length <= len(entry.Alias); length++ {
-			lookupEntry := Entry{FullRef: entry.FullRef, Alias: entry.Alias[:length]}
+			lookupEntry := ShortReferenceEntry{FullRef: entry.FullRef, Alias: entry.Alias[:length]}
 			if _, ok := seen[lookupEntry]; ok {
 				continue
 			}
@@ -126,11 +126,11 @@ func LookupEntries(displayEntries []Entry) []Entry {
 	return lookupEntries
 }
 
-func buildWithAlias(fullRefs []string, startLength int, alias aliasFunc) ([]Entry, error) {
+func buildWithAlias(fullRefs []string, startLength int, alias aliasFunc) ([]ShortReferenceEntry, error) {
 	return buildWithAliasAvoidingAliases(fullRefs, startLength, alias, nil)
 }
 
-func buildWithAliasAvoidingAliases(fullRefs []string, startLength int, alias aliasFunc, reservedAliases map[string]struct{}) ([]Entry, error) {
+func buildWithAliasAvoidingAliases(fullRefs []string, startLength int, alias aliasFunc, reservedAliases map[string]struct{}) ([]ShortReferenceEntry, error) {
 	refs := uniqueSorted(fullRefs)
 	if len(refs) == 0 {
 		return nil, nil
@@ -173,10 +173,10 @@ func buildWithAliasAvoidingAliases(fullRefs []string, startLength int, alias ali
 		}
 	}
 
-	entries := make([]Entry, 0, len(refs))
+	entries := make([]ShortReferenceEntry, 0, len(refs))
 	for _, ref := range refs {
 		length := lengths[ref]
-		entries = append(entries, Entry{FullRef: ref, Alias: alias(ref, length)})
+		entries = append(entries, ShortReferenceEntry{FullRef: ref, Alias: alias(ref, length)})
 	}
 	return entries, nil
 }

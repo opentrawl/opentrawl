@@ -13,81 +13,111 @@ func ValidateTrawlerPeopleSnapshot(snapshot *person.TrawlerPeopleSnapshot) error
 	}
 	seenPersonIdentifiersWithinTrawlerArchive := map[string]struct{}{}
 	for personIdentityIndex, personIdentity := range snapshot.GetTrawlerPersonIdentities() {
-		if personIdentity == nil {
-			return fmt.Errorf("person identity %d is missing", personIdentityIndex)
+		if err := validateTrawlerPersonIdentity(personIdentityIndex, personIdentity, seenPersonIdentifiersWithinTrawlerArchive); err != nil {
+			return err
 		}
-		personIdentifierWithinTrawlerArchive := strings.TrimSpace(
-			personIdentity.GetPersonIdentifierWithinTrawlerArchive().GetPersonIdentifierWithinTrawlerArchive(),
-		)
-		if personIdentifierWithinTrawlerArchive != "" {
-			if _, exists := seenPersonIdentifiersWithinTrawlerArchive[personIdentifierWithinTrawlerArchive]; exists {
-				return fmt.Errorf("person identity %d repeats person identifier within trawler archive %q", personIdentityIndex, personIdentifierWithinTrawlerArchive)
-			}
-			seenPersonIdentifiersWithinTrawlerArchive[personIdentifierWithinTrawlerArchive] = struct{}{}
+	}
+	return nil
+}
+
+func validateTrawlerPersonIdentity(
+	personIdentityIndex int,
+	personIdentity *person.TrawlerPersonIdentity,
+	seenPersonIdentifiersWithinTrawlerArchive map[string]struct{},
+) error {
+	if personIdentity == nil {
+		return fmt.Errorf("person identity %d is missing", personIdentityIndex)
+	}
+	personIdentifierWithinTrawlerArchive := strings.TrimSpace(
+		personIdentity.GetPersonIdentifierWithinTrawlerArchive().GetPersonIdentifierWithinTrawlerArchive(),
+	)
+	if personIdentifierWithinTrawlerArchive != "" {
+		if _, exists := seenPersonIdentifiersWithinTrawlerArchive[personIdentifierWithinTrawlerArchive]; exists {
+			return fmt.Errorf("person identity %d repeats person identifier within trawler archive %q", personIdentityIndex, personIdentifierWithinTrawlerArchive)
 		}
-		if strings.TrimSpace(personIdentity.GetPersonDisplayName()) == "" {
-			return fmt.Errorf("person identity %d display name is required", personIdentityIndex)
+		seenPersonIdentifiersWithinTrawlerArchive[personIdentifierWithinTrawlerArchive] = struct{}{}
+	}
+	if strings.TrimSpace(personIdentity.GetPersonDisplayName()) == "" {
+		return fmt.Errorf("person identity %d display name is required", personIdentityIndex)
+	}
+	if personIdentifierWithinTrawlerArchive == "" &&
+		len(personIdentity.GetPersonEmailAddresses()) == 0 &&
+		len(personIdentity.GetPersonPhoneNumbers()) == 0 &&
+		len(personIdentity.GetPersonAccountIdentifiersForServices()) == 0 {
+		return fmt.Errorf("person identity %d requires at least one identifier", personIdentityIndex)
+	}
+	if err := validateUniquePersonValues(personIdentityIndex, "email address", personIdentity.GetPersonEmailAddresses(), true); err != nil {
+		return err
+	}
+	if err := validateUniquePersonValues(personIdentityIndex, "phone number", personIdentity.GetPersonPhoneNumbers(), false); err != nil {
+		return err
+	}
+	return validatePersonAccountServices(personIdentityIndex, personIdentity.GetPersonAccountIdentifiersForServices())
+}
+
+func validateUniquePersonValues(personIdentityIndex int, label string, values []string, lowercase bool) error {
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if lowercase {
+			value = strings.ToLower(value)
 		}
-		if personIdentifierWithinTrawlerArchive == "" &&
-			len(personIdentity.GetPersonEmailAddresses()) == 0 &&
-			len(personIdentity.GetPersonPhoneNumbers()) == 0 &&
-			len(personIdentity.GetPersonAccountIdentifiersForServices()) == 0 {
-			return fmt.Errorf("person identity %d requires at least one identifier", personIdentityIndex)
+		if value == "" {
+			return fmt.Errorf("person identity %d contains an empty %s", personIdentityIndex, label)
 		}
-		seenPersonEmailAddresses := map[string]struct{}{}
-		for _, personEmailAddress := range personIdentity.GetPersonEmailAddresses() {
-			personEmailAddress = strings.ToLower(strings.TrimSpace(personEmailAddress))
-			if personEmailAddress == "" {
-				return fmt.Errorf("person identity %d contains an empty email address", personIdentityIndex)
-			}
-			if _, exists := seenPersonEmailAddresses[personEmailAddress]; exists {
-				return fmt.Errorf("person identity %d contains duplicate email address %q", personIdentityIndex, personEmailAddress)
-			}
-			seenPersonEmailAddresses[personEmailAddress] = struct{}{}
+		if _, exists := seen[value]; exists {
+			return fmt.Errorf("person identity %d contains duplicate %s %q", personIdentityIndex, label, value)
 		}
-		seenPersonPhoneNumbers := map[string]struct{}{}
-		for _, personPhoneNumber := range personIdentity.GetPersonPhoneNumbers() {
-			personPhoneNumber = strings.TrimSpace(personPhoneNumber)
-			if personPhoneNumber == "" {
-				return fmt.Errorf("person identity %d contains an empty phone number", personIdentityIndex)
-			}
-			if _, exists := seenPersonPhoneNumbers[personPhoneNumber]; exists {
-				return fmt.Errorf("person identity %d contains duplicate phone number %q", personIdentityIndex, personPhoneNumber)
-			}
-			seenPersonPhoneNumbers[personPhoneNumber] = struct{}{}
+		seen[value] = struct{}{}
+	}
+	return nil
+}
+
+func validatePersonAccountServices(
+	personIdentityIndex int,
+	services []*person.TrawlerPersonAccountIdentifiersForService,
+) error {
+	seenServices := map[string]struct{}{}
+	for _, service := range services {
+		if service == nil {
+			return fmt.Errorf("person identity %d contains a missing account service", personIdentityIndex)
 		}
-		seenPersonAccountServiceNames := map[string]struct{}{}
-		for _, personAccountIdentifiersForService := range personIdentity.GetPersonAccountIdentifiersForServices() {
-			if personAccountIdentifiersForService == nil {
-				return fmt.Errorf("person identity %d contains a missing account service", personIdentityIndex)
-			}
-			personAccountServiceName := strings.TrimSpace(personAccountIdentifiersForService.GetPersonAccountServiceName())
-			if personAccountServiceName == "" {
-				return fmt.Errorf("person identity %d contains an empty account service name", personIdentityIndex)
-			}
-			personAccountServiceNameKey := strings.ToLower(personAccountServiceName)
-			if _, exists := seenPersonAccountServiceNames[personAccountServiceNameKey]; exists {
-				return fmt.Errorf("person identity %d contains duplicate account service name %q", personIdentityIndex, personAccountServiceName)
-			}
-			seenPersonAccountServiceNames[personAccountServiceNameKey] = struct{}{}
-			if len(personAccountIdentifiersForService.GetPersonAccountIdentifiersWithinService()) == 0 {
-				return fmt.Errorf("person identity %d contains no %s account identifiers", personIdentityIndex, personAccountServiceName)
-			}
-			seenPersonAccountIdentifiers := map[string]struct{}{}
-			for _, personAccountIdentifierWithinService := range personAccountIdentifiersForService.GetPersonAccountIdentifiersWithinService() {
-				personAccountIdentifier := strings.TrimSpace(
-					personAccountIdentifierWithinService.GetPersonAccountIdentifierWithinService(),
-				)
-				if personAccountIdentifier == "" {
-					return fmt.Errorf("person identity %d contains an empty %s account identifier", personIdentityIndex, personAccountServiceName)
-				}
-				personAccountIdentifierKey := strings.ToLower(personAccountIdentifier)
-				if _, exists := seenPersonAccountIdentifiers[personAccountIdentifierKey]; exists {
-					return fmt.Errorf("person identity %d contains duplicate %s account identifier %q", personIdentityIndex, personAccountServiceName, personAccountIdentifier)
-				}
-				seenPersonAccountIdentifiers[personAccountIdentifierKey] = struct{}{}
-			}
+		serviceName := strings.TrimSpace(service.GetPersonAccountServiceName())
+		if serviceName == "" {
+			return fmt.Errorf("person identity %d contains an empty account service name", personIdentityIndex)
 		}
+		serviceKey := strings.ToLower(serviceName)
+		if _, exists := seenServices[serviceKey]; exists {
+			return fmt.Errorf("person identity %d contains duplicate account service name %q", personIdentityIndex, serviceName)
+		}
+		seenServices[serviceKey] = struct{}{}
+		identifiers := service.GetPersonAccountIdentifiersWithinService()
+		if len(identifiers) == 0 {
+			return fmt.Errorf("person identity %d contains no %s account identifiers", personIdentityIndex, serviceName)
+		}
+		if err := validateServiceAccountIdentifiers(personIdentityIndex, serviceName, identifiers); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateServiceAccountIdentifiers(
+	personIdentityIndex int,
+	serviceName string,
+	identifiers []*person.PersonAccountIdentifierWithinService,
+) error {
+	seen := map[string]struct{}{}
+	for _, entry := range identifiers {
+		identifier := strings.TrimSpace(entry.GetPersonAccountIdentifierWithinService())
+		if identifier == "" {
+			return fmt.Errorf("person identity %d contains an empty %s account identifier", personIdentityIndex, serviceName)
+		}
+		key := strings.ToLower(identifier)
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("person identity %d contains duplicate %s account identifier %q", personIdentityIndex, serviceName, identifier)
+		}
+		seen[key] = struct{}{}
 	}
 	return nil
 }

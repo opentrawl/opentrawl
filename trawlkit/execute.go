@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	commandcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
@@ -18,20 +17,13 @@ import (
 )
 
 func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targetTrawlerCommand, globals globalOptions, wireChild bool) (result executionResult) {
-	command, err := parseTargetTrawlerCommandFlags(command)
+	command, paths, err := prepareTargetTrawlerCommand(trawler, command, globals)
 	if err != nil {
 		return executionResult{err: err}
 	}
-	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, trawler.RegisteredTrawlerDeclaration())
+	runLog, err := r.openRunLogIfWritable(paths, command, globals, wireChild)
 	if err != nil {
 		return executionResult{err: err}
-	}
-	var runLog *cklog.Run
-	if !command.writesNoFiles {
-		runLog, err = r.openRunLog(paths, command, globals, wireChild)
-		if err != nil {
-			return executionResult{err: err}
-		}
 	}
 	if runLog != nil && !wireChild {
 		defer func() {
@@ -43,40 +35,16 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 	if err := trawler.LoadTrawlerConfiguration(paths.TrawlerConfigurationPath); err != nil {
 		return executionResult{err: err}
 	}
-	if command.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED &&
-		command.sharedOperationExecution == nil {
-		command.invocationArguments = append([]string(nil), command.args...)
-		args, err := parseSharedTrawlerCommandFlags(
-			command.sharedOperation,
-			command.shared,
-			command.args,
-			command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
-		)
-		if err != nil {
-			return executionResult{err: err}
-		}
-		command.args = args
-	}
-	var lock *runLock
 	if command.mutates {
-		lock, err = acquireRunLock(paths.Base)
+		lock, err := acquireRunLock(paths.Base)
 		if err != nil {
 			return executionResult{err: err}
 		}
 		defer func() { _ = lock.Close() }()
 	}
-	var timeout time.Duration
-	if !command.mutates {
-		timeout = command.timeout
-		if timeout == 0 {
-			timeout = r.opts.readTimeout
-		}
-	}
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
+	ctx, cancel := r.withReadCommandTimeout(ctx, command)
+	defer cancel()
+
 	st, err := openStore(ctx, paths.TrawlerArchivePaths, command.storeMode)
 	if err != nil {
 		return executionResult{err: err}
@@ -84,15 +52,7 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 	if st != nil {
 		defer func() { _ = st.Close() }()
 	}
-	coreShortRefOpenMode := coreShortReferenceStoreReadOnlyIfPresent
-	switch {
-	case command.writesNoFiles:
-		coreShortRefOpenMode = coreShortReferenceStoreReadOnlyWithoutWritingFilesIfPresent
-	case wireChild && command.mutates:
-		coreShortRefOpenMode = coreShortReferenceStoreReadOnlyIfPresent
-	case command.mutates || st != nil:
-		coreShortRefOpenMode = coreShortReferenceStoreReadWrite
-	}
+	coreShortRefOpenMode := selectCoreShortReferenceOpenMode(command, st, wireChild)
 	coreShortRefStore, err := openCoreShortReferenceStore(ctx, paths.TrawlerArchivePaths, coreShortRefOpenMode)
 	if err != nil {
 		return executionResult{err: err}
@@ -100,6 +60,89 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 	if coreShortRefStore != nil {
 		defer func() { _ = coreShortRefStore.Close() }()
 	}
+	req := r.buildExecutionRequest(trawler, command, paths, runLog, st, coreShortRefStore, coreShortRefOpenMode, wireChild)
+	return r.executePreparedCommand(ctx, trawler, command, paths, req, wireChild)
+}
+
+func prepareTargetTrawlerCommand(
+	trawler Trawler,
+	command targetTrawlerCommand,
+	globals globalOptions,
+) (targetTrawlerCommand, resolvedTrawlerArchivePaths, error) {
+	parsedCommand, err := parseTargetTrawlerCommandFlags(command)
+	if err != nil {
+		return targetTrawlerCommand{}, resolvedTrawlerArchivePaths{}, err
+	}
+	paths, err := resolveTrawlerArchivePaths(globals.stateRoot, trawler.RegisteredTrawlerDeclaration())
+	if err != nil {
+		return targetTrawlerCommand{}, resolvedTrawlerArchivePaths{}, err
+	}
+	if parsedCommand.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED &&
+		parsedCommand.sharedOperationExecution == nil {
+		parsedCommand.invocationArguments = append([]string(nil), parsedCommand.args...)
+		args, err := parseSharedTrawlerCommandFlags(
+			parsedCommand.sharedOperation,
+			parsedCommand.shared,
+			parsedCommand.args,
+			parsedCommand.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		)
+		if err != nil {
+			return targetTrawlerCommand{}, resolvedTrawlerArchivePaths{}, err
+		}
+		parsedCommand.args = args
+	}
+	return parsedCommand, paths, nil
+}
+
+func (r runner) openRunLogIfWritable(
+	paths resolvedTrawlerArchivePaths,
+	command targetTrawlerCommand,
+	globals globalOptions,
+	wireChild bool,
+) (*cklog.Run, error) {
+	if command.writesNoFiles {
+		return nil, nil
+	}
+	return r.openRunLog(paths, command, globals, wireChild)
+}
+
+func (r runner) withReadCommandTimeout(ctx context.Context, command targetTrawlerCommand) (context.Context, context.CancelFunc) {
+	if command.mutates {
+		return ctx, func() {}
+	}
+	timeout := command.timeout
+	if timeout == 0 {
+		timeout = r.opts.readTimeout
+	}
+	if timeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func selectCoreShortReferenceOpenMode(command targetTrawlerCommand, st *store.Store, wireChild bool) coreShortReferenceStoreOpenMode {
+	switch {
+	case command.writesNoFiles:
+		return coreShortReferenceStoreReadOnlyWithoutWritingFilesIfPresent
+	case wireChild && command.mutates:
+		return coreShortReferenceStoreReadOnlyIfPresent
+	case command.mutates || st != nil:
+		return coreShortReferenceStoreReadWrite
+	default:
+		return coreShortReferenceStoreReadOnlyIfPresent
+	}
+}
+
+func (r runner) buildExecutionRequest(
+	trawler Trawler,
+	command targetTrawlerCommand,
+	paths resolvedTrawlerArchivePaths,
+	runLog *cklog.Run,
+	st *store.Store,
+	coreShortRefStore *store.Store,
+	coreShortRefOpenMode coreShortReferenceStoreOpenMode,
+	wireChild bool,
+) *TrawlerCommandExecutionRequest {
 	req := &TrawlerCommandExecutionRequest{
 		OpenedTrawlerArchiveStore: st,
 		TrawlerArchivePaths:       paths.TrawlerArchivePaths,
@@ -109,29 +152,49 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 			logProgress(runLog, progress)
 		},
 	}
-	if snapshotProvider, ok := trawler.(ShortReferenceSnapshotProvider); ok &&
-		coreShortRefStore != nil &&
-		coreShortRefOpenMode == coreShortReferenceStoreReadWrite &&
-		st != nil &&
-		!command.writesNoFiles {
-		replayed := false
-		req.replayShortReferences = func(replayCtx context.Context) error {
-			if replayed {
-				return nil
-			}
-			replayed = true
-			candidates, completeSnapshot, replayErr := snapshotProvider.ListArchiveRecordReferencesForShortReferences(replayCtx, req)
-			if replayErr != nil {
-				return replayErr
-			}
-			return publishShortReferenceCandidatesToCoreStore(replayCtx, coreShortRefStore, candidates, completeSnapshot)
-		}
-	}
 	if wireChild {
 		req.ReportTrawlerCommandProgress = func(progress Progress) {
 			_ = writeChildFrame(r.opts.stdout, childProgressFrame(progress))
 		}
 	}
+	attachShortReferenceReplay(trawler, command, st, coreShortRefStore, coreShortRefOpenMode, req)
+	return req
+}
+
+func attachShortReferenceReplay(
+	trawler Trawler,
+	command targetTrawlerCommand,
+	st *store.Store,
+	coreShortRefStore *store.Store,
+	coreShortRefOpenMode coreShortReferenceStoreOpenMode,
+	req *TrawlerCommandExecutionRequest,
+) {
+	snapshotProvider, ok := trawler.(ShortReferenceSnapshotProvider)
+	if !ok || coreShortRefStore == nil || coreShortRefOpenMode != coreShortReferenceStoreReadWrite || st == nil || command.writesNoFiles {
+		return
+	}
+	replayed := false
+	req.replayShortReferences = func(replayCtx context.Context) error {
+		if replayed {
+			return nil
+		}
+		replayed = true
+		candidates, completeSnapshot, replayErr := snapshotProvider.ListArchiveRecordReferencesForShortReferences(replayCtx, req)
+		if replayErr != nil {
+			return replayErr
+		}
+		return publishShortReferenceCandidatesToCoreStore(replayCtx, coreShortRefStore, candidates, completeSnapshot)
+	}
+}
+
+func (r runner) executePreparedCommand(
+	ctx context.Context,
+	trawler Trawler,
+	command targetTrawlerCommand,
+	paths resolvedTrawlerArchivePaths,
+	req *TrawlerCommandExecutionRequest,
+	wireChild bool,
+) executionResult {
 	if command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE {
 		report, err := executeUpdate(ctx, trawler, req)
 		if err == nil {
@@ -155,44 +218,51 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 			return executionResult{err: err}
 		}
 	}
-	if trawlerCommandResponse != nil {
-		if wireChild && trawlerCommandResponse.GetPhotosStepRunResponse() != nil {
-			boundedResponse, err := render.PreparePhotosStepRunResponseForTransport(trawlerCommandResponse.GetPhotosStepRunResponse(), paths.TrawlerArchivePath)
-			if err != nil {
-				return executionResult{err: err}
-			}
-			trawlerCommandResponse.TypedTrawlerCommandResponse = &commandcontract.TrawlerCommandResponse_PhotosStepRunResponse{PhotosStepRunResponse: boundedResponse}
+	if trawlerCommandResponse == nil {
+		return executionResult{err: ctx.Err()}
+	}
+	return finalizeCommandExecutionResult(ctx, trawler, command, paths, req, trawlerCommandResponse, wireChild)
+}
+
+func finalizeCommandExecutionResult(
+	ctx context.Context,
+	trawler Trawler,
+	command targetTrawlerCommand,
+	paths resolvedTrawlerArchivePaths,
+	req *TrawlerCommandExecutionRequest,
+	trawlerCommandResponse *commandcontract.TrawlerCommandResponse,
+	wireChild bool,
+) executionResult {
+	if wireChild && trawlerCommandResponse.GetPhotosStepRunResponse() != nil {
+		boundedResponse, err := render.PreparePhotosStepRunResponseForTransport(trawlerCommandResponse.GetPhotosStepRunResponse(), paths.TrawlerArchivePath)
+		if err != nil {
+			return executionResult{err: err}
 		}
-		var localShortReferencesByCanonicalRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
-		if !wireChild {
-			localShortReferencesByCanonicalRecordReference, err = trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
-				ctx,
-				req,
-				trawlerCommandResponse,
-			)
-			if err != nil {
-				return executionResult{err: err}
-			}
-		}
-		renderContext := trawlerCommandRenderContext(
-			trawler.RegisteredTrawlerDeclaration(),
-			command,
+		trawlerCommandResponse.TypedTrawlerCommandResponse = &commandcontract.TrawlerCommandResponse_PhotosStepRunResponse{PhotosStepRunResponse: boundedResponse}
+	}
+	var localShortReferencesByCanonicalRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
+	if !wireChild {
+		var err error
+		localShortReferencesByCanonicalRecordReference, err = trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
+			ctx,
+			req,
 			trawlerCommandResponse,
 		)
-		commandExecutionResult := executionResult{
-			trawlerCommandResponse:                         trawlerCommandResponse,
-			localShortReferencesByCanonicalRecordReference: localShortReferencesByCanonicalRecordReference,
-			trawlerCommandRenderContext:                    renderContext,
+		if err != nil {
+			return executionResult{err: err}
 		}
-		if err := ctx.Err(); err != nil {
-			commandExecutionResult.err = err
-		}
-		return commandExecutionResult
 	}
-	if err := ctx.Err(); err != nil {
-		return executionResult{err: err}
+	renderContext := trawlerCommandRenderContext(
+		trawler.RegisteredTrawlerDeclaration(),
+		command,
+		trawlerCommandResponse,
+	)
+	return executionResult{
+		trawlerCommandResponse:                         trawlerCommandResponse,
+		localShortReferencesByCanonicalRecordReference: localShortReferencesByCanonicalRecordReference,
+		trawlerCommandRenderContext:                    renderContext,
+		err:                                            ctx.Err(),
 	}
-	return executionResult{}
 }
 
 func (r runner) publishOrStreamShortReferencesAfterMutation(

@@ -48,99 +48,163 @@ func (*App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration
 		},
 	}
 }
+
+type moneyTransactionsCommandOptions struct {
+	account      string
+	after        string
+	before       string
+	basis        string
+	matchingText string
+	pending      bool
+	limit        int
+}
+
 func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 	var commands []trawlkit.TrawlerCommand
-	for _, operation := range []federation.SharedTrawlerOperation{federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN} {
+	for _, operation := range []federation.SharedTrawlerOperation{
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
+	} {
 		commands = append(commands, trawlkit.TrawlerCommand{SharedTrawlerOperation: operation, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand})
 	}
-	commands = append(commands, trawlkit.TrawlerCommand{TrawlerCommandName: "accounts", TrawlerCommandHelpDescription: "List balances and complete history", TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessRequired, ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-		accounts, err := readAccounts(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		return buildMoneyAccountsPresentation(accounts), nil
-	}})
-	var account, after, before, basis, matchingText string
-	var pending bool
-	var limit int
-	commands = append(commands, trawlkit.TrawlerCommand{TrawlerCommandName: "transactions", TrawlerCommandHelpDescription: "List financial transactions", TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessRequired, RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
-		fs.StringVar(&account, "account", "", "Account link")
-		fs.StringVar(&after, "after", "", "First date, YYYY-MM-DD")
-		fs.StringVar(&before, "before", "", "Last date, YYYY-MM-DD")
-		fs.StringVar(&basis, "date-basis", "booked", "booked or charged")
-		fs.BoolVar(&pending, "pending", false, "List pending activity")
-		fs.IntVar(&limit, "limit", 50, "Maximum transactions")
-		fs.StringVar(&matchingText, "matching", "", "Words to find in transaction details")
-	}, ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
-		if limit < 1 {
-			return nil, fmt.Errorf("limit must be positive")
-		}
-		if basis != "booked" && basis != "charged" {
-			return nil, fmt.Errorf("date basis must be booked or charged")
-		}
-		selected := ""
-		if account != "" {
-			local, ok, err := trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(account, "money")
+	commands = append(commands, trawlkit.TrawlerCommand{
+		TrawlerCommandName:               "accounts",
+		TrawlerCommandHelpDescription:    "List balances and complete history",
+		TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+		TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessRequired,
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+			accounts, err := readAccounts(ctx, req)
 			if err != nil {
 				return nil, err
 			}
-			if !ok {
-				return nil, fmt.Errorf("use an account link from trawl money accounts")
-			}
-			refs, err := req.ResolveShortReference(ctx, trawlkit.NewLocalTrawlerShortReference(local))
-			if err != nil {
-				return nil, err
-			}
-			selected = trawlkit.CanonicalArchiveRecordReferenceText(refs[0])
-		}
-		accounts, err := readAccounts(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		movements, err := readMovements(ctx, req, pending)
-		if err != nil {
-			return nil, err
-		}
-		var matchingFields map[string]moneyMatchingField
-		if strings.TrimSpace(matchingText) != "" {
-			matchingFields, err = matchingMoneyMovementFields(ctx, req, matchingText)
-			if err != nil {
-				return nil, err
-			}
-		}
-		var matching []storedMovement
-		for _, movement := range movements {
-			if matchingFields != nil {
-				if _, matched := matchingFields[movement.reference()]; !matched {
-					continue
-				}
-			}
-			if selected != "" && selected != movement.accountReference {
-				continue
-			}
-			if !pending && basis == "charged" && movement.booked.ChargeDate == nil {
-				continue
-			}
-			if !pending && basis == "booked" && (after != "" || before != "") && movement.booked.BookingDate == nil {
-				continue
-			}
-			date := movement.date(basis)
-			if after != "" && date < after {
-				continue
-			}
-			if before != "" && date > before {
-				continue
-			}
-			matching = append(matching, movement)
-		}
-		sort.SliceStable(matching, func(i, j int) bool { return matching[i].date(basis) > matching[j].date(basis) })
-		totalMatching := len(matching)
-		if len(matching) > limit {
-			matching = matching[:limit]
-		}
-		return buildMoneyTransactionsPresentation(accounts, matching, totalMatching, limit, basis, pending), nil
-	}})
+			return buildMoneyAccountsPresentation(accounts), nil
+		},
+	})
+	var opts moneyTransactionsCommandOptions
+	commands = append(commands, trawlkit.TrawlerCommand{
+		TrawlerCommandName:               "transactions",
+		TrawlerCommandHelpDescription:    "List financial transactions",
+		TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+		TrawlerCommandArchiveAccess:      trawlkit.TrawlerCommandArchiveAccessRequired,
+		RegisterTrawlerCommandFlags: func(fs *flag.FlagSet) {
+			fs.StringVar(&opts.account, "account", "", "Account link")
+			fs.StringVar(&opts.after, "after", "", "First date, YYYY-MM-DD")
+			fs.StringVar(&opts.before, "before", "", "Last date, YYYY-MM-DD")
+			fs.StringVar(&opts.basis, "date-basis", "booked", "booked or charged")
+			fs.BoolVar(&opts.pending, "pending", false, "List pending activity")
+			fs.IntVar(&opts.limit, "limit", 50, "Maximum transactions")
+			fs.StringVar(&opts.matchingText, "matching", "", "Words to find in transaction details")
+		},
+		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+			return runMoneyTransactionsCommand(ctx, req, opts)
+		},
+	})
 	return commands
+}
+
+func runMoneyTransactionsCommand(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	opts moneyTransactionsCommandOptions,
+) (*command.TrawlerCommandResponse, error) {
+	if opts.limit < 1 {
+		return nil, fmt.Errorf("limit must be positive")
+	}
+	if opts.basis != "booked" && opts.basis != "charged" {
+		return nil, fmt.Errorf("date basis must be booked or charged")
+	}
+	selectedAccountRef, err := resolveOptionalMoneyAccountLink(ctx, req, opts.account)
+	if err != nil {
+		return nil, err
+	}
+	accounts, err := readAccounts(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	movements, err := readMovements(ctx, req, opts.pending)
+	if err != nil {
+		return nil, err
+	}
+	var matchingFields map[string]moneyMatchingField
+	if strings.TrimSpace(opts.matchingText) != "" {
+		matchingFields, err = matchingMoneyMovementFields(ctx, req, opts.matchingText)
+		if err != nil {
+			return nil, err
+		}
+	}
+	matching := filterMoneyMovements(movements, selectedAccountRef, matchingFields, opts)
+	sort.SliceStable(matching, func(i, j int) bool { return matching[i].date(opts.basis) > matching[j].date(opts.basis) })
+	totalMatching := len(matching)
+	if len(matching) > opts.limit {
+		matching = matching[:opts.limit]
+	}
+	return buildMoneyTransactionsPresentation(accounts, matching, totalMatching, opts.limit, opts.basis, opts.pending), nil
+}
+
+func resolveOptionalMoneyAccountLink(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, account string) (string, error) {
+	if account == "" {
+		return "", nil
+	}
+	local, ok, err := trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(account, "money")
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("use an account link from trawl money accounts")
+	}
+	refs, err := req.ResolveShortReference(ctx, trawlkit.NewLocalTrawlerShortReference(local))
+	if err != nil {
+		return "", err
+	}
+	return trawlkit.CanonicalArchiveRecordReferenceText(refs[0]), nil
+}
+
+func filterMoneyMovements(
+	movements []storedMovement,
+	selectedAccountRef string,
+	matchingFields map[string]moneyMatchingField,
+	opts moneyTransactionsCommandOptions,
+) []storedMovement {
+	var matching []storedMovement
+	for _, movement := range movements {
+		if !movementMatchesTransactionOptions(movement, selectedAccountRef, matchingFields, opts) {
+			continue
+		}
+		matching = append(matching, movement)
+	}
+	return matching
+}
+
+func movementMatchesTransactionOptions(
+	movement storedMovement,
+	selectedAccountRef string,
+	matchingFields map[string]moneyMatchingField,
+	opts moneyTransactionsCommandOptions,
+) bool {
+	if matchingFields != nil {
+		if _, matched := matchingFields[movement.reference()]; !matched {
+			return false
+		}
+	}
+	if selectedAccountRef != "" && selectedAccountRef != movement.accountReference {
+		return false
+	}
+	if !opts.pending && opts.basis == "charged" && movement.booked.ChargeDate == nil {
+		return false
+	}
+	if !opts.pending && opts.basis == "booked" && (opts.after != "" || opts.before != "") && movement.booked.BookingDate == nil {
+		return false
+	}
+	date := movement.date(opts.basis)
+	if opts.after != "" && date < opts.after {
+		return false
+	}
+	if opts.before != "" && date > opts.before {
+		return false
+	}
+	return true
 }
 func (*App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
 	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: &status.TrawlerArchiveStatus{}}

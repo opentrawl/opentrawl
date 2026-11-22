@@ -28,7 +28,7 @@ import (
 const appID = "twitter"
 
 type Crawler struct {
-	cfg Config
+	cfg TwitterCrawlerConfiguration
 
 	browseLimit    int
 	browseLimitSet bool
@@ -59,7 +59,7 @@ var (
 )
 
 func New() *Crawler {
-	return &Crawler{cfg: Config{MonthlyBudgetUSD: "10"}}
+	return &Crawler{cfg: TwitterCrawlerConfiguration{MonthlyBudgetUSD: "10"}}
 }
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {

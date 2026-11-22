@@ -17,7 +17,7 @@ import (
 const appID = "telegram"
 
 type Crawler struct {
-	cfg    Config
+	cfg    TelegramCrawlerConfiguration
 	update updateOptions
 	search searchOptions
 
@@ -35,11 +35,11 @@ type updateOptions struct {
 	FullHistory                                              bool
 }
 
-// Config contains durable Telegram acquisition choices. FullHistory is set
+// TelegramCrawlerConfiguration contains durable Telegram acquisition choices. FullHistory is set
 // only after an explicitly requested cloud-history download completes, so
 // interrupted first runs remain resumable rather than silently changing the
 // behaviour of normal update.
-type Config struct {
+type TelegramCrawlerConfiguration struct {
 	FullHistory bool `toml:"full_history"`
 }
 

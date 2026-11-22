@@ -320,7 +320,7 @@ func shortRefAliases(ctx context.Context, index *shortref.SQLiteIndex, refs []st
 	return index.Aliases(ctx, refs)
 }
 
-func shortRefLookupEntries(entries []shortref.Entry, reservedAliases map[string]struct{}) []shortref.Entry {
+func shortRefLookupEntries(entries []shortref.ShortReferenceEntry, reservedAliases map[string]struct{}) []shortref.ShortReferenceEntry {
 	lookupEntries := shortref.LookupEntries(entries)
 	if len(reservedAliases) == 0 {
 		return lookupEntries

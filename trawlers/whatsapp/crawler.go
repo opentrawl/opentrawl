@@ -11,13 +11,13 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 )
 
-type Config struct {
+type WhatsAppCrawlerConfiguration struct {
 	Source    string `toml:"source,omitempty"`
 	CopyMedia bool   `toml:"copy_media,omitempty"`
 }
 
 type Crawler struct {
-	cfg Config
+	cfg WhatsAppCrawlerConfiguration
 
 	messageFlags messageFlagValues
 }

@@ -172,26 +172,10 @@ func (c *Client) bearerToken(ctx context.Context) string {
 
 func (c *Client) discoverFromXBundles(ctx context.Context) (discoveredWebClientMetadata, error) {
 	result := fallbackMetadata(c.now())
-	bundleSet := map[string]struct{}{}
-	for _, pageURL := range discoveryPages {
-		html, err := c.fetchPublicText(ctx, pageURL, 4*1024*1024)
-		if err != nil {
-			continue
-		}
-		for _, match := range absScriptURLPattern.FindAllString(html, -1) {
-			if isAllowedAbsTwimgScript(match) {
-				bundleSet[match] = struct{}{}
-			}
-		}
-	}
-	if len(bundleSet) == 0 {
+	queue := c.discoverInitialBundleQueue(ctx)
+	if len(queue) == 0 {
 		return result, errors.New("no X web client bundles discovered")
 	}
-	queue := make([]string, 0, len(bundleSet))
-	for bundleURL := range bundleSet {
-		queue = append(queue, bundleURL)
-	}
-	sortBundlesForDiscovery(queue)
 
 	seen := map[string]struct{}{}
 	remainingBytes := maxDiscoveryBytes
@@ -211,67 +195,117 @@ func (c *Client) discoverFromXBundles(ctx context.Context) (discoveredWebClientM
 			continue
 		}
 		seen[scriptURL] = struct{}{}
-		limit := min(maxSingleBundleBytes, remainingBytes)
-		source, err := c.fetchPublicText(ctx, scriptURL, limit)
+		source, err := c.fetchPublicText(ctx, scriptURL, min(maxSingleBundleBytes, remainingBytes))
 		if err != nil {
 			continue
 		}
 		remainingBytes -= len(source)
 
-		if !foundBearer {
-			if token := bearerTokenPattern.FindString(source); token != "" && validBearerToken(token) {
-				result.BearerToken = token
-				foundBearer = true
-			}
-		}
-		if result.ViewerQueryID == "" {
-			if m := viewerQueryPattern.FindStringSubmatch(source); len(m) >= 2 && queryIDValidPattern.MatchString(m[1]) {
-				result.ViewerQueryID = m[1]
-				if len(m) >= 4 {
-					vars := uniqueStrings(relayVarPattern.FindAllString(m[3], -1))
-					if len(vars) > 0 {
-						result.ViewerProvidedVariables = vars
-					}
-				}
-			}
-		}
-		for _, spec := range graphqlOpPatterns {
-			matches := spec.pattern.FindAllStringSubmatch(source, -1)
-			for _, m := range matches {
-				if len(m) <= max(spec.opIdx, spec.idIdx) {
-					continue
-				}
-				op := m[spec.opIdx]
-				id := m[spec.idIdx]
-				if targets[op] && queryIDValidPattern.MatchString(id) && !foundOps[op] {
-					result.QueryIDs[op] = id
-					foundOps[op] = true
-				}
-			}
-		}
+		foundBearer = extractMetadataFromBundle(source, &result, targets, foundOps, foundBearer)
 		if foundBearer && result.ViewerQueryID != "" && len(foundOps) == len(targets) {
 			break
 		}
-		if baseURL, err := url.Parse(scriptURL); err == nil {
-			for _, dep := range jsImportPattern.FindAllStringSubmatch(source, -1) {
-				if len(dep) < 2 {
-					continue
-				}
-				resolved, err := baseURL.Parse(dep[1])
-				if err != nil {
-					continue
-				}
-				resolvedStr := resolved.String()
-				if isAllowedAbsTwimgScript(resolvedStr) {
-					if _, already := seen[resolvedStr]; !already {
-						queue = append(queue, resolvedStr)
-					}
-				}
-			}
-			sortBundlesForDiscovery(queue)
-		}
+		queue = appendImportedBundleURLs(queue, scriptURL, source, seen)
 	}
 	return result, nil
+}
+
+func (c *Client) discoverInitialBundleQueue(ctx context.Context) []string {
+	bundleSet := map[string]struct{}{}
+	for _, pageURL := range discoveryPages {
+		html, err := c.fetchPublicText(ctx, pageURL, 4*1024*1024)
+		if err != nil {
+			continue
+		}
+		for _, match := range absScriptURLPattern.FindAllString(html, -1) {
+			if isAllowedAbsTwimgScript(match) {
+				bundleSet[match] = struct{}{}
+			}
+		}
+	}
+	queue := make([]string, 0, len(bundleSet))
+	for bundleURL := range bundleSet {
+		queue = append(queue, bundleURL)
+	}
+	sortBundlesForDiscovery(queue)
+	return queue
+}
+
+func extractMetadataFromBundle(
+	source string,
+	result *discoveredWebClientMetadata,
+	targets map[string]bool,
+	foundOps map[string]bool,
+	foundBearer bool,
+) bool {
+	if !foundBearer {
+		if token := bearerTokenPattern.FindString(source); token != "" && validBearerToken(token) {
+			result.BearerToken = token
+			foundBearer = true
+		}
+	}
+	if result.ViewerQueryID == "" {
+		extractViewerQueryMetadata(source, result)
+	}
+	extractGraphQLOperationIDs(source, result, targets, foundOps)
+	return foundBearer
+}
+
+func extractViewerQueryMetadata(source string, result *discoveredWebClientMetadata) {
+	m := viewerQueryPattern.FindStringSubmatch(source)
+	if len(m) < 2 || !queryIDValidPattern.MatchString(m[1]) {
+		return
+	}
+	result.ViewerQueryID = m[1]
+	if len(m) >= 4 {
+		if vars := uniqueStrings(relayVarPattern.FindAllString(m[3], -1)); len(vars) > 0 {
+			result.ViewerProvidedVariables = vars
+		}
+	}
+}
+
+func extractGraphQLOperationIDs(source string, result *discoveredWebClientMetadata, targets, foundOps map[string]bool) {
+	for _, spec := range graphqlOpPatterns {
+		for _, m := range spec.pattern.FindAllStringSubmatch(source, -1) {
+			if len(m) <= max(spec.opIdx, spec.idIdx) {
+				continue
+			}
+			op, id := m[spec.opIdx], m[spec.idIdx]
+			if targets[op] && queryIDValidPattern.MatchString(id) && !foundOps[op] {
+				result.QueryIDs[op] = id
+				foundOps[op] = true
+			}
+		}
+	}
+}
+
+func appendImportedBundleURLs(queue []string, scriptURL, source string, seen map[string]struct{}) []string {
+	baseURL, err := url.Parse(scriptURL)
+	if err != nil {
+		return queue
+	}
+	added := false
+	for _, dep := range jsImportPattern.FindAllStringSubmatch(source, -1) {
+		if len(dep) < 2 {
+			continue
+		}
+		resolved, err := baseURL.Parse(dep[1])
+		if err != nil {
+			continue
+		}
+		resolvedStr := resolved.String()
+		if !isAllowedAbsTwimgScript(resolvedStr) {
+			continue
+		}
+		if _, already := seen[resolvedStr]; !already {
+			queue = append(queue, resolvedStr)
+			added = true
+		}
+	}
+	if added {
+		sortBundlesForDiscovery(queue)
+	}
+	return queue
 }
 
 func (c *Client) fetchPublicText(ctx context.Context, rawURL string, maxBytes int) (string, error) {

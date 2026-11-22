@@ -51,7 +51,7 @@ type Snapshot struct {
 	SourcePath string
 }
 
-type Data struct {
+type WhatsAppDesktopSnapshot struct {
 	Contacts     []store.Contact
 	Chats        []store.Chat
 	Groups       []store.Group
@@ -163,16 +163,16 @@ func SnapshotPath(ctx context.Context, path string) (Snapshot, error) {
 	return Snapshot{Root: root, SourcePath: path}, nil
 }
 
-func Extract(ctx context.Context, snap Snapshot) (Data, error) {
+func Extract(ctx context.Context, snap Snapshot) (WhatsAppDesktopSnapshot, error) {
 	contacts, names, err := readContacts(ctx, filepath.Join(snap.Root, contactsDBName))
 	if err != nil {
-		return Data{}, err
+		return WhatsAppDesktopSnapshot{}, err
 	}
 	chats, groups, participants, messages, mediaCount, err := readChats(ctx, filepath.Join(snap.Root, chatDBName), snap.SourcePath, names)
 	if err != nil {
-		return Data{}, err
+		return WhatsAppDesktopSnapshot{}, err
 	}
-	return Data{Contacts: contacts, Chats: chats, Groups: groups, Participants: participants, Messages: messages, MediaCount: mediaCount}, nil
+	return WhatsAppDesktopSnapshot{Contacts: contacts, Chats: chats, Groups: groups, Participants: participants, Messages: messages, MediaCount: mediaCount}, nil
 }
 
 func Import(ctx context.Context, st *store.Store, path string) (store.ImportStats, error) {

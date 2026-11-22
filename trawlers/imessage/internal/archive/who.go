@@ -143,24 +143,19 @@ func (resolution WhoResolution) MatchesOnlyByCloseSpelling() bool {
 }
 
 func matchWhoCandidates(query string, candidates []WhoCandidate) []WhoCandidate {
-	direct := make([]WhoCandidate, 0, min(len(candidates), whoCandidateLimit))
-	close := make([]WhoCandidate, 0, whoCandidateLimit)
-	for _, candidate := range candidates {
-		rank, ok := candidate.MatchRank(query)
-		if !ok {
-			continue
+	ranked := whomatch.PreferDirectMatches(whomatch.RankMatches(query, candidates, func(candidate WhoCandidate) whomatch.Candidate {
+		return whomatch.Candidate{
+			Who:         candidate.Who,
+			Identifiers: candidate.Identifiers,
 		}
-		candidate.matchRank = rank
-		if rank == whomatch.RankCloseSpelling {
-			close = append(close, candidate)
-			continue
-		}
-		direct = append(direct, candidate)
+	}))
+	out := make([]WhoCandidate, 0, len(ranked))
+	for _, match := range ranked {
+		candidate := match.Item
+		candidate.matchRank = match.Rank
+		out = append(out, candidate)
 	}
-	if len(direct) > 0 {
-		return direct
-	}
-	return close
+	return out
 }
 
 func (candidate WhoCandidate) MatchRank(query string) (whomatch.Rank, bool) {

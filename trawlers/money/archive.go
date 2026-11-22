@@ -204,201 +204,342 @@ func applyImport(ctx context.Context, db *sql.DB, name string, imported *contrac
 		return 0, 0, 0, err
 	}
 	defer func() { _ = transaction.Rollback() }()
-	var applied int
-	err = transaction.QueryRowContext(ctx, "SELECT 1 FROM money_imports WHERE name=?", name).Scan(&applied)
-	if err == nil {
-		return 0, 0, 0, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	alreadyApplied, err := isMoneyImportApplied(ctx, transaction, name)
+	if err != nil || alreadyApplied {
 		return 0, 0, 0, err
 	}
-	stamp := imported.ProviderReadTime.AsTime().UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
-	stampProto := prototext.Format(imported.ProviderReadTime)
+	importCtx := moneyImportWriteContext{
+		imported:   imported,
+		stamp:      imported.ProviderReadTime.AsTime().UTC().Format("2006-01-02T15:04:05.999999999Z07:00"),
+		stampProto: prototext.Format(imported.ProviderReadTime),
+	}
 	for _, accountImport := range imported.MoneyAccountImports {
-		account := accountImport.MoneyAccount
-		identity := account.GetMoneyAccountIdentifier()
-		if identity.GetInstitutionIdentifier() == "" || identity.GetAccountIdentifierNamespace() == "" || identity.GetStableAccountIdentifier() == "" {
-			return 0, 0, 0, fmt.Errorf("account requires stable institution, namespace and identity")
-		}
-		reference := stableReference("account", identity.InstitutionIdentifier, identity.AccountIdentifierNamespace, identity.StableAccountIdentifier)
-		account.CanonicalRecordReference = trawlkit.NewCanonicalArchiveRecordReference(reference)
-		previous := &contract.MoneyAccount{}
-		var previousEncoded []byte
-		var previousStamp string
-		err := transaction.QueryRowContext(ctx, "SELECT record,read_time FROM money_accounts WHERE reference=?", reference).Scan(&previousEncoded, &previousStamp)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return 0, 0, 0, err
-		}
-		if err == nil {
-			if err := proto.Unmarshal(previousEncoded, previous); err != nil {
-				return 0, 0, 0, err
-			}
-		}
-		oldPendingRecords := map[string][]byte{}
-		if accountImport.CompletePendingMovementList != nil {
-			rows, err := transaction.QueryContext(ctx, "SELECT reference,record FROM money_movements WHERE account_reference=? AND pending=1", reference)
-			if err != nil {
-				return 0, 0, 0, err
-			}
-			for rows.Next() {
-				var reference string
-				var encoded []byte
-				if err := rows.Scan(&reference, &encoded); err != nil {
-					_ = rows.Close()
-					return 0, 0, 0, err
-				}
-				oldPendingRecords[reference] = encoded
-			}
-			if err := rows.Err(); err != nil {
-				_ = rows.Close()
-				return 0, 0, 0, err
-			}
-			_ = rows.Close()
-		}
-		pendingIsNewer := previous.LastPendingMovementsReadTime == nil || !imported.ProviderReadTime.AsTime().Before(previous.LastPendingMovementsReadTime.AsTime())
-		if previousStamp <= stamp {
-			replacePopulatedFields(previous, account)
-		}
-		if accountImport.BookedMovementList != nil && (previous.LastBookedMovementsReadTime == nil || !imported.ProviderReadTime.AsTime().Before(previous.LastBookedMovementsReadTime.AsTime())) {
-			previous.LastBookedMovementsReadTime = imported.ProviderReadTime
-		}
-		if accountImport.CompletePendingMovementList != nil && pendingIsNewer {
-			previous.LastPendingMovementsReadTime = imported.ProviderReadTime
-			if _, err := transaction.ExecContext(ctx, "DELETE FROM money_search WHERE reference IN (SELECT reference FROM money_movements WHERE account_reference=? AND pending=1)", reference); err != nil {
-				return 0, 0, 0, err
-			}
-			if _, err := transaction.ExecContext(ctx, "DELETE FROM money_movements WHERE account_reference=? AND pending=1", reference); err != nil {
-				return 0, 0, 0, err
-			}
-		}
-		encoded, err := proto.Marshal(previous)
+		a, c, r, err := applyAccountImport(ctx, transaction, importCtx, accountImport)
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		accountStamp := stamp
-		if previousStamp > accountStamp {
-			accountStamp = previousStamp
-		}
-		if _, err := transaction.ExecContext(ctx, "INSERT INTO money_accounts VALUES(?,?,?) ON CONFLICT(reference) DO UPDATE SET record=excluded.record,read_time=excluded.read_time", reference, encoded, accountStamp); err != nil {
-			return 0, 0, 0, err
-		}
-		var movements []storedMovement
-		for _, movement := range accountImport.GetBookedMovementList().GetBookedMovements() {
-			movement.CanonicalRecordReference = trawlkit.NewCanonicalArchiveRecordReference(stableReference("movement", reference, movement.GetMoneyMovementIdentifier().GetMovementIdentifierNamespace(), movement.GetMoneyMovementIdentifier().GetAccountScopedMovementIdentifier()))
-			movements = append(movements, storedMovement{booked: movement})
-		}
-		if pendingIsNewer {
-			for _, movement := range accountImport.GetCompletePendingMovementList().GetPendingMovements() {
-				movement.CanonicalRecordReference = trawlkit.NewCanonicalArchiveRecordReference(stableReference("pending", reference, movement.GetMoneyMovementIdentifier().GetMovementIdentifierNamespace(), movement.GetMoneyMovementIdentifier().GetAccountScopedMovementIdentifier()))
-				movements = append(movements, storedMovement{pending: movement})
-			}
-		}
-		for _, movement := range movements {
-			var record proto.Message
-			var identifier *contract.MoneyMovementIdentifier
-			if movement.booked != nil {
-				record = movement.booked
-				identifier = movement.booked.MoneyMovementIdentifier
-			} else {
-				record = movement.pending
-				identifier = movement.pending.MoneyMovementIdentifier
-			}
-			if identifier.GetMovementIdentifierNamespace() == "" || identifier.GetAccountScopedMovementIdentifier() == "" {
-				return 0, 0, 0, fmt.Errorf("movement requires namespace and account-scoped identifier")
-			}
-			var old []byte
-			var oldStamp string
-			err := transaction.QueryRowContext(ctx, "SELECT record,read_time FROM money_movements WHERE reference=?", movement.reference()).Scan(&old, &oldStamp)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return 0, 0, 0, err
-			}
-			if movement.pending != nil && errors.Is(err, sql.ErrNoRows) {
-				if prior := oldPendingRecords[movement.reference()]; prior != nil {
-					old = prior
-					oldStamp = stampProto
-					err = nil
-				}
-			}
-			delete(oldPendingRecords, movement.reference())
-			recordProvider := imported.ProviderDisplayName
-			recordReadTime := stampProto
-			if err == nil {
-				oldTime := &timestamppb.Timestamp{}
-				if err := prototext.Unmarshal([]byte(oldStamp), oldTime); err != nil {
-					return 0, 0, 0, err
-				}
-
-				merged := record.ProtoReflect().New().Interface()
-				if err := proto.Unmarshal(old, merged); err != nil {
-					return 0, 0, 0, err
-				}
-				if oldTime.AsTime().After(imported.ProviderReadTime.AsTime()) {
-					replacePopulatedFields(record, merged)
-					recordReadTime = oldStamp
-					var provider string
-					if err := transaction.QueryRowContext(ctx, "SELECT provider FROM money_movements WHERE reference=?", movement.reference()).Scan(&provider); err != nil {
-						return 0, 0, 0, err
-					}
-					recordProvider = provider
-				} else {
-					replacePopulatedFields(merged, record)
-					record = merged
-				}
-			}
-
-			type indexedMoneyField struct {
-				label string
-				text  string
-			}
-			var fields []indexedMoneyField
-			if movement.pending != nil {
-				m := record.(*contract.MoneyPendingMovement)
-				fields = []indexedMoneyField{{"Transaction", nonemptyJoined(m.CounterpartyDisplayName, m.MovementDescription)}, {"Provider reference", m.GetMoneyMovementIdentifier().GetAccountScopedMovementIdentifier()}}
-			} else {
-				m := record.(*contract.MoneyMovement)
-				fields = []indexedMoneyField{{"Transaction", nonemptyJoined(m.CounterpartyDisplayName, m.MovementDescription)}, {"Reference", m.PaymentReference}, {"Account", m.CounterpartyAccountIdentifier}, {"Mandate", m.DirectDebitMandateIdentifier}, {"Creditor", m.DirectDebitCreditorIdentifier}, {"Card member", m.CardMemberDisplayName}, {"Place", nonemptyJoined(m.MerchantCity, m.MerchantCountryName)}, {"Details", strings.Join(m.AdditionalPaymentDetails, " ")}, {"Provider reference", m.GetMoneyMovementIdentifier().GetAccountScopedMovementIdentifier()}, {"Merchant category", m.MerchantCategoryCode}, {"Bank transaction code", m.ProviderBankTransactionCode}}
-				if flight := m.FlightTicket; flight != nil {
-					fields = append(fields, indexedMoneyField{"Flight", nonemptyJoined(flight.DeparturePlace, flight.ArrivalPlace, flight.AirlineCode, flight.BookingClassCode, flight.TicketNumber, flight.PassengerName)})
-				}
-			}
-			if _, err := transaction.ExecContext(ctx, "DELETE FROM money_search WHERE reference=?", movement.reference()); err != nil {
-				return 0, 0, 0, err
-			}
-			for _, field := range fields {
-				if field.text == "" {
-					continue
-				}
-				if _, err := transaction.ExecContext(ctx, "INSERT INTO money_search(reference,field_label,body) VALUES(?,?,?)", movement.reference(), field.label, field.text); err != nil {
-					return 0, 0, 0, err
-				}
-			}
-			encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(record)
-			if err != nil {
-				return 0, 0, 0, err
-			}
-			if old == nil {
-				added++
-			} else {
-				oldRecord := record.ProtoReflect().New().Interface()
-				if err := proto.Unmarshal(old, oldRecord); err != nil {
-					return 0, 0, 0, err
-				}
-				if !proto.Equal(oldRecord, record) {
-					changed++
-				}
-			}
-			if _, err := transaction.ExecContext(ctx, "INSERT INTO money_movements VALUES(?,?,?,?,?,?) ON CONFLICT(reference) DO UPDATE SET record=excluded.record,provider=excluded.provider,read_time=excluded.read_time", movement.reference(), reference, movement.pending != nil, encoded, recordProvider, recordReadTime); err != nil {
-				return 0, 0, 0, err
-			}
-		}
-		if accountImport.CompletePendingMovementList != nil && pendingIsNewer {
-			removed += uint64(len(oldPendingRecords))
-		}
+		added += a
+		changed += c
+		removed += r
 	}
 	if _, err := transaction.ExecContext(ctx, "INSERT INTO money_imports VALUES(?)", name); err != nil {
 		return 0, 0, 0, err
 	}
 	return added, changed, removed, transaction.Commit()
+}
+
+type moneyImportWriteContext struct {
+	imported   *contract.MoneyImport
+	stamp      string
+	stampProto string
+}
+
+type indexedMoneyField struct {
+	label string
+	text  string
+}
+
+func isMoneyImportApplied(ctx context.Context, tx *sql.Tx, name string) (bool, error) {
+	var applied int
+	err := tx.QueryRowContext(ctx, "SELECT 1 FROM money_imports WHERE name=?", name).Scan(&applied)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return false, err
+}
+
+func applyAccountImport(
+	ctx context.Context,
+	tx *sql.Tx,
+	importCtx moneyImportWriteContext,
+	accountImport *contract.MoneyAccountImport,
+) (added, changed, removed uint64, err error) {
+	account := accountImport.MoneyAccount
+	identity := account.GetMoneyAccountIdentifier()
+	if identity.GetInstitutionIdentifier() == "" || identity.GetAccountIdentifierNamespace() == "" || identity.GetStableAccountIdentifier() == "" {
+		return 0, 0, 0, fmt.Errorf("account requires stable institution, namespace and identity")
+	}
+	reference := stableReference("account", identity.InstitutionIdentifier, identity.AccountIdentifierNamespace, identity.StableAccountIdentifier)
+	account.CanonicalRecordReference = trawlkit.NewCanonicalArchiveRecordReference(reference)
+
+	previous, previousStamp, err := loadStoredMoneyAccount(ctx, tx, reference)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	oldPendingRecords := map[string][]byte{}
+	if accountImport.CompletePendingMovementList != nil {
+		oldPendingRecords, err = loadPendingMoneyMovements(ctx, tx, reference)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+	}
+	pendingIsNewer := previous.LastPendingMovementsReadTime == nil || !importCtx.imported.ProviderReadTime.AsTime().Before(previous.LastPendingMovementsReadTime.AsTime())
+	if err := upsertMergedMoneyAccount(ctx, tx, importCtx, accountImport, reference, previous, previousStamp, pendingIsNewer); err != nil {
+		return 0, 0, 0, err
+	}
+	movements := collectAccountImportMovements(reference, accountImport, pendingIsNewer)
+	for _, movement := range movements {
+		wasAdded, wasChanged, err := applyMovementImport(ctx, tx, importCtx, reference, movement, oldPendingRecords)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		if wasAdded {
+			added++
+		} else if wasChanged {
+			changed++
+		}
+	}
+	if accountImport.CompletePendingMovementList != nil && pendingIsNewer {
+		removed += uint64(len(oldPendingRecords))
+	}
+	return added, changed, removed, nil
+}
+
+func loadStoredMoneyAccount(ctx context.Context, tx *sql.Tx, reference string) (*contract.MoneyAccount, string, error) {
+	previous := &contract.MoneyAccount{}
+	var previousEncoded []byte
+	var previousStamp string
+	err := tx.QueryRowContext(ctx, "SELECT record,read_time FROM money_accounts WHERE reference=?", reference).Scan(&previousEncoded, &previousStamp)
+	if errors.Is(err, sql.ErrNoRows) {
+		return previous, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if err := proto.Unmarshal(previousEncoded, previous); err != nil {
+		return nil, "", err
+	}
+	return previous, previousStamp, nil
+}
+
+func loadPendingMoneyMovements(ctx context.Context, tx *sql.Tx, accountReference string) (map[string][]byte, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT reference,record FROM money_movements WHERE account_reference=? AND pending=1", accountReference)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	pending := map[string][]byte{}
+	for rows.Next() {
+		var ref string
+		var encoded []byte
+		if err := rows.Scan(&ref, &encoded); err != nil {
+			return nil, err
+		}
+		pending[ref] = encoded
+	}
+	return pending, rows.Err()
+}
+
+func upsertMergedMoneyAccount(
+	ctx context.Context,
+	tx *sql.Tx,
+	importCtx moneyImportWriteContext,
+	accountImport *contract.MoneyAccountImport,
+	reference string,
+	previous *contract.MoneyAccount,
+	previousStamp string,
+	pendingIsNewer bool,
+) error {
+	if previousStamp <= importCtx.stamp {
+		replacePopulatedFields(previous, accountImport.MoneyAccount)
+	}
+	if accountImport.BookedMovementList != nil && (previous.LastBookedMovementsReadTime == nil || !importCtx.imported.ProviderReadTime.AsTime().Before(previous.LastBookedMovementsReadTime.AsTime())) {
+		previous.LastBookedMovementsReadTime = importCtx.imported.ProviderReadTime
+	}
+	if accountImport.CompletePendingMovementList != nil && pendingIsNewer {
+		previous.LastPendingMovementsReadTime = importCtx.imported.ProviderReadTime
+		if _, err := tx.ExecContext(ctx, "DELETE FROM money_search WHERE reference IN (SELECT reference FROM money_movements WHERE account_reference=? AND pending=1)", reference); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM money_movements WHERE account_reference=? AND pending=1", reference); err != nil {
+			return err
+		}
+	}
+	encoded, err := proto.Marshal(previous)
+	if err != nil {
+		return err
+	}
+	accountStamp := max(importCtx.stamp, previousStamp)
+	_, err = tx.ExecContext(ctx, "INSERT INTO money_accounts VALUES(?,?,?) ON CONFLICT(reference) DO UPDATE SET record=excluded.record,read_time=excluded.read_time", reference, encoded, accountStamp)
+	return err
+}
+
+func collectAccountImportMovements(accountReference string, accountImport *contract.MoneyAccountImport, includePending bool) []storedMovement {
+	var movements []storedMovement
+	for _, movement := range accountImport.GetBookedMovementList().GetBookedMovements() {
+		movement.CanonicalRecordReference = trawlkit.NewCanonicalArchiveRecordReference(stableReference("movement", accountReference, movement.GetMoneyMovementIdentifier().GetMovementIdentifierNamespace(), movement.GetMoneyMovementIdentifier().GetAccountScopedMovementIdentifier()))
+		movements = append(movements, storedMovement{booked: movement})
+	}
+	if !includePending {
+		return movements
+	}
+	for _, movement := range accountImport.GetCompletePendingMovementList().GetPendingMovements() {
+		movement.CanonicalRecordReference = trawlkit.NewCanonicalArchiveRecordReference(stableReference("pending", accountReference, movement.GetMoneyMovementIdentifier().GetMovementIdentifierNamespace(), movement.GetMoneyMovementIdentifier().GetAccountScopedMovementIdentifier()))
+		movements = append(movements, storedMovement{pending: movement})
+	}
+	return movements
+}
+
+func applyMovementImport(
+	ctx context.Context,
+	tx *sql.Tx,
+	importCtx moneyImportWriteContext,
+	accountReference string,
+	movement storedMovement,
+	oldPendingRecords map[string][]byte,
+) (wasAdded, wasChanged bool, err error) {
+	record, identifier := movementRecordAndIdentifier(movement)
+	if identifier.GetMovementIdentifierNamespace() == "" || identifier.GetAccountScopedMovementIdentifier() == "" {
+		return false, false, fmt.Errorf("movement requires namespace and account-scoped identifier")
+	}
+	movementRef := movement.reference()
+	old, oldStamp, found, err := loadExistingMovementBytes(ctx, tx, movement, movementRef, importCtx.stampProto, oldPendingRecords)
+	if err != nil {
+		return false, false, err
+	}
+	recordProvider := importCtx.imported.ProviderDisplayName
+	recordReadTime := importCtx.stampProto
+	if found {
+		record, recordProvider, recordReadTime, err = mergeMovementWithStored(ctx, tx, importCtx, movementRef, record, old, oldStamp, recordProvider, recordReadTime)
+		if err != nil {
+			return false, false, err
+		}
+	}
+	if err := replaceMovementSearchFields(ctx, tx, movementRef, movement.pending != nil, record); err != nil {
+		return false, false, err
+	}
+	encoded, err := proto.MarshalOptions{Deterministic: true}.Marshal(record)
+	if err != nil {
+		return false, false, err
+	}
+	wasAdded, wasChanged, err = classifyMovementDiff(old, record)
+	if err != nil {
+		return false, false, err
+	}
+	_, err = tx.ExecContext(ctx, "INSERT INTO money_movements VALUES(?,?,?,?,?,?) ON CONFLICT(reference) DO UPDATE SET record=excluded.record,provider=excluded.provider,read_time=excluded.read_time", movementRef, accountReference, movement.pending != nil, encoded, recordProvider, recordReadTime)
+	return wasAdded, wasChanged, err
+}
+
+func movementRecordAndIdentifier(movement storedMovement) (proto.Message, *contract.MoneyMovementIdentifier) {
+	if movement.booked != nil {
+		return movement.booked, movement.booked.MoneyMovementIdentifier
+	}
+	return movement.pending, movement.pending.MoneyMovementIdentifier
+}
+
+func loadExistingMovementBytes(
+	ctx context.Context,
+	tx *sql.Tx,
+	movement storedMovement,
+	movementRef string,
+	stampProto string,
+	oldPendingRecords map[string][]byte,
+) ([]byte, string, bool, error) {
+	var old []byte
+	var oldStamp string
+	err := tx.QueryRowContext(ctx, "SELECT record,read_time FROM money_movements WHERE reference=?", movementRef).Scan(&old, &oldStamp)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, "", false, err
+	}
+	found := err == nil
+	if movement.pending != nil && !found {
+		if prior := oldPendingRecords[movementRef]; prior != nil {
+			old = prior
+			oldStamp = stampProto
+			found = true
+		}
+	}
+	delete(oldPendingRecords, movementRef)
+	return old, oldStamp, found, nil
+}
+
+func mergeMovementWithStored(
+	ctx context.Context,
+	tx *sql.Tx,
+	importCtx moneyImportWriteContext,
+	movementRef string,
+	record proto.Message,
+	old []byte,
+	oldStamp string,
+	recordProvider string,
+	recordReadTime string,
+) (proto.Message, string, string, error) {
+	oldTime := &timestamppb.Timestamp{}
+	if err := prototext.Unmarshal([]byte(oldStamp), oldTime); err != nil {
+		return nil, "", "", err
+	}
+	merged := record.ProtoReflect().New().Interface()
+	if err := proto.Unmarshal(old, merged); err != nil {
+		return nil, "", "", err
+	}
+	if oldTime.AsTime().After(importCtx.imported.ProviderReadTime.AsTime()) {
+		replacePopulatedFields(record, merged)
+		var provider string
+		if err := tx.QueryRowContext(ctx, "SELECT provider FROM money_movements WHERE reference=?", movementRef).Scan(&provider); err != nil {
+			return nil, "", "", err
+		}
+		return record, provider, oldStamp, nil
+	}
+	replacePopulatedFields(merged, record)
+	return merged, recordProvider, recordReadTime, nil
+}
+
+func replaceMovementSearchFields(ctx context.Context, tx *sql.Tx, movementRef string, isPending bool, record proto.Message) error {
+	fields := indexedFieldsForMoneyRecord(isPending, record)
+	if _, err := tx.ExecContext(ctx, "DELETE FROM money_search WHERE reference=?", movementRef); err != nil {
+		return err
+	}
+	for _, field := range fields {
+		if field.text == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO money_search(reference,field_label,body) VALUES(?,?,?)", movementRef, field.label, field.text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func indexedFieldsForMoneyRecord(isPending bool, record proto.Message) []indexedMoneyField {
+	if isPending {
+		m := record.(*contract.MoneyPendingMovement)
+		return []indexedMoneyField{
+			{"Transaction", nonemptyJoined(m.CounterpartyDisplayName, m.MovementDescription)},
+			{"Provider reference", m.GetMoneyMovementIdentifier().GetAccountScopedMovementIdentifier()},
+		}
+	}
+	m := record.(*contract.MoneyMovement)
+	fields := []indexedMoneyField{
+		{"Transaction", nonemptyJoined(m.CounterpartyDisplayName, m.MovementDescription)},
+		{"Reference", m.PaymentReference},
+		{"Account", m.CounterpartyAccountIdentifier},
+		{"Mandate", m.DirectDebitMandateIdentifier},
+		{"Creditor", m.DirectDebitCreditorIdentifier},
+		{"Card member", m.CardMemberDisplayName},
+		{"Place", nonemptyJoined(m.MerchantCity, m.MerchantCountryName)},
+		{"Details", strings.Join(m.AdditionalPaymentDetails, " ")},
+		{"Provider reference", m.GetMoneyMovementIdentifier().GetAccountScopedMovementIdentifier()},
+		{"Merchant category", m.MerchantCategoryCode},
+		{"Bank transaction code", m.ProviderBankTransactionCode},
+	}
+	if flight := m.FlightTicket; flight != nil {
+		fields = append(fields, indexedMoneyField{"Flight", nonemptyJoined(flight.DeparturePlace, flight.ArrivalPlace, flight.AirlineCode, flight.BookingClassCode, flight.TicketNumber, flight.PassengerName)})
+	}
+	return fields
+}
+
+func classifyMovementDiff(old []byte, record proto.Message) (added, changed bool, err error) {
+	if old == nil {
+		return true, false, nil
+	}
+	oldRecord := record.ProtoReflect().New().Interface()
+	if err := proto.Unmarshal(old, oldRecord); err != nil {
+		return false, false, err
+	}
+	return false, !proto.Equal(oldRecord, record), nil
 }
 
 func (*App) ListArchiveRecordReferencesForShortReferences(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {

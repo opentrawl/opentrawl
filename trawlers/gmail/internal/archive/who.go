@@ -496,14 +496,12 @@ func matchWhoCandidates(query string, candidates []WhoCandidate) []WhoCandidate 
 	if query == "" {
 		return []WhoCandidate{}
 	}
-	var matches []WhoCandidate
-	for _, candidate := range candidates {
-		rank, ok := candidate.matcherCandidate().MatchRank(query)
-		if !ok {
-			continue
-		}
-		candidate.matchRank = rank
-		candidate.Identifiers = matchingIdentifiersFirst(query, candidate.Identifiers)
+	ranked := whomatch.RankMatches(query, candidates, WhoCandidate.matcherCandidate)
+	matches := make([]WhoCandidate, 0, len(ranked))
+	for _, match := range ranked {
+		candidate := match.Item
+		candidate.matchRank = match.Rank
+		candidate.Identifiers = whomatch.PrioritizeMatchingIdentifiers(query, candidate.Identifiers)
 		matches = append(matches, candidate)
 	}
 	sort.SliceStable(matches, func(i, j int) bool {
@@ -513,49 +511,6 @@ func matchWhoCandidates(query string, candidates []WhoCandidate) []WhoCandidate 
 		return compareWhoCandidates(matches[i], matches[j]) < 0
 	})
 	return matches
-}
-
-func matchingIdentifiersFirst(query string, identifiers []string) []string {
-	if len(identifiers) == 0 {
-		return identifiers
-	}
-	type rankedIdentifier struct {
-		value   string
-		rank    whomatch.Rank
-		matched bool
-		index   int
-	}
-	ranked := make([]rankedIdentifier, 0, len(identifiers))
-	anyMatched := false
-	for index, identifier := range identifiers {
-		rank, matched := whomatch.MatchRank(query, []string{identifier})
-		if matched {
-			anyMatched = true
-		}
-		ranked = append(ranked, rankedIdentifier{
-			value:   identifier,
-			rank:    rank,
-			matched: matched,
-			index:   index,
-		})
-	}
-	if !anyMatched {
-		return identifiers
-	}
-	sort.SliceStable(ranked, func(i, j int) bool {
-		if ranked[i].matched != ranked[j].matched {
-			return ranked[i].matched
-		}
-		if ranked[i].matched && ranked[i].rank != ranked[j].rank {
-			return ranked[i].rank.BetterThan(ranked[j].rank)
-		}
-		return ranked[i].index < ranked[j].index
-	})
-	out := make([]string, 0, len(ranked))
-	for _, identifier := range ranked {
-		out = append(out, identifier.value)
-	}
-	return out
 }
 
 func sortWhoCandidates(candidates []WhoCandidate) {

@@ -95,19 +95,6 @@ func CheckSource(ctx context.Context) (SourceState, error) {
 	return SourceReady, nil
 }
 
-func checkSourceAt(ctx context.Context, dir string) (SourceState, error) {
-	paths, err := addressBookDatabasePaths(dir)
-	if err != nil {
-		return sourceStateForError(err), err
-	}
-	for _, path := range paths {
-		if err := checkAddressBookDatabase(ctx, path); err != nil {
-			return sourceStateForError(err), err
-		}
-	}
-	return SourceReady, nil
-}
-
 func addressBookDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

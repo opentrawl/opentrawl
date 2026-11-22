@@ -13,14 +13,14 @@ type ArchiveData struct {
 	SourceBytes      int64
 	SourceModifiedAt time.Time
 	ExtractedAt      time.Time
-	Handles          []Handle
+	Handles          []MessagesHandle
 	Chats            []Chat
 	Participants     []Participant
 	ChatMessages     []ChatMessage
 	Messages         []Message
 }
 
-type Handle struct {
+type MessagesHandle struct {
 	SourceRowID       int64
 	ID                string
 	Service           string
@@ -124,15 +124,15 @@ func requireArchiveTables(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func extractHandles(ctx context.Context, db *sql.DB) ([]Handle, error) {
+func extractHandles(ctx context.Context, db *sql.DB) ([]MessagesHandle, error) {
 	rows, err := db.QueryContext(ctx, extractHandlesSQL)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []Handle
+	var out []MessagesHandle
 	for rows.Next() {
-		var h Handle
+		var h MessagesHandle
 		if err := rows.Scan(&h.SourceRowID, &h.ID, &h.Service, &h.UncanonicalizedID, &h.DisplayName); err != nil {
 			return nil, err
 		}

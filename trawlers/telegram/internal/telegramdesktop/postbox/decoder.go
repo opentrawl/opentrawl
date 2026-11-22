@@ -134,13 +134,13 @@ func DecodeObject(data []byte) (map[string]any, error) {
 	return nil, nil
 }
 
-type Entry struct {
+type PostboxDecodedEntry struct {
 	Key       string
 	ValueType int
 	Value     any
 }
 
-func DecodeEntries(data []byte) ([]Entry, error) {
+func DecodeEntries(data []byte) ([]PostboxDecodedEntry, error) {
 	d := decoder{reader: newByteReader(data), size: len(data)}
 	return d.entries()
 }
@@ -150,8 +150,8 @@ type decoder struct {
 	size   int
 }
 
-func (d decoder) entries() ([]Entry, error) {
-	var entries []Entry
+func (d decoder) entries() ([]PostboxDecodedEntry, error) {
+	var entries []PostboxDecodedEntry
 	for d.reader.off < d.size {
 		key, err := d.reader.shortString()
 		if err != nil {
@@ -161,7 +161,7 @@ func (d decoder) entries() ([]Entry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("decode %q: %w", key, err)
 		}
-		entries = append(entries, Entry{Key: key, ValueType: valueType, Value: value})
+		entries = append(entries, PostboxDecodedEntry{Key: key, ValueType: valueType, Value: value})
 	}
 	return entries, nil
 }
@@ -191,119 +191,63 @@ func (d decoder) value() (int, any, error) {
 		value, err := d.object()
 		return int(valueType), value, err
 	case 6:
-		count, err := d.reader.int32()
-		if err != nil {
-			return int(valueType), nil, err
-		}
-		if count < 0 {
-			return int(valueType), nil, errors.New("negative int32 array length")
-		}
-		values := make([]any, 0, count)
-		for range int(count) {
+		values, err := d.decodeArray("int32", func() (any, error) {
 			value, err := d.reader.int32()
-			if err != nil {
-				return int(valueType), nil, err
-			}
-			values = append(values, int64(value))
-		}
-		return int(valueType), values, nil
+			return int64(value), err
+		})
+		return int(valueType), values, err
 	case 7:
-		count, err := d.reader.int32()
-		if err != nil {
-			return int(valueType), nil, err
-		}
-		if count < 0 {
-			return int(valueType), nil, errors.New("negative int64 array length")
-		}
-		values := make([]any, 0, count)
-		for range int(count) {
-			value, err := d.reader.int64()
-			if err != nil {
-				return int(valueType), nil, err
-			}
-			values = append(values, value)
-		}
-		return int(valueType), values, nil
+		values, err := d.decodeArray("int64", func() (any, error) { return d.reader.int64() })
+		return int(valueType), values, err
 	case 8:
-		count, err := d.reader.int32()
-		if err != nil {
-			return int(valueType), nil, err
-		}
-		if count < 0 {
-			return int(valueType), nil, errors.New("negative object array length")
-		}
-		values := make([]any, 0, count)
-		for range int(count) {
-			value, err := d.object()
-			if err != nil {
-				return int(valueType), nil, err
-			}
-			values = append(values, value)
-		}
-		return int(valueType), values, nil
+		values, err := d.decodeArray("object", func() (any, error) { return d.object() })
+		return int(valueType), values, err
 	case 9:
-		count, err := d.reader.int32()
-		if err != nil {
-			return int(valueType), nil, err
-		}
-		if count < 0 {
-			return int(valueType), nil, errors.New("negative object pair array length")
-		}
-		values := make([]any, 0, count)
-		for range int(count) {
+		values, err := d.decodeArray("object pair", func() (any, error) {
 			left, err := d.object()
 			if err != nil {
-				return int(valueType), nil, err
+				return nil, err
 			}
 			right, err := d.object()
 			if err != nil {
-				return int(valueType), nil, err
+				return nil, err
 			}
-			values = append(values, []any{left, right})
-		}
-		return int(valueType), values, nil
+			return []any{left, right}, nil
+		})
+		return int(valueType), values, err
 	case 10:
 		value, err := d.reader.bytes()
 		return int(valueType), value, err
 	case 11:
 		return int(valueType), nil, nil
 	case 12:
-		count, err := d.reader.int32()
-		if err != nil {
-			return int(valueType), nil, err
-		}
-		if count < 0 {
-			return int(valueType), nil, errors.New("negative string array length")
-		}
-		values := make([]any, 0, count)
-		for range int(count) {
-			value, err := d.reader.string()
-			if err != nil {
-				return int(valueType), nil, err
-			}
-			values = append(values, value)
-		}
-		return int(valueType), values, nil
+		values, err := d.decodeArray("string", func() (any, error) { return d.reader.string() })
+		return int(valueType), values, err
 	case 13:
-		count, err := d.reader.int32()
-		if err != nil {
-			return int(valueType), nil, err
-		}
-		if count < 0 {
-			return int(valueType), nil, errors.New("negative bytes array length")
-		}
-		values := make([]any, 0, count)
-		for range int(count) {
-			value, err := d.reader.bytes()
-			if err != nil {
-				return int(valueType), nil, err
-			}
-			values = append(values, value)
-		}
-		return int(valueType), values, nil
+		values, err := d.decodeArray("bytes", func() (any, error) { return d.reader.bytes() })
+		return int(valueType), values, err
 	default:
 		return int(valueType), nil, fmt.Errorf("unknown postbox value type %d", valueType)
 	}
+}
+
+func (d decoder) decodeArray(kind string, readElement func() (any, error)) ([]any, error) {
+	count, err := d.reader.int32()
+	if err != nil {
+		return nil, err
+	}
+	if count < 0 {
+		return nil, fmt.Errorf("negative %s array length", kind)
+	}
+	values := make([]any, 0, count)
+	for range int(count) {
+		value, err := readElement()
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, nil
 }
 
 func (d decoder) object() (map[string]any, error) {

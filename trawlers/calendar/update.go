@@ -23,7 +23,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err := reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar data"); err != nil {
 		return nil, err
 	}
-	var data calendarstore.Data
+	var data calendarstore.CalendarStoreSnapshot
 	sourceStarted := time.Now()
 	err := withHeartbeat(ctx, func() error {
 		return reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar data")

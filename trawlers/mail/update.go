@@ -37,19 +37,7 @@ type mailUpdateCounts struct {
 // and are marked deleted from source.
 func (*Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*updatecontract.TrawlerArchiveUpdateReport, error) {
 	updateStartedTime := time.Now()
-	homeDirectoryPath, err := os.UserHomeDir()
-	if err != nil {
-		return nil, appleMailSourceError(err)
-	}
-	location, err := applemailsource.LocateAppleMailStore(homeDirectoryPath)
-	if err != nil {
-		return nil, appleMailSourceError(err)
-	}
-	envelopeIndex, err := applemailsource.ReadAppleMailEnvelopeIndex(ctx, location.EnvelopeIndexDatabasePath)
-	if err != nil {
-		return nil, appleMailSourceError(err)
-	}
-	accounts, err := applemailsource.ReadAppleMailAccounts(ctx, location.AccountsDatabasePath)
+	location, envelopeIndex, accounts, err := loadAppleMailSources(ctx)
 	if err != nil {
 		return nil, appleMailSourceError(err)
 	}
@@ -66,135 +54,249 @@ func (*Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		return nil, err
 	}
 	includedAccounts := includedAppleMailAccounts(req, envelopeIndex, accounts, boundGmailOwnerEmailAddress)
-	emlxFilesByAccount := map[applemailsource.AppleMailAccountIdentifier]map[applemailsource.AppleMailMessageRowIdentifier]applemailsource.AppleMailEmlxFile{}
-	for accountIdentifier := range includedAccounts {
-		files, err := applemailsource.FindAppleMailEmlxFiles(filepath.Join(location.AppleMailVersionDirectoryPath, string(accountIdentifier)))
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, appleMailSourceError(err)
-		}
-		emlxFilesByAccount[accountIdentifier] = files
-	}
-	originalStore := mailparse.NewRawEmailOriginalStore(filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath))
-	batch := archive.MailArchiveUpdateBatch{DeletedFromSourceTime: updateStartedTime}
-	for _, account := range includedAccounts {
-		batch.AppleMailAccounts = append(batch.AppleMailAccounts, account)
-	}
-	counts := mailUpdateCounts{}
-	flush := func() error {
-		result, err := archiveStore.ApplyMailArchiveUpdateBatch(ctx, batch)
-		if err != nil {
-			return err
-		}
-		counts.messagesAdded += result.ArchivedMailMessagesAdded
-		batch = archive.MailArchiveUpdateBatch{DeletedFromSourceTime: updateStartedTime}
-		return nil
-	}
-	messagesStillInAppleMail := map[applemailsource.AppleMailMessageRowIdentifier]struct{}{}
-	for messageIndex, envelopeMessage := range envelopeIndex.AppleMailMessagesNotDeleted {
-		mailbox, found := envelopeIndex.AppleMailMailboxesByRowIdentifier[envelopeMessage.AppleMailMailboxRowIdentifier]
-		if !found || mailbox.IsJunkOrTrashMailbox() {
-			continue
-		}
-		if _, included := includedAccounts[mailbox.AppleMailAccountIdentifier]; !included {
-			continue
-		}
-		rowIdentifier := envelopeMessage.AppleMailMessageRowIdentifier
-		messagesStillInAppleMail[rowIdentifier] = struct{}{}
-		emlxFile, hasFile := emlxFilesByAccount[mailbox.AppleMailAccountIdentifier][rowIdentifier]
-		liveSourceState, archived := liveSourceStates[rowIdentifier]
-		messageIsUnread := !envelopeMessage.AppleMailMessageIsRead
-		if !hasFile {
-			if !archived {
-				counts.messagesWithoutLocalAppleMailFile++
-			} else if liveSourceState.AppleMailMailboxURL != mailbox.AppleMailMailboxURL || liveSourceState.MessageIsUnread != messageIsUnread {
-				batch.MailboxOrReadStateChanges = append(batch.MailboxOrReadStateChanges, archive.MailMessageMailboxOrReadStateChange{
-					ArchivedMailMessageIdentifier: liveSourceState.ArchivedMailMessageIdentifier,
-					AppleMailMailboxURL:           mailbox.AppleMailMailboxURL,
-					AppleMailMailboxName:          mailbox.AppleMailMailboxName,
-					MessageIsUnread:               messageIsUnread,
-				})
-				counts.messagesWithMailboxOrReadChange++
-			}
-			continue
-		}
-		if archived && liveSourceState.AppleMailEmlxFile == emlxFile && liveSourceState.EmailParserRevision == mailparse.EmailParserRevision {
-			if liveSourceState.AppleMailMailboxURL != mailbox.AppleMailMailboxURL || liveSourceState.MessageIsUnread != messageIsUnread {
-				batch.MailboxOrReadStateChanges = append(batch.MailboxOrReadStateChanges, archive.MailMessageMailboxOrReadStateChange{
-					ArchivedMailMessageIdentifier: liveSourceState.ArchivedMailMessageIdentifier,
-					AppleMailMailboxURL:           mailbox.AppleMailMailboxURL,
-					AppleMailMailboxName:          mailbox.AppleMailMailboxName,
-					MessageIsUnread:               messageIsUnread,
-				})
-				counts.messagesWithMailboxOrReadChange++
-			}
-			continue
-		}
-		var rawEmailMessage []byte
-		var originalSHA256 mailparse.RawEmailOriginalSHA256
-		if archived && liveSourceState.AppleMailEmlxFile == emlxFile {
-			originalSHA256 = liveSourceState.RawEmailOriginalSHA256
-			rawEmailMessage, err = originalStore.ReadRawEmailOriginal(originalSHA256)
-			if err != nil {
-				return nil, err
-			}
-			counts.messagesParsedFromStoredOriginals++
-		} else {
-			rawEmailMessage, err = applemailsource.ReadRawEmailMessageFromEmlxFile(emlxFile.EmlxFilePath)
-			if err != nil {
-				// Mail.app may move or rewrite a file between the folder walk
-				// and this read; the next update reads it again.
-				counts.messagesWithUnreadableAppleMailFile++
-				logMailUpdateEvent(req, "message_file_unreadable", "row="+strconv.FormatInt(int64(rowIdentifier), 10)+" error="+strconv.Quote(err.Error()))
-				continue
-			}
-			if originalSHA256, err = originalStore.StoreRawEmailOriginalOnce(rawEmailMessage); err != nil {
-				return nil, err
-			}
-			counts.messagesParsedFromAppleMailFiles++
-		}
-		batch.ArchivedMailMessagesToWrite = append(batch.ArchivedMailMessagesToWrite,
-			newArchivedMailMessage(mailbox, envelopeMessage, emlxFile, originalSHA256, rawEmailMessage))
-		if len(batch.ArchivedMailMessagesToWrite) >= parsedMessagesPerArchiveTransaction {
-			if err := flush(); err != nil {
-				return nil, err
-			}
-			reportMailUpdateProgress(req, messageIndex+1, len(envelopeIndex.AppleMailMessagesNotDeleted))
-		}
-	}
-	for rowIdentifier, liveSourceState := range liveSourceStates {
-		if _, included := includedAccounts[liveSourceState.AppleMailAccountIdentifier]; !included {
-			continue
-		}
-		if _, stillInAppleMail := messagesStillInAppleMail[rowIdentifier]; !stillInAppleMail {
-			batch.ArchivedMailMessagesDeletedFromSource = append(batch.ArchivedMailMessagesDeletedFromSource, liveSourceState.ArchivedMailMessageIdentifier)
-		}
-	}
-	counts.messagesDeletedFromAppleMail = len(batch.ArchivedMailMessagesDeletedFromSource)
-	messagesDeletedWithOlderParse, err := archiveStore.MailMessagesDeletedFromSourceWithOlderParse(ctx, mailparse.EmailParserRevision)
+	emlxFilesByAccount, err := loadAppleMailEmlxFilesByAccount(location.AppleMailVersionDirectoryPath, includedAccounts)
 	if err != nil {
+		return nil, appleMailSourceError(err)
+	}
+	updater := &mailArchiveUpdater{
+		req:                req,
+		archiveStore:       archiveStore,
+		originalStore:      mailparse.NewRawEmailOriginalStore(filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath)),
+		updateStartedTime:  updateStartedTime,
+		includedAccounts:   includedAccounts,
+		emlxFilesByAccount: emlxFilesByAccount,
+		liveSourceStates:   liveSourceStates,
+		batch:              newMailUpdateBatch(updateStartedTime, includedAccounts),
+		stillInAppleMail:   map[applemailsource.AppleMailMessageRowIdentifier]struct{}{},
+	}
+	if err := updater.processEnvelopeMessages(ctx, envelopeIndex); err != nil {
 		return nil, err
 	}
-	for _, message := range messagesDeletedWithOlderParse {
-		rawEmailMessage, err := originalStore.ReadRawEmailOriginal(message.RawEmailOriginalSHA256)
-		if err != nil {
-			return nil, err
-		}
-		parsed := mailparse.ParseRawEmailMessage(rawEmailMessage)
-		batch.ReparsedMailMessagesDeletedFromSource = append(batch.ReparsedMailMessagesDeletedFromSource, archive.ReparsedMailMessageDeletedFromSource{
-			ArchivedMailMessageIdentifier: message.ArchivedMailMessageIdentifier,
-			EmailParserRevision:           mailparse.EmailParserRevision,
-			ParsedEmailMessage:            parsed,
-			ArchivedMailAttachments:       archivedAttachmentsWithoutAppleMailFolder(parsed, message.EmlxFileIsPartial),
-		})
-		counts.messagesParsedFromStoredOriginals++
+	updater.collectDeletedMessages()
+	if err := updater.reparseDeletedMessagesWithOlderParse(ctx); err != nil {
+		return nil, err
 	}
-	if err := flush(); err != nil {
+	if err := updater.flush(ctx); err != nil {
 		return nil, err
 	}
 	if err := archiveStore.MarkUpdateCompleted(ctx, time.Now()); err != nil {
 		return nil, err
 	}
 	reportMailUpdateProgress(req, len(envelopeIndex.AppleMailMessagesNotDeleted), len(envelopeIndex.AppleMailMessagesNotDeleted))
+	logMailUpdateComplete(req, updater.counts, updateStartedTime)
+	return &updatecontract.TrawlerArchiveUpdateReport{ArchiveRecordCountAddedByThisUpdate: proto.Uint64(uint64(updater.counts.messagesAdded))}, nil
+}
+
+type mailArchiveUpdater struct {
+	req                *trawlkit.TrawlerCommandExecutionRequest
+	archiveStore       *archive.Store
+	originalStore      mailparse.RawEmailOriginalStore
+	updateStartedTime  time.Time
+	includedAccounts   map[applemailsource.AppleMailAccountIdentifier]applemailsource.AppleMailAccount
+	emlxFilesByAccount map[applemailsource.AppleMailAccountIdentifier]map[applemailsource.AppleMailMessageRowIdentifier]applemailsource.AppleMailEmlxFile
+	liveSourceStates   map[applemailsource.AppleMailMessageRowIdentifier]archive.LiveArchivedMailMessageSourceState
+	batch              archive.MailArchiveUpdateBatch
+	stillInAppleMail   map[applemailsource.AppleMailMessageRowIdentifier]struct{}
+	counts             mailUpdateCounts
+}
+
+func loadAppleMailSources(ctx context.Context) (
+	applemailsource.AppleMailStoreLocation,
+	applemailsource.AppleMailEnvelopeIndexContents,
+	map[applemailsource.AppleMailAccountIdentifier]applemailsource.AppleMailAccount,
+	error,
+) {
+	homeDirectoryPath, err := os.UserHomeDir()
+	if err != nil {
+		return applemailsource.AppleMailStoreLocation{}, applemailsource.AppleMailEnvelopeIndexContents{}, nil, err
+	}
+	location, err := applemailsource.LocateAppleMailStore(homeDirectoryPath)
+	if err != nil {
+		return applemailsource.AppleMailStoreLocation{}, applemailsource.AppleMailEnvelopeIndexContents{}, nil, err
+	}
+	envelopeIndex, err := applemailsource.ReadAppleMailEnvelopeIndex(ctx, location.EnvelopeIndexDatabasePath)
+	if err != nil {
+		return applemailsource.AppleMailStoreLocation{}, applemailsource.AppleMailEnvelopeIndexContents{}, nil, err
+	}
+	accounts, err := applemailsource.ReadAppleMailAccounts(ctx, location.AccountsDatabasePath)
+	if err != nil {
+		return applemailsource.AppleMailStoreLocation{}, applemailsource.AppleMailEnvelopeIndexContents{}, nil, err
+	}
+	return location, envelopeIndex, accounts, nil
+}
+
+func loadAppleMailEmlxFilesByAccount(
+	versionDir string,
+	includedAccounts map[applemailsource.AppleMailAccountIdentifier]applemailsource.AppleMailAccount,
+) (map[applemailsource.AppleMailAccountIdentifier]map[applemailsource.AppleMailMessageRowIdentifier]applemailsource.AppleMailEmlxFile, error) {
+	emlxFilesByAccount := map[applemailsource.AppleMailAccountIdentifier]map[applemailsource.AppleMailMessageRowIdentifier]applemailsource.AppleMailEmlxFile{}
+	for accountIdentifier := range includedAccounts {
+		files, err := applemailsource.FindAppleMailEmlxFiles(filepath.Join(versionDir, string(accountIdentifier)))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		emlxFilesByAccount[accountIdentifier] = files
+	}
+	return emlxFilesByAccount, nil
+}
+
+func newMailUpdateBatch(
+	updateStartedTime time.Time,
+	includedAccounts map[applemailsource.AppleMailAccountIdentifier]applemailsource.AppleMailAccount,
+) archive.MailArchiveUpdateBatch {
+	batch := archive.MailArchiveUpdateBatch{DeletedFromSourceTime: updateStartedTime}
+	for _, account := range includedAccounts {
+		batch.AppleMailAccounts = append(batch.AppleMailAccounts, account)
+	}
+	return batch
+}
+
+func (u *mailArchiveUpdater) flush(ctx context.Context) error {
+	result, err := u.archiveStore.ApplyMailArchiveUpdateBatch(ctx, u.batch)
+	if err != nil {
+		return err
+	}
+	u.counts.messagesAdded += result.ArchivedMailMessagesAdded
+	u.batch = archive.MailArchiveUpdateBatch{DeletedFromSourceTime: u.updateStartedTime}
+	return nil
+}
+
+func (u *mailArchiveUpdater) processEnvelopeMessages(ctx context.Context, envelopeIndex applemailsource.AppleMailEnvelopeIndexContents) error {
+	for messageIndex, envelopeMessage := range envelopeIndex.AppleMailMessagesNotDeleted {
+		if err := u.processOneEnvelopeMessage(ctx, envelopeIndex, envelopeMessage); err != nil {
+			return err
+		}
+		if len(u.batch.ArchivedMailMessagesToWrite) >= parsedMessagesPerArchiveTransaction {
+			if err := u.flush(ctx); err != nil {
+				return err
+			}
+			reportMailUpdateProgress(u.req, messageIndex+1, len(envelopeIndex.AppleMailMessagesNotDeleted))
+		}
+	}
+	return nil
+}
+
+func (u *mailArchiveUpdater) processOneEnvelopeMessage(
+	ctx context.Context,
+	envelopeIndex applemailsource.AppleMailEnvelopeIndexContents,
+	envelopeMessage applemailsource.AppleMailEnvelopeMessage,
+) error {
+	mailbox, found := envelopeIndex.AppleMailMailboxesByRowIdentifier[envelopeMessage.AppleMailMailboxRowIdentifier]
+	if !found || mailbox.IsJunkOrTrashMailbox() {
+		return nil
+	}
+	if _, included := u.includedAccounts[mailbox.AppleMailAccountIdentifier]; !included {
+		return nil
+	}
+	rowIdentifier := envelopeMessage.AppleMailMessageRowIdentifier
+	u.stillInAppleMail[rowIdentifier] = struct{}{}
+	emlxFile, hasFile := u.emlxFilesByAccount[mailbox.AppleMailAccountIdentifier][rowIdentifier]
+	liveSourceState, archived := u.liveSourceStates[rowIdentifier]
+	messageIsUnread := !envelopeMessage.AppleMailMessageIsRead
+	if !hasFile {
+		if !archived {
+			u.counts.messagesWithoutLocalAppleMailFile++
+		} else {
+			u.recordMailboxOrReadChangeIfNeeded(liveSourceState, mailbox, messageIsUnread)
+		}
+		return nil
+	}
+	if archived && liveSourceState.AppleMailEmlxFile == emlxFile && liveSourceState.EmailParserRevision == mailparse.EmailParserRevision {
+		u.recordMailboxOrReadChangeIfNeeded(liveSourceState, mailbox, messageIsUnread)
+		return nil
+	}
+	rawEmailMessage, originalSHA256, ok, err := u.loadRawEmailForUpdate(rowIdentifier, emlxFile, liveSourceState, archived)
+	if err != nil || !ok {
+		return err
+	}
+	u.batch.ArchivedMailMessagesToWrite = append(u.batch.ArchivedMailMessagesToWrite,
+		newArchivedMailMessage(mailbox, envelopeMessage, emlxFile, originalSHA256, rawEmailMessage))
+	return nil
+}
+
+func (u *mailArchiveUpdater) recordMailboxOrReadChangeIfNeeded(
+	liveSourceState archive.LiveArchivedMailMessageSourceState,
+	mailbox applemailsource.AppleMailMailbox,
+	messageIsUnread bool,
+) {
+	if liveSourceState.AppleMailMailboxURL == mailbox.AppleMailMailboxURL && liveSourceState.MessageIsUnread == messageIsUnread {
+		return
+	}
+	u.batch.MailboxOrReadStateChanges = append(u.batch.MailboxOrReadStateChanges, archive.MailMessageMailboxOrReadStateChange{
+		ArchivedMailMessageIdentifier: liveSourceState.ArchivedMailMessageIdentifier,
+		AppleMailMailboxURL:           mailbox.AppleMailMailboxURL,
+		AppleMailMailboxName:          mailbox.AppleMailMailboxName,
+		MessageIsUnread:               messageIsUnread,
+	})
+	u.counts.messagesWithMailboxOrReadChange++
+}
+
+func (u *mailArchiveUpdater) loadRawEmailForUpdate(
+	rowIdentifier applemailsource.AppleMailMessageRowIdentifier,
+	emlxFile applemailsource.AppleMailEmlxFile,
+	liveSourceState archive.LiveArchivedMailMessageSourceState,
+	archived bool,
+) ([]byte, mailparse.RawEmailOriginalSHA256, bool, error) {
+	if archived && liveSourceState.AppleMailEmlxFile == emlxFile {
+		originalSHA256 := liveSourceState.RawEmailOriginalSHA256
+		rawEmailMessage, err := u.originalStore.ReadRawEmailOriginal(originalSHA256)
+		if err != nil {
+			return nil, "", false, err
+		}
+		u.counts.messagesParsedFromStoredOriginals++
+		return rawEmailMessage, originalSHA256, true, nil
+	}
+	rawEmailMessage, err := applemailsource.ReadRawEmailMessageFromEmlxFile(emlxFile.EmlxFilePath)
+	if err != nil {
+		// Mail.app may move or rewrite a file between the folder walk
+		// and this read; the next update reads it again.
+		u.counts.messagesWithUnreadableAppleMailFile++
+		logMailUpdateEvent(u.req, "message_file_unreadable", "row="+strconv.FormatInt(int64(rowIdentifier), 10)+" error="+strconv.Quote(err.Error()))
+		return nil, "", false, nil
+	}
+	originalSHA256, err := u.originalStore.StoreRawEmailOriginalOnce(rawEmailMessage)
+	if err != nil {
+		return nil, "", false, err
+	}
+	u.counts.messagesParsedFromAppleMailFiles++
+	return rawEmailMessage, originalSHA256, true, nil
+}
+
+func (u *mailArchiveUpdater) collectDeletedMessages() {
+	for rowIdentifier, liveSourceState := range u.liveSourceStates {
+		if _, included := u.includedAccounts[liveSourceState.AppleMailAccountIdentifier]; !included {
+			continue
+		}
+		if _, stillInAppleMail := u.stillInAppleMail[rowIdentifier]; !stillInAppleMail {
+			u.batch.ArchivedMailMessagesDeletedFromSource = append(u.batch.ArchivedMailMessagesDeletedFromSource, liveSourceState.ArchivedMailMessageIdentifier)
+		}
+	}
+	u.counts.messagesDeletedFromAppleMail = len(u.batch.ArchivedMailMessagesDeletedFromSource)
+}
+
+func (u *mailArchiveUpdater) reparseDeletedMessagesWithOlderParse(ctx context.Context) error {
+	messagesDeletedWithOlderParse, err := u.archiveStore.MailMessagesDeletedFromSourceWithOlderParse(ctx, mailparse.EmailParserRevision)
+	if err != nil {
+		return err
+	}
+	for _, message := range messagesDeletedWithOlderParse {
+		rawEmailMessage, err := u.originalStore.ReadRawEmailOriginal(message.RawEmailOriginalSHA256)
+		if err != nil {
+			return err
+		}
+		parsed := mailparse.ParseRawEmailMessage(rawEmailMessage)
+		u.batch.ReparsedMailMessagesDeletedFromSource = append(u.batch.ReparsedMailMessagesDeletedFromSource, archive.ReparsedMailMessageDeletedFromSource{
+			ArchivedMailMessageIdentifier: message.ArchivedMailMessageIdentifier,
+			EmailParserRevision:           mailparse.EmailParserRevision,
+			ParsedEmailMessage:            parsed,
+			ArchivedMailAttachments:       archivedAttachmentsWithoutAppleMailFolder(parsed, message.EmlxFileIsPartial),
+		})
+		u.counts.messagesParsedFromStoredOriginals++
+	}
+	return nil
+}
+
+func logMailUpdateComplete(req *trawlkit.TrawlerCommandExecutionRequest, counts mailUpdateCounts, updateStartedTime time.Time) {
 	logMailUpdateEvent(req, "update_complete", strings.Join([]string{
 		"parsed_from_apple_mail_files=" + strconv.Itoa(counts.messagesParsedFromAppleMailFiles),
 		"parsed_from_stored_originals=" + strconv.Itoa(counts.messagesParsedFromStoredOriginals),
@@ -205,7 +307,6 @@ func (*Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 		"added=" + strconv.Itoa(counts.messagesAdded),
 		"elapsed_ms=" + strconv.FormatInt(time.Since(updateStartedTime).Milliseconds(), 10),
 	}, " "))
-	return &updatecontract.TrawlerArchiveUpdateReport{ArchiveRecordCountAddedByThisUpdate: proto.Uint64(uint64(counts.messagesAdded))}, nil
 }
 
 // includedAppleMailAccounts returns every account with a mailbox, except a

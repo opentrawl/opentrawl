@@ -38,34 +38,18 @@ func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, e
 	if err != nil {
 		return nil, err
 	}
-	type scoredCandidate struct {
-		candidate WhoCandidate
-		score     int
-	}
-	scored := []scoredCandidate{}
-	for _, candidate := range candidates {
-		rank, ok := candidate.MatchRank(query)
-		if ok {
-			scored = append(scored, scoredCandidate{candidate: candidate, score: int(rank)})
+	scored := whomatch.RankAndSortMatches(query, candidates, func(candidate WhoCandidate) whomatch.Candidate {
+		lastSeen, _ := time.Parse(time.RFC3339, strings.TrimSpace(candidate.LastSeen))
+		return whomatch.Candidate{
+			Who:         candidate.Who,
+			Identifiers: candidate.Identifiers,
+			LastSeen:    lastSeen,
+			Messages:    candidate.Messages,
 		}
-	}
-	sort.SliceStable(scored, func(i, j int) bool {
-		left := scored[i]
-		right := scored[j]
-		if left.score != right.score {
-			return left.score > right.score
-		}
-		if left.candidate.LastSeen != right.candidate.LastSeen {
-			return lastSeenAfter(left.candidate.LastSeen, right.candidate.LastSeen)
-		}
-		if left.candidate.Messages != right.candidate.Messages {
-			return left.candidate.Messages > right.candidate.Messages
-		}
-		return strings.ToLower(left.candidate.Who) < strings.ToLower(right.candidate.Who)
 	})
 	out := make([]WhoCandidate, 0, len(scored))
 	for _, item := range scored {
-		out = append(out, item.candidate)
+		out = append(out, item.Item)
 	}
 	return out, nil
 }

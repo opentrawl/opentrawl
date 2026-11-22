@@ -25,7 +25,7 @@ type Store struct {
 	now func() time.Time
 }
 
-type Record struct {
+type UpdateStateRecord struct {
 	SourceName string    `json:"source_name"`
 	EntityType string    `json:"entity_type"`
 	EntityID   string    `json:"entity_id"`
@@ -71,8 +71,8 @@ on conflict(source_name, entity_type, entity_id) do update set
 	return nil
 }
 
-func (s *Store) Get(ctx context.Context, sourceName, entityType, entityID string) (Record, bool, error) {
-	var rec Record
+func (s *Store) Get(ctx context.Context, sourceName, entityType, entityID string) (UpdateStateRecord, bool, error) {
+	var rec UpdateStateRecord
 	var updatedAt string
 	err := s.db.QueryRowContext(ctx, `
 select source_name, entity_type, entity_id, value, updated_at
@@ -80,14 +80,14 @@ from update_state
 where source_name = ? and entity_type = ? and entity_id = ?
 `, sourceName, entityType, entityID).Scan(&rec.SourceName, &rec.EntityType, &rec.EntityID, &rec.Value, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Record{}, false, nil
+		return UpdateStateRecord{}, false, nil
 	}
 	if err != nil {
-		return Record{}, false, err
+		return UpdateStateRecord{}, false, err
 	}
 	parsed, err := time.Parse(time.RFC3339Nano, updatedAt)
 	if err != nil {
-		return Record{}, false, fmt.Errorf("parse update state updated_at: %w", err)
+		return UpdateStateRecord{}, false, fmt.Errorf("parse update state updated_at: %w", err)
 	}
 	rec.UpdatedAt = parsed
 	return rec, true, nil

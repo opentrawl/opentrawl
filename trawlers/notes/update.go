@@ -67,6 +67,14 @@ func (c *Crawler) updateSource(ctx context.Context, req *trawlkit.TrawlerCommand
 	return stats, nil
 }
 
+type notesReplayResult struct {
+	bodies      []archive.BodyInsert
+	noteTitles  map[string]string
+	final       notesdb.FinalState
+	attachments []notesdb.Attachment
+	tableData   []notesdb.TableData
+}
+
 func updateSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, st *archive.Store, snap notesdb.Snapshot, source, detail string, refreshNoteMetadata bool, start time.Time) (archive.UpdateStats, error) {
 	var progress *cklog.Progress
 	if req.TrawlerCommandLog != nil {
@@ -77,102 +85,20 @@ func updateSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRe
 		return archive.UpdateStats{}, err
 	}
 	specs := stateSpecs(source, detail, walOffsets)
-	prev := map[string]string{}
-	noteTitles := map[string]string{}
-	bodies := []archive.BodyInsert{}
-	var final notesdb.FinalState
-	var attachments []notesdb.Attachment
-	var tableData []notesdb.TableData
-	for i, spec := range specs {
-		if req.ReportTrawlerCommandProgress != nil {
-			req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "source", Done: int64(i), Total: int64(len(specs)), Message: "reading Notes store state"})
-		}
-		reportLogProgress(progress, int64(i), "reading Notes store state")
-		state, err := wal.Materialize(snap.Path, walData, spec.offset)
-		if err != nil {
-			return archive.UpdateStats{}, err
-		}
-		db, err := notesdb.Open(ctx, state.Path)
-		if err != nil {
-			_ = state.Close()
-			if shouldSkipHistoricalState(err, i, len(specs)) {
-				continue
-			}
-			return archive.UpdateStats{}, err
-		}
-		index, err := notesdb.ReadModificationIndex(ctx, db)
-		if err != nil {
-			_ = db.Close()
-			_ = state.Close()
-			if shouldSkipHistoricalState(err, i, len(specs)) {
-				continue
-			}
-			return archive.UpdateStats{}, err
-		}
-		changed := notesdb.ChangedSince(prev, index)
-		if len(prev) == 0 {
-			changed = allChanged(index)
-		}
-		var stateBodies []notesdb.Body
-		if i == len(specs)-1 {
-			final, err = notesdb.ReadFinalState(ctx, db)
-			if err != nil {
-				_ = db.Close()
-				_ = state.Close()
-				return archive.UpdateStats{}, err
-			}
-			for _, note := range final.Notes {
-				noteTitles[note.ID] = note.Title
-			}
-			stateBodies = final.Bodies
-			// Attachments are not versioned the way note bodies are: they are
-			// read once from the final state, alongside ReadFinalState, not
-			// once per WAL-replay step.
-			attachments, err = notesdb.ReadAttachments(ctx, db)
-			if err != nil {
-				_ = db.Close()
-				_ = state.Close()
-				return archive.UpdateStats{}, err
-			}
-			tableData, err = readTableData(ctx, db, final.Bodies)
-			if err != nil {
-				_ = db.Close()
-				_ = state.Close()
-				return archive.UpdateStats{}, err
-			}
-		} else {
-			stateBodies, err = notesdb.ReadBodies(ctx, db, changed)
-			if err != nil {
-				_ = db.Close()
-				_ = state.Close()
-				if shouldSkipHistoricalState(err, i, len(specs)) {
-					continue
-				}
-				return archive.UpdateStats{}, err
-			}
-		}
-		for _, body := range stateBodies {
-			bodies = append(bodies, bodyInsert(body, noteTitles[body.NoteID], spec, start))
-		}
-		prev = index
-		if err := db.Close(); err != nil {
-			_ = state.Close()
-			return archive.UpdateStats{}, err
-		}
-		if err := state.Close(); err != nil {
-			return archive.UpdateStats{}, err
-		}
+	replayed, err := replayNotesSnapshotStates(ctx, req, progress, snap.Path, walData, specs, start)
+	if err != nil {
+		return archive.UpdateStats{}, err
 	}
-	backfillBodyTitles(bodies, noteTitles)
-	bodyReads := len(bodies)
-	bodies = dedupeBodyObservations(bodies)
+	backfillBodyTitles(replayed.bodies, replayed.noteTitles)
+	bodyReads := len(replayed.bodies)
+	bodies := dedupeBodyObservations(replayed.bodies)
 	withBody := noteIDsWithBody(bodies)
-	realNotes, skipped := splitBodilessNotes(final.Notes, withBody)
+	realNotes, skipped := splitBodilessNotes(replayed.final.Notes, withBody)
 	notes := archiveNotes(realNotes)
 	state := updateState(snap.SourcePath, source, detail, len(walData), len(walOffsets), start)
 	groupContainerDir := filepath.Dir(snap.SourcePath)
 	archiveBaseDir := filepath.Dir(req.TrawlerArchivePaths.TrawlerArchivePath)
-	attachmentInserts, err := resolveAttachments(attachments, groupContainerDir, archiveBaseDir)
+	attachmentInserts, err := resolveAttachments(replayed.attachments, groupContainerDir, archiveBaseDir)
 	if err != nil {
 		return archive.UpdateStats{}, err
 	}
@@ -180,7 +106,7 @@ func updateSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRe
 		Notes:               notes,
 		Bodies:              bodies,
 		Attachments:         attachmentInserts,
-		TableData:           tableInserts(tableData, start),
+		TableData:           tableInserts(replayed.tableData, start),
 		UpdateState:         state,
 		LastSeenAt:          notestime.Format(start),
 		RefreshNoteMetadata: refreshNoteMetadata,
@@ -203,6 +129,124 @@ func updateSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRe
 	}
 	reportLogProgress(progress, int64(len(specs)), "wrote Notes archive")
 	return stats, nil
+}
+
+func replayNotesSnapshotStates(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+	progress *cklog.Progress,
+	snapPath string,
+	walData []byte,
+	specs []stateSpec,
+	start time.Time,
+) (notesReplayResult, error) {
+	result := notesReplayResult{noteTitles: map[string]string{}}
+	prev := map[string]string{}
+	for i, spec := range specs {
+		if req.ReportTrawlerCommandProgress != nil {
+			req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "source", Done: int64(i), Total: int64(len(specs)), Message: "reading Notes store state"})
+		}
+		reportLogProgress(progress, int64(i), "reading Notes store state")
+		isFinal := i == len(specs)-1
+		nextIndex, skipped, err := replayOneNotesState(ctx, snapPath, walData, spec, i, len(specs), isFinal, prev, start, &result)
+		if err != nil {
+			return notesReplayResult{}, err
+		}
+		if !skipped {
+			prev = nextIndex
+		}
+	}
+	return result, nil
+}
+
+func replayOneNotesState(
+	ctx context.Context,
+	snapPath string,
+	walData []byte,
+	spec stateSpec,
+	index int,
+	total int,
+	isFinal bool,
+	prev map[string]string,
+	start time.Time,
+	result *notesReplayResult,
+) (map[string]string, bool, error) {
+	state, err := wal.Materialize(snapPath, walData, spec.offset)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() { _ = state.Close() }()
+	db, err := notesdb.Open(ctx, state.Path)
+	if err != nil {
+		if shouldSkipHistoricalState(err, index, total) {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+	defer func() { _ = db.Close() }()
+	modIndex, err := notesdb.ReadModificationIndex(ctx, db)
+	if err != nil {
+		if shouldSkipHistoricalState(err, index, total) {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+	stateBodies, skipped, err := readNotesStateBodies(ctx, db, index, total, isFinal, prev, modIndex, result)
+	if err != nil || skipped {
+		return nil, skipped, err
+	}
+	for _, body := range stateBodies {
+		result.bodies = append(result.bodies, bodyInsert(body, result.noteTitles[body.NoteID], spec, start))
+	}
+	return modIndex, false, nil
+}
+
+func readNotesStateBodies(
+	ctx context.Context,
+	db *sql.DB,
+	index int,
+	total int,
+	isFinal bool,
+	prev map[string]string,
+	modIndex map[string]string,
+	result *notesReplayResult,
+) ([]notesdb.Body, bool, error) {
+	if isFinal {
+		final, err := notesdb.ReadFinalState(ctx, db)
+		if err != nil {
+			return nil, false, err
+		}
+		result.final = final
+		for _, note := range final.Notes {
+			result.noteTitles[note.ID] = note.Title
+		}
+		// Attachments are not versioned the way note bodies are: they are
+		// read once from the final state, alongside ReadFinalState, not
+		// once per WAL-replay step.
+		attachments, err := notesdb.ReadAttachments(ctx, db)
+		if err != nil {
+			return nil, false, err
+		}
+		result.attachments = attachments
+		tableData, err := readTableData(ctx, db, final.Bodies)
+		if err != nil {
+			return nil, false, err
+		}
+		result.tableData = tableData
+		return final.Bodies, false, nil
+	}
+	changed := notesdb.ChangedSince(prev, modIndex)
+	if len(prev) == 0 {
+		changed = allChanged(modIndex)
+	}
+	stateBodies, err := notesdb.ReadBodies(ctx, db, changed)
+	if err != nil {
+		if shouldSkipHistoricalState(err, index, total) {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+	return stateBodies, false, nil
 }
 
 func stateSpecs(source, detail string, commits []int64) []stateSpec {

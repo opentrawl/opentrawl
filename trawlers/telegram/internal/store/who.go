@@ -77,13 +77,11 @@ func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, e
 			}
 		}
 	}
-	var matches []WhoCandidate
-	for _, candidate := range candidates {
-		rank, ok := whoMatchCandidate(candidate).MatchRank(query)
-		if !ok {
-			continue
-		}
-		candidate.matchRank = int(rank)
+	ranked := whomatch.RankMatches(query, candidates, whoMatchCandidate)
+	matches := make([]WhoCandidate, 0, len(ranked))
+	for _, match := range ranked {
+		candidate := match.Item
+		candidate.matchRank = int(match.Rank)
 		matches = append(matches, candidate)
 	}
 	return s.hydrateWhoCandidates(ctx, matches)

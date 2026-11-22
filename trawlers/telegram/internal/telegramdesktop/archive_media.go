@@ -233,58 +233,7 @@ func downloadArchiveMediaSession(ctx context.Context, remote postboxRemoteSessio
 		raw := tg.NewClient(client)
 		for _, folderID := range postboxHistoryFolderIDs {
 			err := query.GetDialogs(raw).FolderID(folderID).BatchSize(postboxHistoryBatchSize).ForEach(ctx, func(ctx context.Context, elem dialogs.Elem) error {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				if elem.Deleted() {
-					return nil
-				}
-				rawChatID, ok := postboxpkg.TelegramPeerToPostboxID(elem.Dialog.GetPeer())
-				if !ok {
-					return nil
-				}
-				for _, candidate := range archiveMediaCandidatesForDialog(candidates, remote.native.AccountID, rawChatID, multiAccount) {
-					messageID, ok := archiveCloudMessageID(candidate.MessageID)
-					if !ok {
-						continue
-					}
-					result.attempted++
-					getCtx, cancel := context.WithTimeout(ctx, postboxRemoteMessageTimeout)
-					remoteMessage, getErr := getRemoteMessageForPeer(getCtx, raw, elem.Peer, elem.Dialog.GetPeer(), messageID)
-					cancel()
-					if getErr != nil {
-						if errors.Is(getCtx.Err(), context.DeadlineExceeded) {
-							result.timeouts++
-						} else {
-							result.errors++
-						}
-						continue
-					}
-					if remoteMessage == nil {
-						continue
-					}
-					path, size, reason := downloadTelegramMessageMedia(ctx, raw, querymessages.Elem{Msg: remoteMessage}, mediaTempDir, fmt.Sprintf("%s:%d", remote.native.AccountID, candidate.SourcePK))
-					if path == "" {
-						switch reason {
-						case "timeout":
-							result.timeouts++
-						case "error":
-							result.errors++
-						default:
-							// The candidate remains unresolved and is counted after
-							// every usable native account has been attempted.
-						}
-						continue
-					}
-					candidate.MediaPath = path
-					candidate.MediaSize = size
-					result.messages = append(result.messages, candidate)
-					result.downloaded++
-					if progress != nil && result.downloaded%25 == 0 {
-						_ = progress.Report(int64(result.downloaded), "downloading Telegram attachments")
-					}
-				}
-				return nil
+				return downloadArchiveMediaForDialog(ctx, raw, elem, remote.native.AccountID, multiAccount, candidates, mediaTempDir, progress, &result)
 			})
 			if err != nil {
 				return err
@@ -296,6 +245,84 @@ func downloadArchiveMediaSession(ctx context.Context, remote postboxRemoteSessio
 		return result, err
 	}
 	return result, nil
+}
+
+func downloadArchiveMediaForDialog(
+	ctx context.Context,
+	raw *tg.Client,
+	elem dialogs.Elem,
+	accountID string,
+	multiAccount bool,
+	candidates []store.Message,
+	mediaTempDir string,
+	progress ProgressReporter,
+	result *archiveMediaSessionResult,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if elem.Deleted() {
+		return nil
+	}
+	rawChatID, ok := postboxpkg.TelegramPeerToPostboxID(elem.Dialog.GetPeer())
+	if !ok {
+		return nil
+	}
+	for _, candidate := range archiveMediaCandidatesForDialog(candidates, accountID, rawChatID, multiAccount) {
+		downloadArchiveMediaCandidate(ctx, raw, elem, accountID, candidate, mediaTempDir, progress, result)
+	}
+	return nil
+}
+
+func downloadArchiveMediaCandidate(
+	ctx context.Context,
+	raw *tg.Client,
+	elem dialogs.Elem,
+	accountID string,
+	candidate store.Message,
+	mediaTempDir string,
+	progress ProgressReporter,
+	result *archiveMediaSessionResult,
+) {
+	messageID, ok := archiveCloudMessageID(candidate.MessageID)
+	if !ok {
+		return
+	}
+	result.attempted++
+	getCtx, cancel := context.WithTimeout(ctx, postboxRemoteMessageTimeout)
+	remoteMessage, getErr := getRemoteMessageForPeer(getCtx, raw, elem.Peer, elem.Dialog.GetPeer(), messageID)
+	cancel()
+	if getErr != nil {
+		if errors.Is(getCtx.Err(), context.DeadlineExceeded) {
+			result.timeouts++
+		} else {
+			result.errors++
+		}
+		return
+	}
+	if remoteMessage == nil {
+		return
+	}
+	path, size, reason := downloadTelegramMessageMedia(ctx, raw, querymessages.Elem{Msg: remoteMessage}, mediaTempDir, fmt.Sprintf("%s:%d", accountID, candidate.SourcePK))
+	if path == "" {
+		switch reason {
+		case "timeout":
+			result.timeouts++
+		case "error":
+			result.errors++
+		default:
+			// The candidate remains unresolved and is counted after
+			// every usable native account has been attempted.
+		}
+		return
+	}
+	candidate.MediaPath = path
+	candidate.MediaSize = size
+	result.messages = append(result.messages, candidate)
+	result.downloaded++
+	if progress != nil && result.downloaded%25 == 0 {
+		_ = progress.Report(int64(result.downloaded), "downloading Telegram attachments")
+	}
 }
 
 func archiveMediaCandidatesForDialog(candidates []store.Message, accountID string, rawChatID int64, multiAccount bool) []store.Message {

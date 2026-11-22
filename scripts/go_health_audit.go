@@ -52,6 +52,35 @@ type finding struct {
 	detail string
 }
 
+type auditCollector struct {
+	absRoot            string
+	fset               *token.FileSet
+	areas              map[string]*areaStats
+	boundaryViolations []finding
+	genericExports     []finding
+	genericFiles       []string
+	nolintFindings     []finding
+	anyByFile          map[string]int
+	mapAnyCount        int
+	totalAnyCount      int
+	funcMetrics        []funcMetric
+	goTestFiles        int
+	goInternalTests    int
+	goSyntheticTests   int
+	swiftFiles         []funcMetric
+	swiftUnsafeLines   int
+	swiftTestFiles     int
+}
+
+func newAuditCollector(absRoot string) *auditCollector {
+	return &auditCollector{
+		absRoot:   absRoot,
+		fset:      token.NewFileSet(),
+		areas:     map[string]*areaStats{},
+		anyByFile: map[string]int{},
+	}
+}
+
 func main() {
 	checkBoundariesOnly := flag.Bool("check-boundaries", false, "exit non-zero if any Go architecture boundary violation is found")
 	flag.Parse()
@@ -72,191 +101,211 @@ func main() {
 		os.Exit(2)
 	}
 
-	var (
-		areas              = map[string]*areaStats{}
-		boundaryViolations []finding
-		genericExports     []finding
-		genericFiles       []string
-		nolintFindings     []finding
-		anyByFile          = map[string]int{}
-		mapAnyCount        int
-		totalAnyCount      int
-		funcMetrics        []funcMetric
-		goTestFiles        int
-		goInternalTests    int
-		goSyntheticTests   int
-		swiftFiles         []funcMetric
-		swiftUnsafeLines   int
-		swiftTestFiles     int
-	)
-
-	fset := token.NewFileSet()
+	collector := newAuditCollector(absRoot)
 	for _, rel := range trackedFiles {
-		full := filepath.Join(absRoot, rel)
-		ext := filepath.Ext(rel)
-		if ext != ".go" && ext != ".swift" && ext != ".proto" && ext != ".m" && ext != ".h" && ext != ".py" && ext != ".sh" {
-			continue
-		}
-		lines, err := countLines(full)
-		if err != nil {
-			continue
-		}
-		area := classifyArea(absRoot, rel)
-		stat := areas[area]
-		if stat == nil {
-			stat = &areaStats{}
-			areas[area] = stat
-		}
-		stat.files++
-
-		isGenerated := strings.HasSuffix(rel, ".pb.go") || strings.HasSuffix(rel, ".pb.swift")
-		isTest := strings.HasSuffix(rel, "_test.go") || strings.HasSuffix(rel, "Tests.swift") || strings.HasSuffix(rel, "_test.py") || strings.Contains(rel, "/Tests/")
-		switch {
-		case isGenerated:
-			stat.genLOC += lines
-		case isTest:
-			stat.testLOC += lines
-		default:
-			stat.prodLOC += lines
-		}
-
-		if ext == ".swift" && !isGenerated {
-			if isTest {
-				swiftTestFiles++
-				continue
-			}
-			swiftFiles = append(swiftFiles, funcMetric{file: rel, lines: lines})
-			swiftUnsafeLines += countSwiftUnsafeLines(full)
-			continue
-		}
-
-		if ext != ".go" || isGenerated {
-			continue
-		}
-		if isTest {
-			goTestFiles++
-			if strings.Contains(rel, "/internal/") {
-				goInternalTests++
-			}
-			if fileMatchesPattern(full, syntheticTestPattern) {
-				goSyntheticTests++
-			}
-			continue
-		}
-
-		if genericFileNames[strings.ToLower(filepath.Base(rel))] {
-			genericFiles = append(genericFiles, rel)
-		}
-
-		parsed, err := parser.ParseFile(fset, full, nil, parser.ParseComments)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "parse %s: %v\n", rel, err)
-			continue
-		}
-
-		// 1. Architecture boundary checks from real AST imports.
-		for _, imp := range parsed.Imports {
-			importPath := strings.Trim(imp.Path.Value, `"`)
-			line := fset.Position(imp.Pos()).Line
-			if violation := checkImportBoundary(rel, importPath); violation != "" {
-				boundaryViolations = append(boundaryViolations, finding{
-					file: rel, line: line, detail: violation + " (" + importPath + ")",
-				})
-			}
-		}
-
-		// 2. Nolint suppressions from real comments.
-		for _, cg := range parsed.Comments {
-			for _, c := range cg.List {
-				if strings.Contains(c.Text, "nolint") {
-					nolintFindings = append(nolintFindings, finding{
-						file: rel, line: fset.Position(c.Pos()).Line, detail: strings.TrimSpace(c.Text),
-					})
-				}
-			}
-		}
-
-		// 3. Exported generic names, any/interface{}, and function complexity.
-		for _, decl := range parsed.Decls {
-			switch d := decl.(type) {
-			case *ast.GenDecl:
-				for _, spec := range d.Specs {
-					if ts, ok := spec.(*ast.TypeSpec); ok && genericExportedNames[ts.Name.Name] {
-						genericExports = append(genericExports, finding{
-							file: rel, line: fset.Position(ts.Pos()).Line, detail: "type " + ts.Name.Name,
-						})
-					}
-				}
-			case *ast.FuncDecl:
-				if d.Recv == nil && genericExportedNames[d.Name.Name] {
-					genericExports = append(genericExports, finding{
-						file: rel, line: fset.Position(d.Pos()).Line, detail: "func " + d.Name.Name,
-					})
-				}
-				if d.Body != nil {
-					startLine := fset.Position(d.Pos()).Line
-					endLine := fset.Position(d.End()).Line
-					funcMetrics = append(funcMetrics, funcMetric{
-						file:       rel,
-						line:       startLine,
-						name:       formatFuncName(d),
-						lines:      endLine - startLine + 1,
-						complexity: cognitiveComplexity(d.Body),
-					})
-				}
-			}
-		}
-
-		ast.Inspect(parsed, func(n ast.Node) bool {
-			switch node := n.(type) {
-			case *ast.InterfaceType:
-				if node.Methods == nil || len(node.Methods.List) == 0 {
-					anyByFile[rel]++
-					totalAnyCount++
-				}
-			case *ast.Ident:
-				if node.Name == "any" && node.Obj == nil {
-					anyByFile[rel]++
-					totalAnyCount++
-				}
-			case *ast.MapType:
-				if isStringKey(node.Key) && isEmptyInterfaceOrAny(node.Value) {
-					mapAnyCount++
-				}
-			}
-			return true
-		})
+		collector.auditTrackedFile(rel)
 	}
 
 	if *checkBoundariesOnly {
-		if len(boundaryViolations) > 0 {
-			fmt.Fprintln(os.Stderr, "architecture boundary violations:")
-			for _, v := range boundaryViolations {
-				fmt.Fprintf(os.Stderr, "  %s:%d: %s\n", v.file, v.line, v.detail)
-			}
-			os.Exit(1)
-		}
-		fmt.Println("boundary-check: ok (0 cross-trawler or inward-layer violations)")
+		exitWithBoundaryCheck(collector.boundaryViolations)
 		return
 	}
 
 	printReport(
-		areas,
-		boundaryViolations,
-		genericFiles,
-		genericExports,
-		nolintFindings,
-		totalAnyCount,
-		mapAnyCount,
-		anyByFile,
-		funcMetrics,
-		swiftFiles,
-		swiftUnsafeLines,
-		goTestFiles,
-		goInternalTests,
-		goSyntheticTests,
-		swiftTestFiles,
+		collector.areas,
+		collector.boundaryViolations,
+		collector.genericFiles,
+		collector.genericExports,
+		collector.nolintFindings,
+		collector.totalAnyCount,
+		collector.mapAnyCount,
+		collector.anyByFile,
+		collector.funcMetrics,
+		collector.swiftFiles,
+		collector.swiftUnsafeLines,
+		collector.goTestFiles,
+		collector.goInternalTests,
+		collector.goSyntheticTests,
+		collector.swiftTestFiles,
 	)
+}
+
+func exitWithBoundaryCheck(violations []finding) {
+	if len(violations) > 0 {
+		fmt.Fprintln(os.Stderr, "architecture boundary violations:")
+		for _, v := range violations {
+			fmt.Fprintf(os.Stderr, "  %s:%d: %s\n", v.file, v.line, v.detail)
+		}
+		os.Exit(1)
+	}
+	fmt.Println("boundary-check: ok (0 cross-trawler or inward-layer violations)")
+}
+
+func isAuditedExtension(ext string) bool {
+	switch ext {
+	case ".go", ".swift", ".proto", ".m", ".h", ".py", ".sh":
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *auditCollector) auditTrackedFile(rel string) {
+	ext := filepath.Ext(rel)
+	if !isAuditedExtension(ext) {
+		return
+	}
+	full := filepath.Join(c.absRoot, rel)
+	lines, err := countLines(full)
+	if err != nil {
+		return
+	}
+	isGenerated := strings.HasSuffix(rel, ".pb.go") || strings.HasSuffix(rel, ".pb.swift")
+	isTest := strings.HasSuffix(rel, "_test.go") || strings.HasSuffix(rel, "Tests.swift") || strings.HasSuffix(rel, "_test.py") || strings.Contains(rel, "/Tests/")
+	c.recordAreaLines(rel, lines, isGenerated, isTest)
+
+	if ext == ".swift" && !isGenerated {
+		c.auditSwiftFile(rel, full, lines, isTest)
+		return
+	}
+	if ext != ".go" || isGenerated {
+		return
+	}
+	if isTest {
+		c.auditGoTestFile(rel, full)
+		return
+	}
+	c.auditGoProductionFile(rel, full)
+}
+
+func (c *auditCollector) recordAreaLines(rel string, lines int, isGenerated, isTest bool) {
+	area := classifyArea(c.absRoot, rel)
+	stat := c.areas[area]
+	if stat == nil {
+		stat = &areaStats{}
+		c.areas[area] = stat
+	}
+	stat.files++
+	switch {
+	case isGenerated:
+		stat.genLOC += lines
+	case isTest:
+		stat.testLOC += lines
+	default:
+		stat.prodLOC += lines
+	}
+}
+
+func (c *auditCollector) auditSwiftFile(rel, full string, lines int, isTest bool) {
+	if isTest {
+		c.swiftTestFiles++
+		return
+	}
+	c.swiftFiles = append(c.swiftFiles, funcMetric{file: rel, lines: lines})
+	c.swiftUnsafeLines += countSwiftUnsafeLines(full)
+}
+
+func (c *auditCollector) auditGoTestFile(rel, full string) {
+	c.goTestFiles++
+	if strings.Contains(rel, "/internal/") {
+		c.goInternalTests++
+	}
+	if fileMatchesPattern(full, syntheticTestPattern) {
+		c.goSyntheticTests++
+	}
+}
+
+func (c *auditCollector) auditGoProductionFile(rel, full string) {
+	if genericFileNames[strings.ToLower(filepath.Base(rel))] {
+		c.genericFiles = append(c.genericFiles, rel)
+	}
+	parsed, err := parser.ParseFile(c.fset, full, nil, parser.ParseComments)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "parse %s: %v\n", rel, err)
+		return
+	}
+	c.auditGoImports(rel, parsed)
+	c.auditGoNolints(rel, parsed)
+	c.auditGoDecls(rel, parsed)
+	c.auditGoAnyUsage(rel, parsed)
+}
+
+func (c *auditCollector) auditGoImports(rel string, parsed *ast.File) {
+	for _, imp := range parsed.Imports {
+		importPath := strings.Trim(imp.Path.Value, `"`)
+		line := c.fset.Position(imp.Pos()).Line
+		if violation := checkImportBoundary(rel, importPath); violation != "" {
+			c.boundaryViolations = append(c.boundaryViolations, finding{
+				file: rel, line: line, detail: violation + " (" + importPath + ")",
+			})
+		}
+	}
+}
+
+func (c *auditCollector) auditGoNolints(rel string, parsed *ast.File) {
+	for _, cg := range parsed.Comments {
+		for _, comment := range cg.List {
+			if strings.Contains(comment.Text, "nolint") {
+				c.nolintFindings = append(c.nolintFindings, finding{
+					file: rel, line: c.fset.Position(comment.Pos()).Line, detail: strings.TrimSpace(comment.Text),
+				})
+			}
+		}
+	}
+}
+
+func (c *auditCollector) auditGoDecls(rel string, parsed *ast.File) {
+	for _, decl := range parsed.Decls {
+		switch d := decl.(type) {
+		case *ast.GenDecl:
+			for _, spec := range d.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok && genericExportedNames[ts.Name.Name] {
+					c.genericExports = append(c.genericExports, finding{
+						file: rel, line: c.fset.Position(ts.Pos()).Line, detail: "type " + ts.Name.Name,
+					})
+				}
+			}
+		case *ast.FuncDecl:
+			if d.Recv == nil && genericExportedNames[d.Name.Name] {
+				c.genericExports = append(c.genericExports, finding{
+					file: rel, line: c.fset.Position(d.Pos()).Line, detail: "func " + d.Name.Name,
+				})
+			}
+			if d.Body != nil {
+				startLine := c.fset.Position(d.Pos()).Line
+				endLine := c.fset.Position(d.End()).Line
+				c.funcMetrics = append(c.funcMetrics, funcMetric{
+					file:       rel,
+					line:       startLine,
+					name:       formatFuncName(d),
+					lines:      endLine - startLine + 1,
+					complexity: cognitiveComplexity(d.Body),
+				})
+			}
+		}
+	}
+}
+
+func (c *auditCollector) auditGoAnyUsage(rel string, parsed *ast.File) {
+	ast.Inspect(parsed, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.InterfaceType:
+			if node.Methods == nil || len(node.Methods.List) == 0 {
+				c.anyByFile[rel]++
+				c.totalAnyCount++
+			}
+		case *ast.Ident:
+			if node.Name == "any" && node.Obj == nil {
+				c.anyByFile[rel]++
+				c.totalAnyCount++
+			}
+		case *ast.MapType:
+			if isStringKey(node.Key) && isEmptyInterfaceOrAny(node.Value) {
+				c.mapAnyCount++
+			}
+		}
+		return true
+	})
 }
 
 func checkImportBoundary(relFile, importPath string) string {

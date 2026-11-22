@@ -76,13 +76,7 @@ func (s *Store) updateContactSnapshot(ctx context.Context, source string, contac
 	if err != nil {
 		return SnapshotStats{}, err
 	}
-	cleaned := make([]model.SourceContact, 0, len(contacts))
-	for _, incoming := range contacts {
-		contact := cleanSourceContact(source, incoming)
-		if contact.Name != "" {
-			cleaned = append(cleaned, contact)
-		}
-	}
+	cleaned := cleanNamedSourceContacts(source, contacts)
 	policy, err := s.snapshotMatchPolicy(ctx, source, cleaned)
 	if err != nil {
 		return SnapshotStats{}, err
@@ -101,80 +95,14 @@ func (s *Store) updateContactSnapshot(ctx context.Context, source string, contac
 			continue
 		}
 		seen[sourceID] = true
-		row, found := byID[sourceID]
-		previousPersonID := row.PersonID
-		changed := false
-		if !found {
-			idx := matchContact(people, contact, policy)
-			if idx < 0 {
-				person := personFromSourceContact(contact, now)
-				if err := s.SavePerson(ctx, person); err != nil {
-					return SnapshotStats{}, err
-				}
-				people = append(people, person)
-				row.PersonID = person.ID
-			} else {
-				row.PersonID = people[idx].ID
-				people[idx] = addSourceContactProjection(people[idx], contact, now)
-			}
-			stats.Added++
-			changed = true
-		} else if !sameSourceContact(row.Contact, contact) {
-			stats.Updated++
-			changed = true
-		}
-		row.Source = source
-		row.SourceID = sourceID
-		row.Contact = contact
-		row.UpdatedAt = now
-		if found {
-			hasGroupingOverride, err := s.sourceContactHasGroupingOverride(
-				ctx,
-				row.Source,
-				row.SourceID,
-			)
-			if err != nil {
-				return SnapshotStats{}, err
-			}
-			if !hasGroupingOverride {
-				matchingPersonID, matchedExactlyOneOtherPerson, err :=
-					s.personWithUniqueStrongIdentityMatchForSourceContact(
-						ctx,
-						row,
-						policy,
-					)
-				if err != nil {
-					return SnapshotStats{}, err
-				}
-				if matchedExactlyOneOtherPerson {
-					row.PersonID = matchingPersonID
-					affected[previousPersonID] = true
-					affected[matchingPersonID] = true
-				}
-			}
-		}
-		if contact.Avatar != nil && len(contact.Avatar.Data) > 0 {
-			pendingAvatars[sourceContactKey(source, sourceID)] = contact.Avatar
-		}
-		if err := s.saveSourceContact(ctx, row); err != nil {
+		var err error
+		people, err = s.upsertSnapshotSourceContact(ctx, source, sourceID, contact, byID, people, policy, now, affected, pendingAvatars, &stats)
+		if err != nil {
 			return SnapshotStats{}, err
-		}
-		if changed {
-			affected[row.PersonID] = true
 		}
 	}
-	for _, row := range existing {
-		if seen[row.SourceID] {
-			continue
-		}
-		if _, err := s.database().ExecContext(ctx, `delete from source_contact_group_overrides where source = ? and source_id = ?`, source, row.SourceID); err != nil {
-			return SnapshotStats{}, err
-		}
-		if _, err := s.database().ExecContext(ctx, `delete from source_contacts where source = ? and source_id = ?`, source, row.SourceID); err != nil {
-			return SnapshotStats{}, err
-		}
-		stats.Removed++
-		affected[row.PersonID] = true
+	if err := s.removeUnseenSourceContacts(ctx, source, existing, seen, affected, &stats); err != nil {
+		return SnapshotStats{}, err
 	}
 	repaired, err := s.repairHistoricalHouseholdGroups(ctx, source, policy, now)
 	if err != nil {
@@ -193,6 +121,130 @@ func (s *Store) updateContactSnapshot(ctx context.Context, source string, contac
 		}
 	}
 	return stats, nil
+}
+
+func cleanNamedSourceContacts(source string, contacts []model.SourceContact) []model.SourceContact {
+	cleaned := make([]model.SourceContact, 0, len(contacts))
+	for _, incoming := range contacts {
+		contact := cleanSourceContact(source, incoming)
+		if contact.Name != "" {
+			cleaned = append(cleaned, contact)
+		}
+	}
+	return cleaned
+}
+
+func (s *Store) upsertSnapshotSourceContact(
+	ctx context.Context,
+	source string,
+	sourceID string,
+	contact model.SourceContact,
+	byID map[string]sourceContactRow,
+	people []model.Person,
+	policy contactMatchPolicy,
+	now time.Time,
+	affected map[string]bool,
+	pendingAvatars map[string]*model.SourceAvatar,
+	stats *SnapshotStats,
+) ([]model.Person, error) {
+	row, found := byID[sourceID]
+	previousPersonID := row.PersonID
+	changed := false
+	if !found {
+		var err error
+		row.PersonID, people, err = s.assignPersonForNewSourceContact(ctx, people, contact, policy, now)
+		if err != nil {
+			return people, err
+		}
+		stats.Added++
+		changed = true
+	} else if !sameSourceContact(row.Contact, contact) {
+		stats.Updated++
+		changed = true
+	}
+	row.Source = source
+	row.SourceID = sourceID
+	row.Contact = contact
+	row.UpdatedAt = now
+	if found {
+		if err := s.reconcileExistingSourceContactGrouping(ctx, &row, previousPersonID, policy, affected); err != nil {
+			return people, err
+		}
+	}
+	if contact.Avatar != nil && len(contact.Avatar.Data) > 0 {
+		pendingAvatars[sourceContactKey(source, sourceID)] = contact.Avatar
+	}
+	if err := s.saveSourceContact(ctx, row); err != nil {
+		return people, err
+	}
+	if changed {
+		affected[row.PersonID] = true
+	}
+	return people, nil
+}
+
+func (s *Store) assignPersonForNewSourceContact(
+	ctx context.Context,
+	people []model.Person,
+	contact model.SourceContact,
+	policy contactMatchPolicy,
+	now time.Time,
+) (string, []model.Person, error) {
+	idx := matchContact(people, contact, policy)
+	if idx < 0 {
+		person := personFromSourceContact(contact, now)
+		if err := s.SavePerson(ctx, person); err != nil {
+			return "", people, err
+		}
+		return person.ID, append(people, person), nil
+	}
+	people[idx] = addSourceContactProjection(people[idx], contact, now)
+	return people[idx].ID, people, nil
+}
+
+func (s *Store) reconcileExistingSourceContactGrouping(
+	ctx context.Context,
+	row *sourceContactRow,
+	previousPersonID string,
+	policy contactMatchPolicy,
+	affected map[string]bool,
+) error {
+	hasGroupingOverride, err := s.sourceContactHasGroupingOverride(ctx, row.Source, row.SourceID)
+	if err != nil || hasGroupingOverride {
+		return err
+	}
+	matchingPersonID, matchedExactlyOneOtherPerson, err := s.personWithUniqueStrongIdentityMatchForSourceContact(ctx, *row, policy)
+	if err != nil || !matchedExactlyOneOtherPerson {
+		return err
+	}
+	row.PersonID = matchingPersonID
+	affected[previousPersonID] = true
+	affected[matchingPersonID] = true
+	return nil
+}
+
+func (s *Store) removeUnseenSourceContacts(
+	ctx context.Context,
+	source string,
+	existing []sourceContactRow,
+	seen map[string]bool,
+	affected map[string]bool,
+	stats *SnapshotStats,
+) error {
+	for _, row := range existing {
+		if seen[row.SourceID] {
+			continue
+		}
+		if _, err := s.database().ExecContext(ctx, `delete from source_contact_group_overrides where source = ? and source_id = ?`, source, row.SourceID); err != nil {
+			return err
+		}
+		if _, err := s.database().ExecContext(ctx, `delete from source_contacts where source = ? and source_id = ?`, source, row.SourceID); err != nil {
+			return err
+		}
+		stats.Removed++
+		affected[row.PersonID] = true
+	}
+	return nil
 }
 
 func (s *Store) sourceContactHasGroupingOverride(

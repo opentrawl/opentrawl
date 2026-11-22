@@ -25,19 +25,19 @@ type Importer struct {
 	Now func() time.Time
 }
 
-type Result struct {
+type ArchiveImportResult struct {
 	Stats store.ImportStats
 }
 
-func (i Importer) Import(ctx context.Context, st *store.Store, path string) (Result, error) {
+func (i Importer) Import(ctx context.Context, st *store.Store, path string) (ArchiveImportResult, error) {
 	started := i.now()
 	files, err := readDumpFiles(path)
 	if err != nil {
-		return Result{}, err
+		return ArchiveImportResult{}, err
 	}
 	tweets, roles, profiles, counters, err := parseDump(files, started)
 	if err != nil {
-		return Result{}, err
+		return ArchiveImportResult{}, err
 	}
 	stats, err := st.ImportArchive(ctx, store.ImportBatch{
 		Tweets:          tweets,
@@ -47,14 +47,14 @@ func (i Importer) Import(ctx context.Context, st *store.Store, path string) (Res
 		ImportedAt:      started,
 	})
 	if err != nil {
-		return Result{}, err
+		return ArchiveImportResult{}, err
 	}
 	stats.NoteTweetsMerged = counters.noteTweetsMerged
 	stats.NoteTweetsUnmatched = counters.noteTweetsUnmatched
 	stats.LikesWithoutText = counters.likesWithoutText
 	stats.StartedAt = started
 	stats.FinishedAt = i.now()
-	return Result{Stats: stats}, nil
+	return ArchiveImportResult{Stats: stats}, nil
 }
 
 func (i Importer) now() time.Time {

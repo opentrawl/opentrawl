@@ -104,7 +104,7 @@ func TestBuildExtendsCollisions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Entry{
+	want := []ShortReferenceEntry{
 		{FullRef: "source:a", Alias: "22222a"},
 		{FullRef: "source:b", Alias: "22222b"},
 		{FullRef: "source:c", Alias: "33333"},
@@ -114,7 +114,7 @@ func TestBuildExtendsCollisions(t *testing.T) {
 	}
 
 	lookupEntries := LookupEntries(entries)
-	for _, wantEntry := range []Entry{
+	for _, wantEntry := range []ShortReferenceEntry{
 		{FullRef: "source:a", Alias: "22222"},
 		{FullRef: "source:b", Alias: "22222"},
 		{FullRef: "source:a", Alias: "22222a"},
@@ -154,7 +154,7 @@ func craftedAlias(fullRef string, length int) string {
 	return alias + strings.Repeat("z", length-len(alias))
 }
 
-func containsEntry(entries []Entry, want Entry) bool {
+func containsEntry(entries []ShortReferenceEntry, want ShortReferenceEntry) bool {
 	for _, entry := range entries {
 		if entry == want {
 			return true

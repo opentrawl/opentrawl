@@ -30,30 +30,30 @@ func CanaryRead(ctx context.Context, path string) error {
 	return st.DB().QueryRowContext(ctx, `select count(*) from CalendarItem`).Scan(&count)
 }
 
-func Read(ctx context.Context, path string) (Data, error) {
+func Read(ctx context.Context, path string) (CalendarStoreSnapshot, error) {
 	snap, err := SnapshotPath(ctx, path)
 	if err != nil {
-		return Data{}, err
+		return CalendarStoreSnapshot{}, err
 	}
 	defer func() { _ = snap.Close() }()
 	st, err := openSnapshot(ctx, snap.Path)
 	if err != nil {
-		return Data{}, err
+		return CalendarStoreSnapshot{}, err
 	}
 	defer func() { _ = st.Close() }()
 	calendars, err := readCalendars(ctx, st.DB())
 	if err != nil {
-		return Data{}, err
+		return CalendarStoreSnapshot{}, err
 	}
 	events, err := readEvents(ctx, st.DB(), calendars)
 	if err != nil {
-		return Data{}, err
+		return CalendarStoreSnapshot{}, err
 	}
 	info, err := os.Stat(snap.SourcePath)
 	if err != nil {
-		return Data{}, err
+		return CalendarStoreSnapshot{}, err
 	}
-	return Data{
+	return CalendarStoreSnapshot{
 		SourcePath:       snap.SourcePath,
 		SourceModifiedAt: info.ModTime().UTC().Format(time.RFC3339Nano),
 		Calendars:        calendars,

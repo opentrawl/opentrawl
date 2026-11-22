@@ -1,6 +1,6 @@
 package calendarstore
 
-type Data struct {
+type CalendarStoreSnapshot struct {
 	SourcePath       string
 	SourceModifiedAt string
 	Calendars        []Calendar

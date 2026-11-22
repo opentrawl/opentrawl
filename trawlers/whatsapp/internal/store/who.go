@@ -40,31 +40,8 @@ func resolveWhoFromCandidateRecords(records []whoCandidateRecord, identity strin
 	if strings.EqualFold(query, "me") {
 		return ownerWhoResolution(records)
 	}
-	type rankedCandidate struct {
-		record whoCandidateRecord
-		rank   whomatch.Rank
-	}
-	var matches []rankedCandidate
-	for _, record := range records {
-		rank, ok := record.matchCandidate().MatchRank(query)
-		if !ok {
-			continue
-		}
-		matches = append(matches, rankedCandidate{record: record, rank: rank})
-	}
-	sort.SliceStable(matches, func(i, j int) bool {
-		left := matches[i]
-		right := matches[j]
-		if left.rank != right.rank {
-			return left.rank.BetterThan(right.rank)
-		}
-		if !left.record.LastSeen.Equal(right.record.LastSeen) {
-			return left.record.LastSeen.After(right.record.LastSeen)
-		}
-		if left.record.Messages != right.record.Messages {
-			return left.record.Messages > right.record.Messages
-		}
-		return strings.ToLower(left.record.Who) < strings.ToLower(right.record.Who)
+	matches := whomatch.RankAndSortMatches(query, records, func(record whoCandidateRecord) whomatch.Candidate {
+		return record.matchCandidate()
 	})
 	resolution := WhoResolution{
 		ParticipantKeys: make([]string, 0, len(matches)),
@@ -72,10 +49,10 @@ func resolveWhoFromCandidateRecords(records []whoCandidateRecord, identity strin
 		Candidates:      make([]WhoCandidate, 0, len(matches)),
 	}
 	if len(matches) > 0 {
-		resolution.matchRank = matches[0].rank
+		resolution.matchRank = matches[0].Rank
 	}
 	for _, match := range matches {
-		candidate := match.record.WhoCandidate
+		candidate := match.Item.WhoCandidate
 		resolution.ParticipantKeys = append(resolution.ParticipantKeys, candidate.ParticipantKeys...)
 		resolution.DisplayNames = append(resolution.DisplayNames, candidate.Who)
 		resolution.Candidates = append(resolution.Candidates, candidate)

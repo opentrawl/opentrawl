@@ -94,7 +94,7 @@ func telegramHistoryStatePath(archivePath string) string {
 	return archivePath + ".history-state.json"
 }
 
-func writeTelegramConfig(path string, cfg Config) error {
+func writeTelegramConfig(path string, cfg TelegramCrawlerConfiguration) error {
 	path = ckconfig.ExpandHome(path)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create Telegram config directory: %w", err)

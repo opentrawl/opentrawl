@@ -443,7 +443,7 @@ func (s *Store) UpdateMarkers(ctx context.Context) (UpdateMarkers, error) {
 	return markers, nil
 }
 
-func recordTime(rec state.Record) time.Time {
+func recordTime(rec state.UpdateStateRecord) time.Time {
 	parsed, err := time.Parse(time.RFC3339, rec.Value)
 	if err == nil {
 		return parsed

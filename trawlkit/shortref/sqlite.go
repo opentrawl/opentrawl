@@ -102,11 +102,11 @@ on conflict(alias, full_ref) do update set canonical_ref = excluded.canonical_re
 	return nil
 }
 
-func (i *SQLiteIndex) UpsertEntry(ctx context.Context, entry Entry) error {
+func (i *SQLiteIndex) UpsertEntry(ctx context.Context, entry ShortReferenceEntry) error {
 	return i.Upsert(ctx, entry.Alias, entry.FullRef)
 }
 
-func (i *SQLiteIndex) UpsertEntries(ctx context.Context, entries []Entry) error {
+func (i *SQLiteIndex) UpsertEntries(ctx context.Context, entries []ShortReferenceEntry) error {
 	for _, entry := range entries {
 		if err := i.UpsertEntry(ctx, entry); err != nil {
 			return err
@@ -115,7 +115,7 @@ func (i *SQLiteIndex) UpsertEntries(ctx context.Context, entries []Entry) error 
 	return nil
 }
 
-func (i *SQLiteIndex) UpsertCanonicalEntries(ctx context.Context, entries []Entry, canonicalRefs map[string]string) error {
+func (i *SQLiteIndex) UpsertCanonicalEntries(ctx context.Context, entries []ShortReferenceEntry, canonicalRefs map[string]string) error {
 	for _, entry := range entries {
 		canonicalRef := strings.TrimSpace(canonicalRefs[entry.FullRef])
 		if canonicalRef == "" {

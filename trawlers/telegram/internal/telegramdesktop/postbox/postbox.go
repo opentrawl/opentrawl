@@ -59,51 +59,11 @@ type MediaRef struct {
 func ReadMessage(value []byte) (*Message, error) {
 	reader := newByteReader(value)
 	version, err := reader.int8()
-	if err != nil {
+	if err != nil || version != 0 {
 		return nil, err
 	}
-	if version != 0 {
-		return nil, nil
-	}
-	if _, err := reader.uint32(); err != nil {
+	if err := skipMessageHeader(reader); err != nil {
 		return nil, err
-	}
-	if _, err := reader.uint32(); err != nil {
-		return nil, err
-	}
-	dataFlags, err := reader.uint8()
-	if err != nil {
-		return nil, err
-	}
-	if dataFlags&(1<<0) != 0 {
-		if _, err := reader.int64(); err != nil {
-			return nil, err
-		}
-	}
-	if dataFlags&(1<<1) != 0 {
-		if _, err := reader.uint32(); err != nil {
-			return nil, err
-		}
-	}
-	if dataFlags&(1<<2) != 0 {
-		if _, err := reader.int64(); err != nil {
-			return nil, err
-		}
-	}
-	if dataFlags&(1<<3) != 0 {
-		if _, err := reader.uint32(); err != nil {
-			return nil, err
-		}
-	}
-	if dataFlags&(1<<4) != 0 {
-		if _, err := reader.uint32(); err != nil {
-			return nil, err
-		}
-	}
-	if dataFlags&(1<<5) != 0 {
-		if _, err := reader.int64(); err != nil {
-			return nil, err
-		}
 	}
 	flags, err := reader.uint32()
 	if err != nil {
@@ -116,53 +76,124 @@ func ReadMessage(value []byte) (*Message, error) {
 	if err := readForwardInfo(reader); err != nil {
 		return nil, err
 	}
-	var authorID int64
-	var hasAuthorID bool
-	hasAuthorFlag, err := reader.int8()
+	authorID, hasAuthorID, err := readMessageAuthorID(reader)
 	if err != nil {
 		return nil, err
-	}
-	if hasAuthorFlag == 1 {
-		authorID, err = reader.int64()
-		if err != nil {
-			return nil, err
-		}
-		hasAuthorID = true
 	}
 	text, err := reader.string()
 	if err != nil {
 		return nil, err
 	}
-	attrCount, err := reader.int32()
+	if err := skipMessageAttributes(reader); err != nil {
+		return nil, err
+	}
+	embeddedCount, embeddedMedia, err := readMessageEmbeddedMedia(reader)
 	if err != nil {
 		return nil, err
 	}
+	refs, err := readMessageReferencedMedia(reader)
+	if err != nil {
+		return nil, err
+	}
+	return &Message{
+		Flags:              flags,
+		Tags:               tags,
+		AuthorID:           authorID,
+		HasAuthorID:        hasAuthorID,
+		Text:               text,
+		EmbeddedMediaCount: embeddedCount,
+		EmbeddedMedia:      embeddedMedia,
+		ReferencedMediaIDs: refs,
+	}, nil
+}
+
+func skipMessageHeader(reader *byteReader) error {
+	if _, err := reader.uint32(); err != nil {
+		return err
+	}
+	if _, err := reader.uint32(); err != nil {
+		return err
+	}
+	dataFlags, err := reader.uint8()
+	if err != nil {
+		return err
+	}
+	for _, spec := range []struct {
+		bit     uint8
+		isInt64 bool
+	}{
+		{bit: 1 << 0, isInt64: true},
+		{bit: 1 << 1, isInt64: false},
+		{bit: 1 << 2, isInt64: true},
+		{bit: 1 << 3, isInt64: false},
+		{bit: 1 << 4, isInt64: false},
+		{bit: 1 << 5, isInt64: true},
+	} {
+		if dataFlags&spec.bit == 0 {
+			continue
+		}
+		if spec.isInt64 {
+			if _, err := reader.int64(); err != nil {
+				return err
+			}
+		} else if _, err := reader.uint32(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func readMessageAuthorID(reader *byteReader) (int64, bool, error) {
+	hasAuthorFlag, err := reader.int8()
+	if err != nil || hasAuthorFlag != 1 {
+		return 0, false, err
+	}
+	authorID, err := reader.int64()
+	if err != nil {
+		return 0, false, err
+	}
+	return authorID, true, nil
+}
+
+func skipMessageAttributes(reader *byteReader) error {
+	attrCount, err := reader.int32()
+	if err != nil {
+		return err
+	}
 	if attrCount < 0 {
-		return nil, fmt.Errorf("negative message attribute count")
+		return fmt.Errorf("negative message attribute count")
 	}
 	for range int(attrCount) {
 		if _, err := reader.bytes(); err != nil {
-			return nil, err
+			return err
 		}
 	}
+	return nil
+}
+
+func readMessageEmbeddedMedia(reader *byteReader) (int, []any, error) {
 	embeddedCount, err := reader.int32()
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	if embeddedCount < 0 {
-		return nil, fmt.Errorf("negative embedded media count")
+		return 0, nil, fmt.Errorf("negative embedded media count")
 	}
 	embeddedMedia := make([]any, 0, embeddedCount)
 	for range int(embeddedCount) {
 		raw, err := reader.bytes()
 		if err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 		decoded, err := DecodeObject(raw)
 		if err == nil && decoded != nil {
 			embeddedMedia = append(embeddedMedia, decoded)
 		}
 	}
+	return int(embeddedCount), embeddedMedia, nil
+}
+
+func readMessageReferencedMedia(reader *byteReader) ([]MediaRef, error) {
 	refCount, err := reader.int32()
 	if err != nil {
 		return nil, err
@@ -182,16 +213,7 @@ func ReadMessage(value []byte) (*Message, error) {
 		}
 		refs = append(refs, MediaRef{Namespace: namespace, ID: id})
 	}
-	return &Message{
-		Flags:              flags,
-		Tags:               tags,
-		AuthorID:           authorID,
-		HasAuthorID:        hasAuthorID,
-		Text:               text,
-		EmbeddedMediaCount: int(embeddedCount),
-		EmbeddedMedia:      embeddedMedia,
-		ReferencedMediaIDs: refs,
-	}, nil
+	return refs, nil
 }
 
 func readForwardInfo(reader *byteReader) error {
