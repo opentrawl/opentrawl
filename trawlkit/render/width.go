@@ -11,7 +11,29 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const defaultOutputWidth = 100
+// UnconstrainedOutputWidth removes artificial 80/100-column narrowing when no
+// physical human terminal edge constrains the stream (a piped command or an
+// agent harness PTY). Table columns still size strictly to their content and
+// never pad out to this bound.
+const UnconstrainedOutputWidth = 10000
+
+// OutputWidthSource identifies how OpenTrawl chose its output line width.
+type OutputWidthSource string
+
+const (
+	OutputWidthSourceColumnsEnvironmentVariable OutputWidthSource = "columns_environment_variable"
+	OutputWidthSourceAgentHarnessEnvironment    OutputWidthSource = "agent_harness_environment"
+	OutputWidthSourceDumbTerminal               OutputWidthSource = "dumb_terminal"
+	OutputWidthSourceInteractiveTerminal        OutputWidthSource = "interactive_terminal"
+	OutputWidthSourceNonTerminalStream          OutputWidthSource = "non_terminal_stream"
+)
+
+// OutputWidthDecision records the resolved width and how OpenTrawl chose it.
+type OutputWidthDecision struct {
+	WidthInColumns           int
+	WidthSource              OutputWidthSource
+	StandardOutputIsTerminal bool
+}
 
 type writerUnwrapper interface {
 	UnwrapWriter() io.Writer
@@ -19,24 +41,79 @@ type writerUnwrapper interface {
 
 // OutputWidth returns the human-output line budget for the writer.
 func OutputWidth(w io.Writer) int {
+	return ResolveOutputWidth(w).WidthInColumns
+}
+
+// ResolveOutputWidth determines the line width for w. Explicit COLUMNS always
+// wins; coding-agent harnesses, dumb terminals and non-terminal streams use
+// unconstrained natural width so columns do not truncate; interactive human
+// terminals use their real window width.
+func ResolveOutputWidth(w io.Writer) OutputWidthDecision {
+	terminalColumns, isTerminal := terminalWindowWidthInColumns(w)
+	if width, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS"))); err == nil && width > 0 {
+		return OutputWidthDecision{
+			WidthInColumns:           width,
+			WidthSource:              OutputWidthSourceColumnsEnvironmentVariable,
+			StandardOutputIsTerminal: isTerminal,
+		}
+	}
+	if runningInsideCodingAgentHarness() {
+		return OutputWidthDecision{
+			WidthInColumns:           UnconstrainedOutputWidth,
+			WidthSource:              OutputWidthSourceAgentHarnessEnvironment,
+			StandardOutputIsTerminal: isTerminal,
+		}
+	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("TERM")), "dumb") {
+		return OutputWidthDecision{
+			WidthInColumns:           UnconstrainedOutputWidth,
+			WidthSource:              OutputWidthSourceDumbTerminal,
+			StandardOutputIsTerminal: isTerminal,
+		}
+	}
+	if isTerminal {
+		return OutputWidthDecision{
+			WidthInColumns:           terminalColumns,
+			WidthSource:              OutputWidthSourceInteractiveTerminal,
+			StandardOutputIsTerminal: true,
+		}
+	}
+	return OutputWidthDecision{
+		WidthInColumns:           UnconstrainedOutputWidth,
+		WidthSource:              OutputWidthSourceNonTerminalStream,
+		StandardOutputIsTerminal: false,
+	}
+}
+
+func terminalWindowWidthInColumns(w io.Writer) (int, bool) {
 	for {
 		if file, ok := w.(*os.File); ok {
 			size, err := unix.IoctlGetWinsize(int(file.Fd()), unix.TIOCGWINSZ)
 			if err == nil && size != nil && size.Col > 0 {
-				return int(size.Col)
+				return int(size.Col), true
 			}
-			break
+			return 0, false
 		}
 		wrappedWriter, ok := w.(writerUnwrapper)
 		if !ok {
-			break
+			return 0, false
 		}
 		w = wrappedWriter.UnwrapWriter()
 	}
-	if width, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS"))); err == nil && width > 0 {
-		return width
+}
+
+func runningInsideCodingAgentHarness() bool {
+	for _, environmentVariableName := range []string{
+		"T3CODE_THREAD_ID",
+		"CLAUDECODE",
+		"CODEX_THREAD_ID",
+		"ANTIGRAVITY_AGENT",
+	} {
+		if strings.TrimSpace(os.Getenv(environmentVariableName)) != "" {
+			return true
+		}
 	}
-	return defaultOutputWidth
+	return false
 }
 
 func DisplayWidth(value string) int {

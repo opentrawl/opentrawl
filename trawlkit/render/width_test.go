@@ -1,9 +1,56 @@
 package render
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 )
+
+func TestResolveOutputWidthPrecedence(t *testing.T) {
+	clearWidthEnvironment := func(t *testing.T) {
+		t.Helper()
+		for _, key := range []string{
+			"COLUMNS",
+			"TERM",
+			"T3CODE_THREAD_ID",
+			"CLAUDECODE",
+			"CODEX_THREAD_ID",
+			"ANTIGRAVITY_AGENT",
+		} {
+			t.Setenv(key, "")
+		}
+	}
+
+	t.Run("explicit COLUMNS overrides agent harness and non-terminal", func(t *testing.T) {
+		clearWidthEnvironment(t)
+		t.Setenv("T3CODE_THREAD_ID", "thread-1")
+		t.Setenv("COLUMNS", "92")
+
+		got := ResolveOutputWidth(&bytes.Buffer{})
+		if got.WidthInColumns != 92 || got.WidthSource != OutputWidthSourceColumnsEnvironmentVariable {
+			t.Fatalf("ResolveOutputWidth() = %+v, want width 92 from columns_environment_variable", got)
+		}
+	})
+
+	t.Run("agent harness uses unconstrained width when COLUMNS is unset", func(t *testing.T) {
+		clearWidthEnvironment(t)
+		t.Setenv("ANTIGRAVITY_AGENT", "1")
+
+		got := ResolveOutputWidth(&bytes.Buffer{})
+		if got.WidthInColumns != UnconstrainedOutputWidth || got.WidthSource != OutputWidthSourceAgentHarnessEnvironment {
+			t.Fatalf("ResolveOutputWidth() = %+v, want unconstrained width from agent_harness_environment", got)
+		}
+	})
+
+	t.Run("non-terminal pipe uses unconstrained width when no harness or COLUMNS is set", func(t *testing.T) {
+		clearWidthEnvironment(t)
+
+		got := ResolveOutputWidth(&bytes.Buffer{})
+		if got.WidthInColumns != UnconstrainedOutputWidth || got.WidthSource != OutputWidthSourceNonTerminalStream {
+			t.Fatalf("ResolveOutputWidth() = %+v, want unconstrained width from non_terminal_stream", got)
+		}
+	})
+}
 
 func TestDisplayWidth(t *testing.T) {
 	for _, tc := range []struct {

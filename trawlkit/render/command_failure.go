@@ -237,6 +237,10 @@ func WhoNeedsName() CommandFailure {
 	return commandIsWrong("Who needs a name.")
 }
 
+func ComplainNeedsText() CommandFailure {
+	return commandIsWrong("Complain needs a description of what went wrong or was missing.")
+}
+
 func ConversationOptionNeedsConversationLink() CommandFailure {
 	return commandIsWrong("--conversation needs a conversation link.")
 }

@@ -43,6 +43,11 @@ func (output TrawlCommandOutput) DiagnosticLogStream() io.Writer {
 	return output.standardError
 }
 
+// ResolvedOutputWidth reports the resolved width and source for standard output.
+func (output TrawlCommandOutput) ResolvedOutputWidth() OutputWidthDecision {
+	return ResolveOutputWidth(output.standardOutput)
+}
+
 // standardErrorWriterSharedWithDiagnostics serialises writes, because
 // trawlers report progress on standard error from several goroutines.
 type standardErrorWriterSharedWithDiagnostics struct {

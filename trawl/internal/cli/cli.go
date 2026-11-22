@@ -27,6 +27,8 @@ type CLI struct {
 	Conversations ConversationsCmd `cmd:"" help:"List conversations"`
 	Messages      MessagesCmd      `cmd:"" help:"List messages in a conversation"`
 	Open          OpenCmd          `cmd:"" help:"Open an archive item"`
+	Complain      ComplainCmd      `cmd:"" hidden:"" help:"Record a local agent complaint about OpenTrawl search, output or ergonomics"`
+	Complaints    ComplaintsCmd    `cmd:"" hidden:"" help:"List local OpenTrawl agent complaints newest first"`
 }
 
 // Runtime carries one command run. It has no writer: every word a command
@@ -121,6 +123,28 @@ func execute(
 	if isAppWireCommand(args) {
 		return executeAppWire(args, output, appWireProtobufFrameStream, timeout, stateRoot)
 	}
+	if complaintText, remainingArgs, hasComplaint, complaintErr := extractGlobalComplaintFlag(args); complaintErr != nil {
+		return complaintErr
+	} else if hasComplaint {
+		complaintRecord := buildAgentComplaintRecord(
+			time.Now(),
+			output.ResolvedOutputWidth(),
+			remainingArgs,
+			"",
+			"",
+			complaintText,
+			"",
+			"",
+		)
+		complaintPath, saveErr := appendAgentComplaintRecord(stateRoot, complaintRecord)
+		if saveErr != nil {
+			return saveErr
+		}
+		if len(remainingArgs) == 0 {
+			return output.WriteAgentComplaintSaved(complaintPath)
+		}
+		args = remainingArgs
+	}
 	for _, argument := range args {
 		if argument == "--" {
 			break
@@ -187,6 +211,8 @@ func execute(
 			return render.OpenNeedsLink()
 		case "who":
 			return render.WhoNeedsName()
+		case "complain":
+			return render.ComplainNeedsText()
 		}
 	}
 	kctx, err := parser.Parse(args)
