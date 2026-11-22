@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
 	// C SQLite via cgo, matching trawlkit/store after the modernc→mattn swap:
@@ -283,12 +282,6 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if _, err := db.ExecContext(ctx, indexSQL); err != nil {
 		return nil, err
 	}
-	if err := shortref.EnsureSchema(ctx, db); err != nil {
-		return nil, err
-	}
-	if _, err := db.ExecContext(ctx, `create index if not exists idx_short_refs_full_ref on short_refs(full_ref)`); err != nil {
-		return nil, err
-	}
 	return s, nil
 }
 
@@ -370,11 +363,6 @@ func (s *Store) MergeObserved(
 		return UpdateStats{}, err
 	}
 	defer rollback(tx)
-	shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction := make(
-		[]trawlkit.ShortReferenceAssignmentCandidate,
-		0,
-		len(chats)+len(messages),
-	)
 	updateStats, changedMessages, err := observedMessageChanges(ctx, tx, messages)
 	if err != nil {
 		return UpdateStats{}, err
@@ -404,19 +392,7 @@ func (s *Store) MergeObserved(
 		).Scan(&storedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations); err != nil {
 			return UpdateStats{}, err
 		}
-		canonicalConversationRecordReference := ChatRef(
-			storedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
-		)
-		if canonicalConversationRecordReference != "" {
-			shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction = append(
-				shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,
-				trawlkit.ShortReferenceAssignmentCandidate{
-					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-						canonicalConversationRecordReference,
-					),
-				},
-			)
-		}
+		_ = storedAccountScopedConversationIdentifierForConversationAcrossTelegramMigrations
 	}
 	for _, f := range folders {
 		if _, err := tx.ExecContext(ctx, `insert into folders(id,title,emoticon,color,flags_json) values(?,?,?,?,?) on conflict(id) do update set title=excluded.title, emoticon=excluded.emoticon, color=excluded.color, flags_json=excluded.flags_json`,
@@ -442,24 +418,52 @@ func (s *Store) MergeObserved(
 	if err := upsertMessages(ctx, tx, changedMessages); err != nil {
 		return UpdateStats{}, err
 	}
-	for _, message := range changedMessages {
-		shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction = append(
-			shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,
-			trawlkit.ShortReferenceAssignmentCandidate{
-				StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-					MessageRef(message.SourcePK),
-				),
-			},
-		)
-	}
-	if err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(
-		ctx,
-		tx,
-		shortReferenceAssignmentCandidatesForRecordsPublishedByTelegramTransaction,
-	); err != nil {
-		return UpdateStats{}, err
-	}
 	return updateStats, tx.Commit()
+}
+
+func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	var candidates []trawlkit.ShortReferenceAssignmentCandidate
+	chatRows, err := s.db.QueryContext(ctx, `select account_scoped_conversation_identifier_for_conversation_across_telegram_migrations from chats order by id`)
+	if err != nil {
+		return nil, err
+	}
+	for chatRows.Next() {
+		var convID string
+		if err := chatRows.Scan(&convID); err != nil {
+			_ = chatRows.Close()
+			return nil, err
+		}
+		chatRef := ChatRef(convID)
+		if chatRef == "" {
+			continue
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(chatRef),
+		})
+	}
+	if err := errors.Join(chatRows.Err(), chatRows.Close()); err != nil {
+		return nil, err
+	}
+	msgRows, err := s.db.QueryContext(ctx, `select source_pk from messages order by rowid`)
+	if err != nil {
+		return nil, err
+	}
+	for msgRows.Next() {
+		var sourcePK int64
+		if err := msgRows.Scan(&sourcePK); err != nil {
+			_ = msgRows.Close()
+			return nil, err
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				MessageRef(sourcePK),
+			),
+		})
+	}
+	if err := errors.Join(msgRows.Err(), msgRows.Close()); err != nil {
+		return nil, err
+	}
+	return candidates, nil
 }
 
 func accountScopedConversationIdentifierAcrossTelegramMigrations(chat Chat) string {

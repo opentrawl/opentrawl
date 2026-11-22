@@ -9,6 +9,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
@@ -24,13 +25,15 @@ const (
 type Crawler struct{}
 
 var (
-	_ trawlkit.Trawler                = (*Crawler)(nil)
-	_ trawlkit.Updater                = (*Crawler)(nil)
-	_ trawlkit.Searcher               = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
-	_ trawlkit.ConversationLister     = (*Crawler)(nil)
-	_ trawlkit.TrawlerMessageLister   = (*Crawler)(nil)
-	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
+	_ trawlkit.Trawler                        = (*Crawler)(nil)
+	_ trawlkit.Updater                        = (*Crawler)(nil)
+	_ trawlkit.Searcher                       = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher                     = (*Crawler)(nil)
+	_ trawlkit.ConversationLister             = (*Crawler)(nil)
+	_ trawlkit.TrawlerMessageLister           = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider         = (*Crawler)(nil)
+	_ trawlkit.CanonicalRecordOpener          = (*Crawler)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -47,7 +50,29 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:              "message.fill",
+			AccentColor:             "#34C759",
+			BundleIdentifier:        "com.apple.MobileSMS",
+			ArtworkBundleIdentifier: "com.apple.MobileSMS",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE,
 	}
+}
+
+func (c *Crawler) ListArchiveRecordReferencesForShortReferences(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, false, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	candidates, err := st.ListShortReferenceCandidates(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, true, nil
 }
 
 func (*Crawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {

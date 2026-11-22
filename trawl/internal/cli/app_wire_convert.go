@@ -57,7 +57,7 @@ func (r *Runtime) appSearchResponse(
 		uint32(maximumReturnedSearchMatchCount),
 	)
 	for _, match := range response.GetSearchMatchesInDisplayOrder() {
-		render.MoneySearchMatchPresentationForApp(match.GetSearchMatchPresentation())
+		render.PrepareSearchMatchMonetaryAmountForApp(match.GetSearchMatchPresentation())
 		if presentation := match.GetSearchMatchPresentation(); presentation != nil && presentation.GetAppleLibraryPhotoFacts() != nil {
 			presentation.PhysicalPlaceNamesSpecificToBroadest = render.SearchMatchPhysicalPlaceNamesForHumanOutput(presentation)
 		}
@@ -88,16 +88,6 @@ func (r *Runtime) appOpenResponse(
 	if record := response.GetRecord(); record != nil && record.GetOpenedEmailMessageRecord() != nil {
 		record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
 			TrawlerSpecificOpenedRecordPresentation: render.EmailOpenedRecordPresentation(record.GetOpenedEmailMessageRecord()),
-		}
-	}
-	if record := response.GetRecord(); record != nil && (record.GetMoneyAccount() != nil || record.GetOpenedMoneyMovement() != nil || record.GetOpenedMoneyPendingMovement() != nil) {
-		presentation, err := render.MoneyOpenedRecordPresentation(response)
-		if err != nil {
-			response.Record = nil
-			response.Outcome = federationcontract.OperationOutcome_OPERATION_OUTCOME_FAILED
-			response.Failure = &federationcontract.TrawlerOperationFailure{FailedTrawler: selectedTrawler, RegisteredTrawlerDisplayName: "Money", FailureCode: federationcontract.FailureCode_FAILURE_CODE_INTERNAL, FailureMessage: err.Error()}
-		} else {
-			record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{TrawlerSpecificOpenedRecordPresentation: presentation}
 		}
 	}
 	return response

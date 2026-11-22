@@ -16,7 +16,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -69,7 +68,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPath()
 	}
-	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema + state.Schema + shortref.Schema})
+	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema + state.Schema})
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +109,7 @@ func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		path = st.Path()
 	}
-	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema); err != nil {
 		return nil, fmt.Errorf("apply current iMessage archive schema: %w", err)
 	}
 	return &Store{store: st, path: path}, nil
@@ -270,40 +269,51 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 				return err
 			}
 		}
-		if err := replaceUpdateState(ctx, tx, data, updatedAt); err != nil {
-			return err
-		}
-		shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction := make(
-			[]trawlkit.ShortReferenceAssignmentCandidate,
-			0,
-			len(data.Messages)+len(data.Chats),
-		)
-		for _, message := range data.Messages {
-			shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction = append(
-				shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction,
-				trawlkit.ShortReferenceAssignmentCandidate{
-					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-						MessageRef(strconv.FormatInt(message.SourceRowID, 10)),
-					),
-				},
-			)
-		}
-		for _, chat := range data.Chats {
-			shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction = append(
-				shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction,
-				trawlkit.ShortReferenceAssignmentCandidate{
-					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-						ChatRef(strconv.FormatInt(chat.SourceRowID, 10)),
-					),
-				},
-			)
-		}
-		return trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
-			ctx,
-			tx,
-			shortReferenceAssignmentCandidatesForRecordsPublishedByIMessageTransaction,
-		)
+		return replaceUpdateState(ctx, tx, data, updatedAt)
 	})
+}
+
+func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	var candidates []trawlkit.ShortReferenceAssignmentCandidate
+	msgRows, err := s.store.DB().QueryContext(ctx, `select source_rowid from messages order by source_rowid`)
+	if err != nil {
+		return nil, err
+	}
+	for msgRows.Next() {
+		var rowID int64
+		if err := msgRows.Scan(&rowID); err != nil {
+			_ = msgRows.Close()
+			return nil, err
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				MessageRef(strconv.FormatInt(rowID, 10)),
+			),
+		})
+	}
+	if err := errors.Join(msgRows.Err(), msgRows.Close()); err != nil {
+		return nil, err
+	}
+	chatRows, err := s.store.DB().QueryContext(ctx, `select source_rowid from chats order by source_rowid`)
+	if err != nil {
+		return nil, err
+	}
+	for chatRows.Next() {
+		var rowID int64
+		if err := chatRows.Scan(&rowID); err != nil {
+			_ = chatRows.Close()
+			return nil, err
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				ChatRef(strconv.FormatInt(rowID, 10)),
+			),
+		})
+	}
+	if err := errors.Join(chatRows.Err(), chatRows.Close()); err != nil {
+		return nil, err
+	}
+	return candidates, nil
 }
 
 func updateContactNames(ctx context.Context, options UpdateOptions) ([]addressbook.ContactName, error) {

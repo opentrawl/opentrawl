@@ -108,5 +108,11 @@ func TrawlerOperationErrorDescription(err error) output.ErrorDescription {
 			Message: render.NoRecordHasThatLink().Error(),
 		}
 	}
+	if errors.Is(err, ErrAmbiguousShortRef) {
+		return output.ErrorDescription{
+			Code:    "ambiguous_short_ref",
+			Message: render.SeveralRecordsHaveThatLink().Error(),
+		}
+	}
 	return output.ErrorDescriptionFor(err)
 }

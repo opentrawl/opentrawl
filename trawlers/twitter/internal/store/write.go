@@ -5,12 +5,9 @@ import (
 	"database/sql"
 	"strings"
 	"time"
-
-	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func upsertTweets(ctx context.Context, tx *sql.Tx, tweets []Tweet, now time.Time) error {
-	shortReferenceAssignmentCandidatesForTweetsPublishedByTwitterTransaction := make([]trawlkit.ShortReferenceAssignmentCandidate, 0, len(tweets))
 	for _, t := range tweets {
 		if strings.TrimSpace(t.ID) == "" {
 			continue
@@ -57,16 +54,8 @@ metrics_fetched_at=coalesce(nullif(excluded.metrics_fetched_at,''), tweets.metri
 		if err != nil {
 			return err
 		}
-		shortReferenceAssignmentCandidatesForTweetsPublishedByTwitterTransaction = append(shortReferenceAssignmentCandidatesForTweetsPublishedByTwitterTransaction, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(TweetRef(t.ID)),
-		})
 	}
-	err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(
-		ctx,
-		tx,
-		shortReferenceAssignmentCandidatesForTweetsPublishedByTwitterTransaction,
-	)
-	return err
+	return nil
 }
 
 func upsertRoles(ctx context.Context, tx *sql.Tx, roles []Role, now time.Time) error {

@@ -4,6 +4,7 @@ import TrawlCore
 
 struct ResultPreview: View {
   let phase: SearchOpenPhase
+  var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
   var body: some View {
     Group {
       switch phase {
@@ -35,7 +36,8 @@ struct ResultPreview: View {
         case .trawlerSpecificRecordPresentation(let openedRecord):
           TrawlerSpecificOpenedRecordPresentationView(
             openedRecord: openedRecord,
-            targetAnchor: response.requestedRecordAnchor)
+            targetAnchor: response.requestedRecordAnchor,
+            onOpenLink: onOpenLink)
         }
       case .failed:
         ContentUnavailableView(

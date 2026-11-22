@@ -670,6 +670,8 @@ public nonisolated struct Trawl_Federation_TrawlerSearchResult: Sendable {
 
   public var totalSearchMatchesIsLowerBound: Bool = false
 
+  public var emptySearchNextCommands: [Trawl_Presentation_DeclarativeTrawlCommand] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1619,7 +1621,7 @@ nonisolated extension Trawl_Federation_FederatedSearchMatch: SwiftProtobuf.Messa
 
 nonisolated extension Trawl_Federation_TrawlerSearchResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSearchResult"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_display_name\0\u{3}search_person_filter_resolution\0\u{3}search_matches_from_trawler_in_display_order\0\u{3}total_search_matches\0\u{3}more_search_matches_exist\0\u{3}total_search_matches_is_lower_bound\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_display_name\0\u{3}search_person_filter_resolution\0\u{3}search_matches_from_trawler_in_display_order\0\u{3}total_search_matches\0\u{3}more_search_matches_exist\0\u{3}total_search_matches_is_lower_bound\0\u{3}empty_search_next_commands\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1634,6 +1636,7 @@ nonisolated extension Trawl_Federation_TrawlerSearchResult: SwiftProtobuf.Messag
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.totalSearchMatches) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.moreSearchMatchesExist) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.totalSearchMatchesIsLowerBound) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.emptySearchNextCommands) }()
       default: break
       }
     }
@@ -1665,6 +1668,9 @@ nonisolated extension Trawl_Federation_TrawlerSearchResult: SwiftProtobuf.Messag
     if self.totalSearchMatchesIsLowerBound != false {
       try visitor.visitSingularBoolField(value: self.totalSearchMatchesIsLowerBound, fieldNumber: 7)
     }
+    if !self.emptySearchNextCommands.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.emptySearchNextCommands, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1676,6 +1682,7 @@ nonisolated extension Trawl_Federation_TrawlerSearchResult: SwiftProtobuf.Messag
     if lhs.totalSearchMatches != rhs.totalSearchMatches {return false}
     if lhs.moreSearchMatchesExist != rhs.moreSearchMatchesExist {return false}
     if lhs.totalSearchMatchesIsLowerBound != rhs.totalSearchMatchesIsLowerBound {return false}
+    if lhs.emptySearchNextCommands != rhs.emptySearchNextCommands {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

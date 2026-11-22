@@ -14,24 +14,13 @@ import (
 func (c *Crawler) loadOpenNote(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
+	canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference,
 ) (openedNoteValuesLoadedFromNotesArchive, error) {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return openedNoteValuesLoadedFromNotesArchive{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	canonicalRecordReferences, err := req.ResolveShortReference(ctx, localShortReference)
-	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return openedNoteValuesLoadedFromNotesArchive{}, commandErr(
-			"ambiguous_short_ref",
-			render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounNoteVersion).Error(),
-			err,
-		)
-	}
-	if err != nil {
-		return openedNoteValuesLoadedFromNotesArchive{}, err
-	}
-	resolvedRef := trawlkit.CanonicalArchiveRecordReferenceText(canonicalRecordReferences[0])
+	resolvedRef := trawlkit.CanonicalArchiveRecordReferenceText(canonicalRecordReference)
 	note, body, err := resolveOpen(ctx, st, resolvedRef)
 	if err != nil {
 		return openedNoteValuesLoadedFromNotesArchive{}, noteLookupErrorForOpen(err)

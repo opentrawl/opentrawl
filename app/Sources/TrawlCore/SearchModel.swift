@@ -214,15 +214,28 @@ public final class SearchModel {
 
   public func open(_ searchMatch: SearchMatch) async {
     guard searchMatches.contains(searchMatch) else { return }
+    await openLink(searchMatch.trawlLink, anchor: searchMatch.recordAnchor, matchID: searchMatch.id)
+  }
+
+  public func open(link: GloballyRoutableTrawlLink, anchor: RecordAnchorIdentifier) async {
+    let matchID = SearchMatchIdentifier(trawlLink: link, recordAnchor: anchor)
+    await openLink(link, anchor: anchor, matchID: matchID)
+  }
+
+  private func openLink(
+    _ link: GloballyRoutableTrawlLink,
+    anchor: RecordAnchorIdentifier,
+    matchID: SearchMatchIdentifier
+  ) async {
     openGeneration &+= 1
     let token = openGeneration
     openPhase = .loading
-    observe(.opening(searchMatch.id))
+    observe(.opening(matchID))
     do {
       let response = try await client.open(
-        link: searchMatch.trawlLink,
-        anchor: searchMatch.recordAnchor)
-      observe(.openResponse(searchMatch.id, response))
+        link: link,
+        anchor: anchor)
+      observe(.openResponse(matchID, response))
       try Task.checkCancellation()
       guard token == openGeneration else { return }
       switch response.outcome {
@@ -249,7 +262,7 @@ public final class SearchModel {
       return
     } catch {
       guard token == openGeneration else { return }
-      observe(.openFailed(searchMatch.id, error.localizedDescription))
+      observe(.openFailed(matchID, error.localizedDescription))
       if let clientError = error as? TrawlClientError, clientError == .timedOut {
         openPhase = .timedOut(error.localizedDescription)
       } else {

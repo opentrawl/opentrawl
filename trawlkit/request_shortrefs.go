@@ -136,6 +136,19 @@ func assignShortReferencesToExistingShortReferenceSchemaUsingCallerOwnedSQLTrans
 	return nil
 }
 
+func (r *TrawlerCommandExecutionRequest) shortReferenceDB() shortref.SQLiteDB {
+	if r == nil {
+		return nil
+	}
+	if r.coreShortReferenceStore != nil {
+		return r.coreShortReferenceStore.DB()
+	}
+	if r.OpenedTrawlerArchiveStore != nil {
+		return r.OpenedTrawlerArchiveStore.DB()
+	}
+	return nil
+}
+
 func (r *TrawlerCommandExecutionRequest) ResolveShortReference(
 	ctx context.Context,
 	localTrawlerShortReference *LocalTrawlerShortReference,
@@ -147,6 +160,14 @@ func (r *TrawlerCommandExecutionRequest) ResolveShortReference(
 	matches, err := r.lookupShortRef(ctx, alias)
 	if err != nil {
 		return nil, err
+	}
+	if len(matches) == 0 && r.replayShortReferences != nil {
+		if replayErr := r.replayShortReferences(ctx); replayErr == nil {
+			matches, err = r.lookupShortRef(ctx, alias)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	switch len(matches) {
 	case 0:
@@ -178,8 +199,8 @@ func (r *TrawlerCommandExecutionRequest) LocalShortReferencesForCanonicalArchive
 	if len(refs) == 0 {
 		return nil, nil
 	}
-	if r == nil || r.OpenedTrawlerArchiveStore == nil {
-		return nil, errors.New("archive store is not open")
+	if r == nil {
+		return nil, errors.New("trawler command request is missing")
 	}
 	if r.readOnlyShortReferenceCatalog != nil {
 		wanted := make(map[string]bool, len(refs))
@@ -194,7 +215,11 @@ func (r *TrawlerCommandExecutionRequest) LocalShortReferencesForCanonicalArchive
 		}
 		return matches, nil
 	}
-	index := shortref.NewSQLiteIndex(r.OpenedTrawlerArchiveStore.DB())
+	db := r.shortReferenceDB()
+	if db == nil {
+		return nil, errors.New("short reference store is not open")
+	}
+	index := shortref.NewSQLiteIndex(db)
 	canonical := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		canonicalArchiveRecordReference := CanonicalArchiveRecordReferenceText(ref)
@@ -206,6 +231,14 @@ func (r *TrawlerCommandExecutionRequest) LocalShortReferencesForCanonicalArchive
 	aliases, err := shortRefAliases(ctx, index, canonical)
 	if err != nil {
 		return nil, err
+	}
+	if len(aliases) < len(uniqueStrings(canonical)) && r.replayShortReferences != nil {
+		if replayErr := r.replayShortReferences(ctx); replayErr == nil {
+			aliases, err = shortRefAliases(ctx, index, canonical)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	references := make(
 		[]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
@@ -260,8 +293,8 @@ func LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(
 }
 
 func (r *TrawlerCommandExecutionRequest) lookupShortRef(ctx context.Context, alias string) ([]string, error) {
-	if r == nil || r.OpenedTrawlerArchiveStore == nil {
-		return nil, errors.New("archive store is not open")
+	if r == nil {
+		return nil, errors.New("trawler command request is missing")
 	}
 	if r.readOnlyShortReferenceCatalog != nil {
 		var matches []string
@@ -272,7 +305,11 @@ func (r *TrawlerCommandExecutionRequest) lookupShortRef(ctx context.Context, ali
 		}
 		return matches, nil
 	}
-	return shortref.NewSQLiteIndex(r.OpenedTrawlerArchiveStore.DB()).Lookup(ctx, alias)
+	db := r.shortReferenceDB()
+	if db == nil {
+		return nil, errors.New("short reference store is not open")
+	}
+	return shortref.NewSQLiteIndex(db).Lookup(ctx, alias)
 }
 
 func shortRefAliases(ctx context.Context, index *shortref.SQLiteIndex, refs []string) (map[string]string, error) {

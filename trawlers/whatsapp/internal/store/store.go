@@ -11,7 +11,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store/storedb"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
@@ -299,8 +298,50 @@ func (s *Store) applyArchiveSchema(ctx context.Context) error {
 	if err := state.EnsureSchema(ctx, s.db); err != nil {
 		return err
 	}
-	if err := shortref.EnsureSchema(ctx, s.db); err != nil {
-		return err
-	}
 	return nil
+}
+
+func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	var candidates []trawlkit.ShortReferenceAssignmentCandidate
+	msgRows, err := s.db.QueryContext(ctx, `select msg_id from messages where trim(msg_id) <> '' order by rowid`)
+	if err != nil {
+		return nil, err
+	}
+	for msgRows.Next() {
+		var msgID string
+		if err := msgRows.Scan(&msgID); err != nil {
+			_ = msgRows.Close()
+			return nil, err
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				MessageRefPrefix + msgID,
+			),
+		})
+	}
+	if err := errors.Join(msgRows.Err(), msgRows.Close()); err != nil {
+		return nil, err
+	}
+	chatRows, err := s.db.QueryContext(ctx, `select jid from chats order by jid`)
+	if err != nil {
+		return nil, err
+	}
+	for chatRows.Next() {
+		var jid string
+		if err := chatRows.Scan(&jid); err != nil {
+			_ = chatRows.Close()
+			return nil, err
+		}
+		chatRef := ChatRef(jid)
+		if chatRef == "" {
+			continue
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(chatRef),
+		})
+	}
+	if err := errors.Join(chatRows.Err(), chatRows.Close()); err != nil {
+		return nil, err
+	}
+	return candidates, nil
 }

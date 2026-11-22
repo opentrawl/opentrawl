@@ -16,15 +16,14 @@ import (
 func (c *Crawler) loadOpenMessage(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
+	canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference,
 ) (*message.OpenedMessageRecordWithConversationContext, error) {
-	r := c.handler(ctx, req)
 	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	defer func() { _ = st.Close() }()
-	sourcePK, err := r.resolveOpenMessageReference(localShortReference)
+	sourcePK, err := parseMessageRef(trawlkit.CanonicalArchiveRecordReferenceText(canonicalRecordReference))
 	if err != nil {
 		return nil, err
 	}
@@ -36,29 +35,6 @@ func (c *Crawler) loadOpenMessage(
 		return nil, err
 	}
 	return projectOpenedMessageRecordWithConversationContext(ctx, st, window)
-}
-
-func (r *runtime) resolveOpenMessageReference(
-	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (int64, error) {
-	fullRefs, err := r.req.ResolveShortReference(r.ctx, localShortReference)
-	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return 0, commandErr(1, "unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage))
-	}
-	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return 0, commandErr(1, "ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounMessage))
-	}
-	if err != nil {
-		return 0, err
-	}
-	if len(fullRefs) != 1 {
-		return 0, commandErr(1, "unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounMessage))
-	}
-	sourcePK, err := parseMessageRef(trawlkit.CanonicalArchiveRecordReferenceText(fullRefs[0]))
-	if err != nil {
-		return 0, err
-	}
-	return sourcePK, nil
 }
 
 func parseMessageRef(ref string) (int64, error) {

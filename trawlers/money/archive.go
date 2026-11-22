@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	contract "github.com/opentrawl/opentrawl/trawlers/money/proto/trawl/money"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	contract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -395,32 +395,34 @@ func applyImport(ctx context.Context, db *sql.DB, name string, imported *contrac
 			removed += uint64(len(oldPendingRecords))
 		}
 	}
-	rows, err := transaction.QueryContext(ctx, "SELECT reference FROM money_accounts UNION SELECT reference FROM money_movements")
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	var references []trawlkit.ShortReferenceAssignmentCandidate
-	for rows.Next() {
-		var reference string
-		if err := rows.Scan(&reference); err != nil {
-			_ = rows.Close()
-			return 0, 0, 0, err
-		}
-		canonical := trawlkit.NewCanonicalArchiveRecordReference(reference)
-		references = append(references, trawlkit.ShortReferenceAssignmentCandidate{StableRecordReferenceUsedForShortReferenceAssignment: canonical, CurrentRecordReferenceReturnedWhenShortReferenceIsResolved: canonical})
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return 0, 0, 0, err
-	}
-	_ = rows.Close()
-	if err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(ctx, transaction, references); err != nil {
-		return 0, 0, 0, err
-	}
 	if _, err := transaction.ExecContext(ctx, "INSERT INTO money_imports VALUES(?)", name); err != nil {
 		return 0, 0, 0, err
 	}
 	return added, changed, removed, transaction.Commit()
+}
+
+func (*App) ListArchiveRecordReferencesForShortReferences(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	if req.OpenedTrawlerArchiveStore == nil {
+		return nil, false, nil
+	}
+	rows, err := req.OpenedTrawlerArchiveStore.DB().QueryContext(ctx, "SELECT reference FROM money_accounts UNION SELECT reference FROM money_movements")
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() { _ = rows.Close() }()
+	var references []trawlkit.ShortReferenceAssignmentCandidate
+	for rows.Next() {
+		var reference string
+		if err := rows.Scan(&reference); err != nil {
+			return nil, false, err
+		}
+		canonical := trawlkit.NewCanonicalArchiveRecordReference(reference)
+		references = append(references, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment:       canonical,
+			CurrentRecordReferenceReturnedWhenShortReferenceIsResolved: canonical,
+		})
+	}
+	return references, false, rows.Err()
 }
 
 func (app *App) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*update.TrawlerArchiveUpdateReport, error) {

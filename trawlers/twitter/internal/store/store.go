@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckstate "github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
@@ -231,3 +232,68 @@ last_seen_at=excluded.last_seen_at`,
 }
 
 func rollback(tx *sql.Tx) { _ = tx.Rollback() }
+
+func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	var candidates []trawlkit.ShortReferenceAssignmentCandidate
+	tweetRows, err := s.db.QueryContext(ctx, `select id from tweets order by rowid`)
+	if err != nil {
+		return nil, err
+	}
+	for tweetRows.Next() {
+		var id string
+		if err := tweetRows.Scan(&id); err != nil {
+			_ = tweetRows.Close()
+			return nil, err
+		}
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(TweetRef(id)),
+		})
+	}
+	if err := errors.Join(tweetRows.Err(), tweetRows.Close()); err != nil {
+		return nil, err
+	}
+	convRows, err := s.db.QueryContext(ctx, `select id from dm_conversations order by id`)
+	if err != nil {
+		return nil, err
+	}
+	for convRows.Next() {
+		var id string
+		if err := convRows.Scan(&id); err != nil {
+			_ = convRows.Close()
+			return nil, err
+		}
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(DMConversationRef(id)),
+		})
+	}
+	if err := errors.Join(convRows.Err(), convRows.Close()); err != nil {
+		return nil, err
+	}
+	dmRows, err := s.db.QueryContext(ctx, `select id from dm_messages order by rowid`)
+	if err != nil {
+		return nil, err
+	}
+	for dmRows.Next() {
+		var id string
+		if err := dmRows.Scan(&id); err != nil {
+			_ = dmRows.Close()
+			return nil, err
+		}
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(DMMessageRef(id)),
+		})
+	}
+	if err := errors.Join(dmRows.Err(), dmRows.Close()); err != nil {
+		return nil, err
+	}
+	return candidates, nil
+}

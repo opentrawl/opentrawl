@@ -24,12 +24,13 @@ const (
 type Crawler struct{}
 
 var (
-	_ trawlkit.Trawler                = (*Crawler)(nil)
-	_ trawlkit.Updater                = (*Crawler)(nil)
-	_ trawlkit.Searcher               = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
-	_ trawlkit.RecordOpener           = (*Crawler)(nil)
-	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
+	_ trawlkit.Trawler                        = (*Crawler)(nil)
+	_ trawlkit.Updater                        = (*Crawler)(nil)
+	_ trawlkit.Searcher                       = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher                     = (*Crawler)(nil)
+	_ trawlkit.CanonicalRecordOpener          = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider         = (*Crawler)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -46,7 +47,29 @@ func (*Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclara
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates read only the files Apple Mail has already downloaded.",
 		},
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:              "envelope.fill",
+			AccentColor:             "#007AFF",
+			BundleIdentifier:        "com.apple.mail",
+			ArtworkBundleIdentifier: "com.apple.mobilemail",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING,
 	}
+}
+
+func (*Crawler) ListArchiveRecordReferencesForShortReferences(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	archiveStore, err := archive.UseExisting(req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, false, archiveUnavailableError(err)
+	}
+	candidates, err := archiveStore.ListShortReferenceCandidates(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, false, nil
 }
 
 func (*Crawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {

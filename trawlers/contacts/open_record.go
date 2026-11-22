@@ -15,14 +15,12 @@ type openedPersonValuesLoadedFromContactsArchive struct {
 	archivedPerson                 model.Person
 }
 
-var _ trawlkit.RecordOpener = (*App)(nil)
-
-func (a *App) OpenRecord(
+func (a *App) OpenCanonicalRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
+	canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference,
 ) (*open.OpenRecord, error) {
-	openedPersonValues, err := a.loadOpenPerson(ctx, req, localShortReference)
+	openedPersonValues, err := a.loadOpenPerson(ctx, req, canonicalRecordReference)
 	if err != nil {
 		return nil, err
 	}

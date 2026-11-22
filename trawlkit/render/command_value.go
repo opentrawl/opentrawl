@@ -28,9 +28,16 @@ func presentationValueFromTrawlerSpecificCommand(
 		)
 	case *presentation.TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay:
 		return formatArchiveRecordAssociatedTime(typedValue.ArchiveRecordAssociatedTimeForDisplay, timeWrittenForm)
+	case *presentation.TrawlerSpecificCommandPresentationValue_ExactMonetaryAmount:
+		return FormatExactMonetaryAmount(typedValue.ExactMonetaryAmount)
 	default:
 		return ""
 	}
+}
+
+func presentationValueIsExactMonetaryAmount(value *presentation.TrawlerSpecificCommandPresentationValue) bool {
+	_, isMonetaryAmount := value.GetTypedValue().(*presentation.TrawlerSpecificCommandPresentationValue_ExactMonetaryAmount)
+	return isMonetaryAmount
 }
 
 func presentationValueIsArchiveRecordAssociatedTime(value *presentation.TrawlerSpecificCommandPresentationValue) bool {

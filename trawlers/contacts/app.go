@@ -29,11 +29,13 @@ type App struct {
 type Crawler = App
 
 var (
-	_ trawlkit.Trawler          = (*App)(nil)
-	_ trawlkit.Updater          = (*App)(nil)
-	_ trawlkit.Searcher         = (*App)(nil)
-	_ trawlkit.WhoMatcher       = (*App)(nil)
-	_ trawlkit.PeopleReconciler = (*App)(nil)
+	_ trawlkit.Trawler                        = (*App)(nil)
+	_ trawlkit.Updater                        = (*App)(nil)
+	_ trawlkit.Searcher                       = (*App)(nil)
+	_ trawlkit.WhoMatcher                     = (*App)(nil)
+	_ trawlkit.PeopleReconciler               = (*App)(nil)
+	_ trawlkit.CanonicalRecordOpener          = (*App)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider = (*App)(nil)
 )
 
 func New() *App {
@@ -50,7 +52,29 @@ func (a *App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclarati
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:              "person.crop.circle.fill",
+			AccentColor:             "#8E8E93",
+			BundleIdentifier:        "com.apple.AddressBook",
+			ArtworkBundleIdentifier: "com.apple.MobileAddressBook",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE,
 	}
+}
+
+func (a *App) ListArchiveRecordReferencesForShortReferences(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, false, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	candidates, err := st.ListShortReferenceCandidates(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, true, nil
 }
 
 func (*App) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {
@@ -473,17 +497,17 @@ func resolvePersonLookupTextFromPossibleGloballyRoutableContactsLink(
 func (a *App) loadOpenPerson(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
+	canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference,
 ) (openedPersonValuesLoadedFromContactsArchive, error) {
 	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
 	if err != nil {
 		return openedPersonValuesLoadedFromContactsArchive{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	resolved, err := resolveOpenRef(ctx, req, localShortReference)
-	if err != nil {
-		return openedPersonValuesLoadedFromContactsArchive{}, err
+	personID, ok := archive.PersonIDFromRef(trawlkit.CanonicalArchiveRecordReferenceText(canonicalRecordReference))
+	if !ok {
+		return openedPersonValuesLoadedFromContactsArchive{}, usageError(render.LinkIsNotValid())
 	}
-	person, err := st.FindPerson(ctx, resolved)
+	person, err := st.FindPerson(ctx, personID)
 	if err != nil {
 		return openedPersonValuesLoadedFromContactsArchive{}, personLinkLookupError(err)
 	}

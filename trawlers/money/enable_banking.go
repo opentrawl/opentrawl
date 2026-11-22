@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
+	contract "github.com/opentrawl/opentrawl/trawlers/money/proto/trawl/money"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	contract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"github.com/pelletier/go-toml/v2"
 	"google.golang.org/protobuf/encoding/prototext"

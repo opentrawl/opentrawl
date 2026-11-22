@@ -14,7 +14,6 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
-	money "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
 	note "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
@@ -33,16 +32,69 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ResolvedCanonicalRecordTrawlLink struct {
+	state                     protoimpl.MessageState                    `protogen:"open.v1"`
+	CanonicalRecordReference  *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	GloballyRoutableTrawlLink *identity.GloballyRoutableTrawlLink       `protobuf:"bytes,2,opt,name=globally_routable_trawl_link,json=globallyRoutableTrawlLink,proto3" json:"globally_routable_trawl_link,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *ResolvedCanonicalRecordTrawlLink) Reset() {
+	*x = ResolvedCanonicalRecordTrawlLink{}
+	mi := &file_trawl_open_open_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolvedCanonicalRecordTrawlLink) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolvedCanonicalRecordTrawlLink) ProtoMessage() {}
+
+func (x *ResolvedCanonicalRecordTrawlLink) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_open_open_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolvedCanonicalRecordTrawlLink.ProtoReflect.Descriptor instead.
+func (*ResolvedCanonicalRecordTrawlLink) Descriptor() ([]byte, []int) {
+	return file_trawl_open_open_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ResolvedCanonicalRecordTrawlLink) GetCanonicalRecordReference() *identity.CanonicalArchiveRecordReference {
+	if x != nil {
+		return x.CanonicalRecordReference
+	}
+	return nil
+}
+
+func (x *ResolvedCanonicalRecordTrawlLink) GetGloballyRoutableTrawlLink() *identity.GloballyRoutableTrawlLink {
+	if x != nil {
+		return x.GloballyRoutableTrawlLink
+	}
+	return nil
+}
+
 type TrawlerSpecificOpenedRecordPresentation struct {
-	state              protoimpl.MessageState                                 `protogen:"open.v1"`
-	DetailPresentation *presentation.TrawlerSpecificCommandDetailPresentation `protobuf:"bytes,1,opt,name=detail_presentation,json=detailPresentation,proto3" json:"detail_presentation,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state               protoimpl.MessageState                                 `protogen:"open.v1"`
+	DetailPresentation  *presentation.TrawlerSpecificCommandDetailPresentation `protobuf:"bytes,1,opt,name=detail_presentation,json=detailPresentation,proto3" json:"detail_presentation,omitempty"`
+	ResolvedRecordLinks []*ResolvedCanonicalRecordTrawlLink                    `protobuf:"bytes,2,rep,name=resolved_record_links,json=resolvedRecordLinks,proto3" json:"resolved_record_links,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *TrawlerSpecificOpenedRecordPresentation) Reset() {
 	*x = TrawlerSpecificOpenedRecordPresentation{}
-	mi := &file_trawl_open_open_proto_msgTypes[0]
+	mi := &file_trawl_open_open_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -54,7 +106,7 @@ func (x *TrawlerSpecificOpenedRecordPresentation) String() string {
 func (*TrawlerSpecificOpenedRecordPresentation) ProtoMessage() {}
 
 func (x *TrawlerSpecificOpenedRecordPresentation) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_open_open_proto_msgTypes[0]
+	mi := &file_trawl_open_open_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -67,12 +119,19 @@ func (x *TrawlerSpecificOpenedRecordPresentation) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use TrawlerSpecificOpenedRecordPresentation.ProtoReflect.Descriptor instead.
 func (*TrawlerSpecificOpenedRecordPresentation) Descriptor() ([]byte, []int) {
-	return file_trawl_open_open_proto_rawDescGZIP(), []int{0}
+	return file_trawl_open_open_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *TrawlerSpecificOpenedRecordPresentation) GetDetailPresentation() *presentation.TrawlerSpecificCommandDetailPresentation {
 	if x != nil {
 		return x.DetailPresentation
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificOpenedRecordPresentation) GetResolvedRecordLinks() []*ResolvedCanonicalRecordTrawlLink {
+	if x != nil {
+		return x.ResolvedRecordLinks
 	}
 	return nil
 }
@@ -91,9 +150,6 @@ type OpenRecord struct {
 	//	*OpenRecord_OpenedNoteRecord
 	//	*OpenRecord_CalendarRecord
 	//	*OpenRecord_OpenedPhotoRecord
-	//	*OpenRecord_OpenedMoneyMovement
-	//	*OpenRecord_MoneyAccount
-	//	*OpenRecord_OpenedMoneyPendingMovement
 	//	*OpenRecord_OpenedEmailMessageRecord
 	TypedOpenedRecord isOpenRecord_TypedOpenedRecord `protobuf_oneof:"typed_opened_record"`
 	unknownFields     protoimpl.UnknownFields
@@ -102,7 +158,7 @@ type OpenRecord struct {
 
 func (x *OpenRecord) Reset() {
 	*x = OpenRecord{}
-	mi := &file_trawl_open_open_proto_msgTypes[1]
+	mi := &file_trawl_open_open_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -114,7 +170,7 @@ func (x *OpenRecord) String() string {
 func (*OpenRecord) ProtoMessage() {}
 
 func (x *OpenRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_open_open_proto_msgTypes[1]
+	mi := &file_trawl_open_open_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -127,7 +183,7 @@ func (x *OpenRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenRecord.ProtoReflect.Descriptor instead.
 func (*OpenRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_open_open_proto_rawDescGZIP(), []int{1}
+	return file_trawl_open_open_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *OpenRecord) GetRecordTrawler() *identity.RegisteredTrawlerIdentity {
@@ -223,33 +279,6 @@ func (x *OpenRecord) GetOpenedPhotoRecord() *photo.OpenedPhotoRecord {
 	return nil
 }
 
-func (x *OpenRecord) GetOpenedMoneyMovement() *money.OpenedMoneyMovement {
-	if x != nil {
-		if x, ok := x.TypedOpenedRecord.(*OpenRecord_OpenedMoneyMovement); ok {
-			return x.OpenedMoneyMovement
-		}
-	}
-	return nil
-}
-
-func (x *OpenRecord) GetMoneyAccount() *money.MoneyAccount {
-	if x != nil {
-		if x, ok := x.TypedOpenedRecord.(*OpenRecord_MoneyAccount); ok {
-			return x.MoneyAccount
-		}
-	}
-	return nil
-}
-
-func (x *OpenRecord) GetOpenedMoneyPendingMovement() *money.OpenedMoneyPendingMovement {
-	if x != nil {
-		if x, ok := x.TypedOpenedRecord.(*OpenRecord_OpenedMoneyPendingMovement); ok {
-			return x.OpenedMoneyPendingMovement
-		}
-	}
-	return nil
-}
-
 func (x *OpenRecord) GetOpenedEmailMessageRecord() *email.OpenedEmailMessageRecord {
 	if x != nil {
 		if x, ok := x.TypedOpenedRecord.(*OpenRecord_OpenedEmailMessageRecord); ok {
@@ -295,18 +324,6 @@ type OpenRecord_OpenedPhotoRecord struct {
 	OpenedPhotoRecord *photo.OpenedPhotoRecord `protobuf:"bytes,10,opt,name=opened_photo_record,json=openedPhotoRecord,proto3,oneof"`
 }
 
-type OpenRecord_OpenedMoneyMovement struct {
-	OpenedMoneyMovement *money.OpenedMoneyMovement `protobuf:"bytes,11,opt,name=opened_money_movement,json=openedMoneyMovement,proto3,oneof"`
-}
-
-type OpenRecord_MoneyAccount struct {
-	MoneyAccount *money.MoneyAccount `protobuf:"bytes,12,opt,name=money_account,json=moneyAccount,proto3,oneof"`
-}
-
-type OpenRecord_OpenedMoneyPendingMovement struct {
-	OpenedMoneyPendingMovement *money.OpenedMoneyPendingMovement `protobuf:"bytes,13,opt,name=opened_money_pending_movement,json=openedMoneyPendingMovement,proto3,oneof"`
-}
-
 type OpenRecord_OpenedEmailMessageRecord struct {
 	OpenedEmailMessageRecord *email.OpenedEmailMessageRecord `protobuf:"bytes,14,opt,name=opened_email_message_record,json=openedEmailMessageRecord,proto3,oneof"`
 }
@@ -327,12 +344,6 @@ func (*OpenRecord_CalendarRecord) isOpenRecord_TypedOpenedRecord() {}
 
 func (*OpenRecord_OpenedPhotoRecord) isOpenRecord_TypedOpenedRecord() {}
 
-func (*OpenRecord_OpenedMoneyMovement) isOpenRecord_TypedOpenedRecord() {}
-
-func (*OpenRecord_MoneyAccount) isOpenRecord_TypedOpenedRecord() {}
-
-func (*OpenRecord_OpenedMoneyPendingMovement) isOpenRecord_TypedOpenedRecord() {}
-
 func (*OpenRecord_OpenedEmailMessageRecord) isOpenRecord_TypedOpenedRecord() {}
 
 type OpenResponse struct {
@@ -348,7 +359,7 @@ type OpenResponse struct {
 
 func (x *OpenResponse) Reset() {
 	*x = OpenResponse{}
-	mi := &file_trawl_open_open_proto_msgTypes[2]
+	mi := &file_trawl_open_open_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +371,7 @@ func (x *OpenResponse) String() string {
 func (*OpenResponse) ProtoMessage() {}
 
 func (x *OpenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_open_open_proto_msgTypes[2]
+	mi := &file_trawl_open_open_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +384,7 @@ func (x *OpenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenResponse.ProtoReflect.Descriptor instead.
 func (*OpenResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_open_open_proto_rawDescGZIP(), []int{2}
+	return file_trawl_open_open_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *OpenResponse) GetOutcome() federation.OperationOutcome {
@@ -416,10 +427,13 @@ var File_trawl_open_open_proto protoreflect.FileDescriptor
 const file_trawl_open_open_proto_rawDesc = "" +
 	"\n" +
 	"\x15trawl/open/open.proto\x12\n" +
-	"trawl.open\x1a\x1dtrawl/calendar/calendar.proto\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a\x17trawl/email/email.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x17trawl/photo/photo.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x17trawl/money/money.proto\"\x98\x01\n" +
+	"trawl.open\x1a\x1dtrawl/calendar/calendar.proto\x1a)trawl/calendar_event/calendar_event.proto\x1a%trawl/conversation/conversation.proto\x1a\x17trawl/email/email.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/note/note.proto\x1a\x17trawl/photo/photo.proto\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\"\xfd\x01\n" +
+	" ResolvedCanonicalRecordTrawlLink\x12m\n" +
+	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12j\n" +
+	"\x1cglobally_routable_trawl_link\x18\x02 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x19globallyRoutableTrawlLink\"\xfa\x01\n" +
 	"'TrawlerSpecificOpenedRecordPresentation\x12m\n" +
-	"\x13detail_presentation\x18\x01 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationR\x12detailPresentation\"\xf7\n" +
-	"\n" +
+	"\x13detail_presentation\x18\x01 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationR\x12detailPresentation\x12`\n" +
+	"\x15resolved_record_links\x18\x02 \x03(\v2,.trawl.open.ResolvedCanonicalRecordTrawlLinkR\x13resolvedRecordLinks\"\xef\b\n" +
 	"\n" +
 	"OpenRecord\x12P\n" +
 	"\x0erecord_trawler\x18\x01 \x01(\v2).trawl.identity.RegisteredTrawlerIdentityR\rrecordTrawler\x12m\n" +
@@ -432,10 +446,7 @@ const file_trawl_open_open_proto_rawDesc = "" +
 	"\x12opened_note_record\x18\b \x01(\v2\x1c.trawl.note.OpenedNoteRecordH\x00R\x10openedNoteRecord\x12I\n" +
 	"\x0fcalendar_record\x18\t \x01(\v2\x1e.trawl.calendar.CalendarRecordH\x00R\x0ecalendarRecord\x12P\n" +
 	"\x13opened_photo_record\x18\n" +
-	" \x01(\v2\x1e.trawl.photo.OpenedPhotoRecordH\x00R\x11openedPhotoRecord\x12V\n" +
-	"\x15opened_money_movement\x18\v \x01(\v2 .trawl.money.OpenedMoneyMovementH\x00R\x13openedMoneyMovement\x12@\n" +
-	"\rmoney_account\x18\f \x01(\v2\x19.trawl.money.MoneyAccountH\x00R\fmoneyAccount\x12l\n" +
-	"\x1dopened_money_pending_movement\x18\r \x01(\v2'.trawl.money.OpenedMoneyPendingMovementH\x00R\x1aopenedMoneyPendingMovement\x12f\n" +
+	" \x01(\v2\x1e.trawl.photo.OpenedPhotoRecordH\x00R\x11openedPhotoRecord\x12f\n" +
 	"\x1bopened_email_message_record\x18\x0e \x01(\v2%.trawl.email.OpenedEmailMessageRecordH\x00R\x18openedEmailMessageRecordB\x15\n" +
 	"\x13typed_opened_record\"\xfe\x02\n" +
 	"\fOpenResponse\x12<\n" +
@@ -457,51 +468,49 @@ func file_trawl_open_open_proto_rawDescGZIP() []byte {
 	return file_trawl_open_open_proto_rawDescData
 }
 
-var file_trawl_open_open_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_trawl_open_open_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_trawl_open_open_proto_goTypes = []any{
-	(*TrawlerSpecificOpenedRecordPresentation)(nil), // 0: trawl.open.TrawlerSpecificOpenedRecordPresentation
-	(*OpenRecord)(nil),   // 1: trawl.open.OpenRecord
-	(*OpenResponse)(nil), // 2: trawl.open.OpenResponse
-	(*presentation.TrawlerSpecificCommandDetailPresentation)(nil), // 3: trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	(*identity.RegisteredTrawlerIdentity)(nil),                    // 4: trawl.identity.RegisteredTrawlerIdentity
-	(*identity.CanonicalArchiveRecordReference)(nil),              // 5: trawl.identity.CanonicalArchiveRecordReference
-	(*message.OpenedMessageRecordWithConversationContext)(nil),    // 6: trawl.message.OpenedMessageRecordWithConversationContext
-	(*conversation.ConversationRecord)(nil),                       // 7: trawl.conversation.ConversationRecord
-	(*person.PersonRecord)(nil),                                   // 8: trawl.person.PersonRecord
-	(*calendar_event.CalendarEventRecord)(nil),                    // 9: trawl.calendar_event.CalendarEventRecord
-	(*note.OpenedNoteRecord)(nil),                                 // 10: trawl.note.OpenedNoteRecord
-	(*calendar.CalendarRecord)(nil),                               // 11: trawl.calendar.CalendarRecord
-	(*photo.OpenedPhotoRecord)(nil),                               // 12: trawl.photo.OpenedPhotoRecord
-	(*money.OpenedMoneyMovement)(nil),                             // 13: trawl.money.OpenedMoneyMovement
-	(*money.MoneyAccount)(nil),                                    // 14: trawl.money.MoneyAccount
-	(*money.OpenedMoneyPendingMovement)(nil),                      // 15: trawl.money.OpenedMoneyPendingMovement
-	(*email.OpenedEmailMessageRecord)(nil),                        // 16: trawl.email.OpenedEmailMessageRecord
-	(federation.OperationOutcome)(0),                              // 17: trawl.federation.OperationOutcome
-	(*federation.TrawlerOperationFailure)(nil),                    // 18: trawl.federation.TrawlerOperationFailure
-	(*identity.GloballyRoutableTrawlLink)(nil),                    // 19: trawl.identity.GloballyRoutableTrawlLink
-	(*identity.RecordAnchorIdentifier)(nil),                       // 20: trawl.identity.RecordAnchorIdentifier
+	(*ResolvedCanonicalRecordTrawlLink)(nil),                      // 0: trawl.open.ResolvedCanonicalRecordTrawlLink
+	(*TrawlerSpecificOpenedRecordPresentation)(nil),               // 1: trawl.open.TrawlerSpecificOpenedRecordPresentation
+	(*OpenRecord)(nil),                                            // 2: trawl.open.OpenRecord
+	(*OpenResponse)(nil),                                          // 3: trawl.open.OpenResponse
+	(*identity.CanonicalArchiveRecordReference)(nil),              // 4: trawl.identity.CanonicalArchiveRecordReference
+	(*identity.GloballyRoutableTrawlLink)(nil),                    // 5: trawl.identity.GloballyRoutableTrawlLink
+	(*presentation.TrawlerSpecificCommandDetailPresentation)(nil), // 6: trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	(*identity.RegisteredTrawlerIdentity)(nil),                    // 7: trawl.identity.RegisteredTrawlerIdentity
+	(*message.OpenedMessageRecordWithConversationContext)(nil),    // 8: trawl.message.OpenedMessageRecordWithConversationContext
+	(*conversation.ConversationRecord)(nil),                       // 9: trawl.conversation.ConversationRecord
+	(*person.PersonRecord)(nil),                                   // 10: trawl.person.PersonRecord
+	(*calendar_event.CalendarEventRecord)(nil),                    // 11: trawl.calendar_event.CalendarEventRecord
+	(*note.OpenedNoteRecord)(nil),                                 // 12: trawl.note.OpenedNoteRecord
+	(*calendar.CalendarRecord)(nil),                               // 13: trawl.calendar.CalendarRecord
+	(*photo.OpenedPhotoRecord)(nil),                               // 14: trawl.photo.OpenedPhotoRecord
+	(*email.OpenedEmailMessageRecord)(nil),                        // 15: trawl.email.OpenedEmailMessageRecord
+	(federation.OperationOutcome)(0),                              // 16: trawl.federation.OperationOutcome
+	(*federation.TrawlerOperationFailure)(nil),                    // 17: trawl.federation.TrawlerOperationFailure
+	(*identity.RecordAnchorIdentifier)(nil),                       // 18: trawl.identity.RecordAnchorIdentifier
 }
 var file_trawl_open_open_proto_depIdxs = []int32{
-	3,  // 0: trawl.open.TrawlerSpecificOpenedRecordPresentation.detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	4,  // 1: trawl.open.OpenRecord.record_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
-	5,  // 2: trawl.open.OpenRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	6,  // 3: trawl.open.OpenRecord.opened_message_record_with_conversation_context:type_name -> trawl.message.OpenedMessageRecordWithConversationContext
-	7,  // 4: trawl.open.OpenRecord.conversation_record:type_name -> trawl.conversation.ConversationRecord
-	8,  // 5: trawl.open.OpenRecord.person_record:type_name -> trawl.person.PersonRecord
-	9,  // 6: trawl.open.OpenRecord.calendar_event_record:type_name -> trawl.calendar_event.CalendarEventRecord
-	0,  // 7: trawl.open.OpenRecord.trawler_specific_opened_record_presentation:type_name -> trawl.open.TrawlerSpecificOpenedRecordPresentation
-	10, // 8: trawl.open.OpenRecord.opened_note_record:type_name -> trawl.note.OpenedNoteRecord
-	11, // 9: trawl.open.OpenRecord.calendar_record:type_name -> trawl.calendar.CalendarRecord
-	12, // 10: trawl.open.OpenRecord.opened_photo_record:type_name -> trawl.photo.OpenedPhotoRecord
-	13, // 11: trawl.open.OpenRecord.opened_money_movement:type_name -> trawl.money.OpenedMoneyMovement
-	14, // 12: trawl.open.OpenRecord.money_account:type_name -> trawl.money.MoneyAccount
-	15, // 13: trawl.open.OpenRecord.opened_money_pending_movement:type_name -> trawl.money.OpenedMoneyPendingMovement
-	16, // 14: trawl.open.OpenRecord.opened_email_message_record:type_name -> trawl.email.OpenedEmailMessageRecord
-	17, // 15: trawl.open.OpenResponse.outcome:type_name -> trawl.federation.OperationOutcome
-	1,  // 16: trawl.open.OpenResponse.record:type_name -> trawl.open.OpenRecord
-	18, // 17: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
-	19, // 18: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	20, // 19: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	4,  // 0: trawl.open.ResolvedCanonicalRecordTrawlLink.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	5,  // 1: trawl.open.ResolvedCanonicalRecordTrawlLink.globally_routable_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	6,  // 2: trawl.open.TrawlerSpecificOpenedRecordPresentation.detail_presentation:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	0,  // 3: trawl.open.TrawlerSpecificOpenedRecordPresentation.resolved_record_links:type_name -> trawl.open.ResolvedCanonicalRecordTrawlLink
+	7,  // 4: trawl.open.OpenRecord.record_trawler:type_name -> trawl.identity.RegisteredTrawlerIdentity
+	4,  // 5: trawl.open.OpenRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	8,  // 6: trawl.open.OpenRecord.opened_message_record_with_conversation_context:type_name -> trawl.message.OpenedMessageRecordWithConversationContext
+	9,  // 7: trawl.open.OpenRecord.conversation_record:type_name -> trawl.conversation.ConversationRecord
+	10, // 8: trawl.open.OpenRecord.person_record:type_name -> trawl.person.PersonRecord
+	11, // 9: trawl.open.OpenRecord.calendar_event_record:type_name -> trawl.calendar_event.CalendarEventRecord
+	1,  // 10: trawl.open.OpenRecord.trawler_specific_opened_record_presentation:type_name -> trawl.open.TrawlerSpecificOpenedRecordPresentation
+	12, // 11: trawl.open.OpenRecord.opened_note_record:type_name -> trawl.note.OpenedNoteRecord
+	13, // 12: trawl.open.OpenRecord.calendar_record:type_name -> trawl.calendar.CalendarRecord
+	14, // 13: trawl.open.OpenRecord.opened_photo_record:type_name -> trawl.photo.OpenedPhotoRecord
+	15, // 14: trawl.open.OpenRecord.opened_email_message_record:type_name -> trawl.email.OpenedEmailMessageRecord
+	16, // 15: trawl.open.OpenResponse.outcome:type_name -> trawl.federation.OperationOutcome
+	2,  // 16: trawl.open.OpenResponse.record:type_name -> trawl.open.OpenRecord
+	17, // 17: trawl.open.OpenResponse.failure:type_name -> trawl.federation.TrawlerOperationFailure
+	5,  // 18: trawl.open.OpenResponse.requested_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	18, // 19: trawl.open.OpenResponse.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
 	20, // [20:20] is the sub-list for method output_type
 	20, // [20:20] is the sub-list for method input_type
 	20, // [20:20] is the sub-list for extension type_name
@@ -514,7 +523,7 @@ func file_trawl_open_open_proto_init() {
 	if File_trawl_open_open_proto != nil {
 		return
 	}
-	file_trawl_open_open_proto_msgTypes[1].OneofWrappers = []any{
+	file_trawl_open_open_proto_msgTypes[2].OneofWrappers = []any{
 		(*OpenRecord_OpenedMessageRecordWithConversationContext)(nil),
 		(*OpenRecord_ConversationRecord)(nil),
 		(*OpenRecord_PersonRecord)(nil),
@@ -523,9 +532,6 @@ func file_trawl_open_open_proto_init() {
 		(*OpenRecord_OpenedNoteRecord)(nil),
 		(*OpenRecord_CalendarRecord)(nil),
 		(*OpenRecord_OpenedPhotoRecord)(nil),
-		(*OpenRecord_OpenedMoneyMovement)(nil),
-		(*OpenRecord_MoneyAccount)(nil),
-		(*OpenRecord_OpenedMoneyPendingMovement)(nil),
 		(*OpenRecord_OpenedEmailMessageRecord)(nil),
 	}
 	type x struct{}
@@ -534,7 +540,7 @@ func file_trawl_open_open_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_open_open_proto_rawDesc), len(file_trawl_open_open_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

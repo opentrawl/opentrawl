@@ -1,8 +1,10 @@
 package whatsapp
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
@@ -21,13 +23,15 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Trawler                = (*Crawler)(nil)
-	_ trawlkit.Updater                = (*Crawler)(nil)
-	_ trawlkit.Searcher               = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
-	_ trawlkit.ConversationLister     = (*Crawler)(nil)
-	_ trawlkit.TrawlerMessageLister   = (*Crawler)(nil)
-	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
+	_ trawlkit.Trawler                        = (*Crawler)(nil)
+	_ trawlkit.Updater                        = (*Crawler)(nil)
+	_ trawlkit.Searcher                       = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher                     = (*Crawler)(nil)
+	_ trawlkit.ConversationLister             = (*Crawler)(nil)
+	_ trawlkit.TrawlerMessageLister           = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider         = (*Crawler)(nil)
+	_ trawlkit.CanonicalRecordOpener          = (*Crawler)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -44,7 +48,29 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:              "phone.bubble.fill",
+			AccentColor:             "#25D366",
+			BundleIdentifier:        "net.whatsapp.WhatsApp",
+			ArtworkBundleIdentifier: "net.whatsapp.WhatsApp",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING,
 	}
+}
+
+func (c *Crawler) ListArchiveRecordReferencesForShortReferences(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, false, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	candidates, err := st.ListShortReferenceCandidates(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, true, nil
 }
 
 func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.TrawlerConfigurationFilePath) error {

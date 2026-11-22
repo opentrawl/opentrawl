@@ -20,6 +20,44 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Trawl_Presentation_MonetaryAmountDisplaySignStyle: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case balance // = 1
+  case signedMovement // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .balance
+    case 2: self = .signedMovement
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .balance: return 1
+    case .signedMovement: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Presentation_MonetaryAmountDisplaySignStyle] = [
+    .unspecified,
+    .balance,
+    .signedMovement,
+  ]
+
+}
+
 public nonisolated struct Trawl_Presentation_CalendarDate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -84,6 +122,71 @@ public nonisolated struct Trawl_Presentation_ArchiveRecordAssociatedTimeForDispl
   fileprivate var _eventUtcOffsetSecondsRecordedBySourceArchive: Int32? = nil
 }
 
+/// Decimal strings, never binary floats. No exponent or grouping separators.
+public nonisolated struct Trawl_Presentation_ExactMonetaryAmount: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var exactDecimalAmount: String = String()
+
+  public var iso4217CurrencyCode: String = String()
+
+  public var monetaryAmountDisplaySignStyle: Trawl_Presentation_MonetaryAmountDisplaySignStyle = .unspecified
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Presentation_DeclarativeTrawlCommandArgument: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var argumentValue: Trawl_Presentation_DeclarativeTrawlCommandArgument.OneOf_ArgumentValue? = nil
+
+  public var textArgument: String {
+    get {
+      if case .textArgument(let v)? = argumentValue {return v}
+      return String()
+    }
+    set {argumentValue = .textArgument(newValue)}
+  }
+
+  public var canonicalRecordReferenceArgument: Trawl_Identity_CanonicalArchiveRecordReference {
+    get {
+      if case .canonicalRecordReferenceArgument(let v)? = argumentValue {return v}
+      return Trawl_Identity_CanonicalArchiveRecordReference()
+    }
+    set {argumentValue = .canonicalRecordReferenceArgument(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_ArgumentValue: Equatable, Sendable {
+    case textArgument(String)
+    case canonicalRecordReferenceArgument(Trawl_Identity_CanonicalArchiveRecordReference)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Presentation_DeclarativeTrawlCommand: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var commandLabel: String = String()
+
+  public var commandArgumentsAfterTrawlInvocation: [Trawl_Presentation_DeclarativeTrawlCommandArgument] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandPresentationValue: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -123,6 +226,14 @@ public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandPresentationV
     set {typedValue = .canonicalRecordReference(newValue)}
   }
 
+  public var exactMonetaryAmount: Trawl_Presentation_ExactMonetaryAmount {
+    get {
+      if case .exactMonetaryAmount(let v)? = typedValue {return v}
+      return Trawl_Presentation_ExactMonetaryAmount()
+    }
+    set {typedValue = .exactMonetaryAmount(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_TypedValue: Equatable, Sendable {
@@ -130,6 +241,7 @@ public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandPresentationV
     case unsignedCount(UInt64)
     case archiveRecordAssociatedTimeForDisplay(Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay)
     case canonicalRecordReference(Trawl_Identity_CanonicalArchiveRecordReference)
+    case exactMonetaryAmount(Trawl_Presentation_ExactMonetaryAmount)
 
   }
 
@@ -142,6 +254,22 @@ public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandListPresentat
   // methods supported on all messages.
 
   public var columnValuesInDisplayOrder: [Trawl_Presentation_TrawlerSpecificCommandPresentationValue] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandListSection: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sectionHeading: String = String()
+
+  public var columnDisplayNamesInOrder: [String] = []
+
+  public var rowsInDisplayOrder: [Trawl_Presentation_TrawlerSpecificCommandListPresentationRow] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -178,6 +306,16 @@ public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandListPresentat
   public var moreRowsExist: Bool = false
 
   public var conciseTextShownWhenListIsEmpty: String = String()
+
+  public var listSummaryHeading: String = String()
+
+  public var sectionsInDisplayOrder: [Trawl_Presentation_TrawlerSpecificCommandListSection] = []
+
+  public var footnotesInDisplayOrder: [String] = []
+
+  public var nextCommandsInDisplayOrder: [Trawl_Presentation_DeclarativeTrawlCommand] = []
+
+  public var nextMaximumRowCount: UInt32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -268,6 +406,12 @@ public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandDetailPresent
   /// Clears the value of `bodyAnchor`. Subsequent reads from it will return its default value.
   public mutating func clearBodyAnchor() {self._bodyAnchor = nil}
 
+  public var detailSubtitle: String = String()
+
+  public var detailFooterText: String = String()
+
+  public var nextCommandsInDisplayOrder: [Trawl_Presentation_DeclarativeTrawlCommand] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Body: Equatable, Sendable {
@@ -285,6 +429,10 @@ public nonisolated struct Trawl_Presentation_TrawlerSpecificCommandDetailPresent
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.presentation"
+
+nonisolated extension Trawl_Presentation_MonetaryAmountDisplaySignStyle: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_UNSPECIFIED\0\u{1}MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_BALANCE\0\u{1}MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_SIGNED_MOVEMENT\0")
+}
 
 nonisolated extension Trawl_Presentation_CalendarDate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CalendarDate"
@@ -398,9 +546,146 @@ nonisolated extension Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay: 
   }
 }
 
+nonisolated extension Trawl_Presentation_ExactMonetaryAmount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ExactMonetaryAmount"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}exact_decimal_amount\0\u{3}iso_4217_currency_code\0\u{3}monetary_amount_display_sign_style\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.exactDecimalAmount) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.iso4217CurrencyCode) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.monetaryAmountDisplaySignStyle) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.exactDecimalAmount.isEmpty {
+      try visitor.visitSingularStringField(value: self.exactDecimalAmount, fieldNumber: 1)
+    }
+    if !self.iso4217CurrencyCode.isEmpty {
+      try visitor.visitSingularStringField(value: self.iso4217CurrencyCode, fieldNumber: 2)
+    }
+    if self.monetaryAmountDisplaySignStyle != .unspecified {
+      try visitor.visitSingularEnumField(value: self.monetaryAmountDisplaySignStyle, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_ExactMonetaryAmount, rhs: Trawl_Presentation_ExactMonetaryAmount) -> Bool {
+    if lhs.exactDecimalAmount != rhs.exactDecimalAmount {return false}
+    if lhs.iso4217CurrencyCode != rhs.iso4217CurrencyCode {return false}
+    if lhs.monetaryAmountDisplaySignStyle != rhs.monetaryAmountDisplaySignStyle {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Presentation_DeclarativeTrawlCommandArgument: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DeclarativeTrawlCommandArgument"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}text_argument\0\u{3}canonical_record_reference_argument\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: String?
+        try decoder.decodeSingularStringField(value: &v)
+        if let v = v {
+          if self.argumentValue != nil {try decoder.handleConflictingOneOf()}
+          self.argumentValue = .textArgument(v)
+        }
+      }()
+      case 2: try {
+        var v: Trawl_Identity_CanonicalArchiveRecordReference?
+        var hadOneofValue = false
+        if let current = self.argumentValue {
+          hadOneofValue = true
+          if case .canonicalRecordReferenceArgument(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.argumentValue = .canonicalRecordReferenceArgument(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.argumentValue {
+    case .textArgument?: try {
+      guard case .textArgument(let v)? = self.argumentValue else { preconditionFailure() }
+      try visitor.visitSingularStringField(value: v, fieldNumber: 1)
+    }()
+    case .canonicalRecordReferenceArgument?: try {
+      guard case .canonicalRecordReferenceArgument(let v)? = self.argumentValue else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_DeclarativeTrawlCommandArgument, rhs: Trawl_Presentation_DeclarativeTrawlCommandArgument) -> Bool {
+    if lhs.argumentValue != rhs.argumentValue {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Presentation_DeclarativeTrawlCommand: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DeclarativeTrawlCommand"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}command_label\0\u{3}command_arguments_after_trawl_invocation\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.commandLabel) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.commandArgumentsAfterTrawlInvocation) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.commandLabel.isEmpty {
+      try visitor.visitSingularStringField(value: self.commandLabel, fieldNumber: 1)
+    }
+    if !self.commandArgumentsAfterTrawlInvocation.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.commandArgumentsAfterTrawlInvocation, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_DeclarativeTrawlCommand, rhs: Trawl_Presentation_DeclarativeTrawlCommand) -> Bool {
+    if lhs.commandLabel != rhs.commandLabel {return false}
+    if lhs.commandArgumentsAfterTrawlInvocation != rhs.commandArgumentsAfterTrawlInvocation {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Presentation_TrawlerSpecificCommandPresentationValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandPresentationValue"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}unsigned_count\0\u{3}archive_record_associated_time_for_display\0\u{3}canonical_record_reference\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}unsigned_count\0\u{3}archive_record_associated_time_for_display\0\u{3}canonical_record_reference\0\u{3}exact_monetary_amount\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -450,6 +735,19 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandPresentationValue
           self.typedValue = .canonicalRecordReference(v)
         }
       }()
+      case 5: try {
+        var v: Trawl_Presentation_ExactMonetaryAmount?
+        var hadOneofValue = false
+        if let current = self.typedValue {
+          hadOneofValue = true
+          if case .exactMonetaryAmount(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.typedValue = .exactMonetaryAmount(v)
+        }
+      }()
       default: break
       }
     }
@@ -476,6 +774,10 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandPresentationValue
     case .canonicalRecordReference?: try {
       guard case .canonicalRecordReference(let v)? = self.typedValue else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    }()
+    case .exactMonetaryAmount?: try {
+      guard case .exactMonetaryAmount(let v)? = self.typedValue else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     }()
     case nil: break
     }
@@ -519,9 +821,49 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandListPresentationR
   }
 }
 
+nonisolated extension Trawl_Presentation_TrawlerSpecificCommandListSection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandListSection"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}section_heading\0\u{3}column_display_names_in_order\0\u{3}rows_in_display_order\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sectionHeading) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.columnDisplayNamesInOrder) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.rowsInDisplayOrder) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sectionHeading.isEmpty {
+      try visitor.visitSingularStringField(value: self.sectionHeading, fieldNumber: 1)
+    }
+    if !self.columnDisplayNamesInOrder.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.columnDisplayNamesInOrder, fieldNumber: 2)
+    }
+    if !self.rowsInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.rowsInDisplayOrder, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_TrawlerSpecificCommandListSection, rhs: Trawl_Presentation_TrawlerSpecificCommandListSection) -> Bool {
+    if lhs.sectionHeading != rhs.sectionHeading {return false}
+    if lhs.columnDisplayNamesInOrder != rhs.columnDisplayNamesInOrder {return false}
+    if lhs.rowsInDisplayOrder != rhs.rowsInDisplayOrder {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Presentation_TrawlerSpecificCommandListPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandListPresentation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}column_display_names_in_order\0\u{3}rows_in_display_order\0\u{3}exact_total_row_count\0\u{3}lower_bound_total_row_count\0\u{3}more_rows_exist\0\u{3}concise_text_shown_when_list_is_empty\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}column_display_names_in_order\0\u{3}rows_in_display_order\0\u{3}exact_total_row_count\0\u{3}lower_bound_total_row_count\0\u{3}more_rows_exist\0\u{3}concise_text_shown_when_list_is_empty\0\u{3}list_summary_heading\0\u{3}sections_in_display_order\0\u{3}footnotes_in_display_order\0\u{3}next_commands_in_display_order\0\u{3}next_maximum_row_count\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -549,6 +891,11 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandListPresentation:
       }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.moreRowsExist) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.conciseTextShownWhenListIsEmpty) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.listSummaryHeading) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.sectionsInDisplayOrder) }()
+      case 9: try { try decoder.decodeRepeatedStringField(value: &self.footnotesInDisplayOrder) }()
+      case 10: try { try decoder.decodeRepeatedMessageField(value: &self.nextCommandsInDisplayOrder) }()
+      case 11: try { try decoder.decodeSingularUInt32Field(value: &self.nextMaximumRowCount) }()
       default: break
       }
     }
@@ -582,6 +929,21 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandListPresentation:
     if !self.conciseTextShownWhenListIsEmpty.isEmpty {
       try visitor.visitSingularStringField(value: self.conciseTextShownWhenListIsEmpty, fieldNumber: 6)
     }
+    if !self.listSummaryHeading.isEmpty {
+      try visitor.visitSingularStringField(value: self.listSummaryHeading, fieldNumber: 7)
+    }
+    if !self.sectionsInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.sectionsInDisplayOrder, fieldNumber: 8)
+    }
+    if !self.footnotesInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.footnotesInDisplayOrder, fieldNumber: 9)
+    }
+    if !self.nextCommandsInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.nextCommandsInDisplayOrder, fieldNumber: 10)
+    }
+    if self.nextMaximumRowCount != 0 {
+      try visitor.visitSingularUInt32Field(value: self.nextMaximumRowCount, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -591,6 +953,11 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandListPresentation:
     if lhs.totalRowCount != rhs.totalRowCount {return false}
     if lhs.moreRowsExist != rhs.moreRowsExist {return false}
     if lhs.conciseTextShownWhenListIsEmpty != rhs.conciseTextShownWhenListIsEmpty {return false}
+    if lhs.listSummaryHeading != rhs.listSummaryHeading {return false}
+    if lhs.sectionsInDisplayOrder != rhs.sectionsInDisplayOrder {return false}
+    if lhs.footnotesInDisplayOrder != rhs.footnotesInDisplayOrder {return false}
+    if lhs.nextCommandsInDisplayOrder != rhs.nextCommandsInDisplayOrder {return false}
+    if lhs.nextMaximumRowCount != rhs.nextMaximumRowCount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -642,7 +1009,7 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentatio
 
 nonisolated extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificCommandDetailPresentation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detail_display_name\0\u{3}detail_display_name_anchor\0\u{3}fields_in_display_order\0\u{3}body_text\0\u{3}body_unavailable_explanation\0\u{3}body_anchor\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detail_display_name\0\u{3}detail_display_name_anchor\0\u{3}fields_in_display_order\0\u{3}body_text\0\u{3}body_unavailable_explanation\0\u{3}body_anchor\0\u{3}detail_subtitle\0\u{3}detail_footer_text\0\u{3}next_commands_in_display_order\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -670,6 +1037,9 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentatio
         }
       }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._bodyAnchor) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.detailSubtitle) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.detailFooterText) }()
+      case 9: try { try decoder.decodeRepeatedMessageField(value: &self.nextCommandsInDisplayOrder) }()
       default: break
       }
     }
@@ -703,6 +1073,15 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentatio
     try { if let v = self._bodyAnchor {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     } }()
+    if !self.detailSubtitle.isEmpty {
+      try visitor.visitSingularStringField(value: self.detailSubtitle, fieldNumber: 7)
+    }
+    if !self.detailFooterText.isEmpty {
+      try visitor.visitSingularStringField(value: self.detailFooterText, fieldNumber: 8)
+    }
+    if !self.nextCommandsInDisplayOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.nextCommandsInDisplayOrder, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -712,6 +1091,9 @@ nonisolated extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentatio
     if lhs.fieldsInDisplayOrder != rhs.fieldsInDisplayOrder {return false}
     if lhs.body != rhs.body {return false}
     if lhs._bodyAnchor != rhs._bodyAnchor {return false}
+    if lhs.detailSubtitle != rhs.detailSubtitle {return false}
+    if lhs.detailFooterText != rhs.detailFooterText {return false}
+    if lhs.nextCommandsInDisplayOrder != rhs.nextCommandsInDisplayOrder {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

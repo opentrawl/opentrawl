@@ -26,12 +26,18 @@ func resolveTrawlerArchivePaths(stateRoot string, registeredTrawlerDeclaration R
 	}
 	base := filepath.Join(root, registeredTrawlerIdentityText)
 	paths := TrawlerArchivePaths{
-		TrawlerArchivePath:       filepath.Join(base, registeredTrawlerIdentityText+".db"),
-		TrawlerConfigurationPath: TrawlerConfigurationFilePath(filepath.Join(base, "config.toml")),
-		TrawlerLogDirectoryPath:  filepath.Join(base, "logs"),
+		TrawlerArchiveDirectoryPath:    base,
+		TrawlerArchivePath:             filepath.Join(base, registeredTrawlerIdentityText+".db"),
+		TrawlerConfigurationPath:       TrawlerConfigurationFilePath(filepath.Join(base, "config.toml")),
+		TrawlerLogDirectoryPath:        filepath.Join(base, "logs"),
+		TrawlerShortReferenceIndexPath: filepath.Join(root, "shortrefs", registeredTrawlerIdentityText+".db"),
 	}
 	if strings.TrimSpace(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerArchivePath) != "" {
 		paths.TrawlerArchivePath = config.ExpandHome(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerArchivePath)
+		paths.TrawlerArchiveDirectoryPath = filepath.Dir(paths.TrawlerArchivePath)
+	}
+	if strings.TrimSpace(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerArchiveDirectoryPath) != "" {
+		paths.TrawlerArchiveDirectoryPath = config.ExpandHome(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerArchiveDirectoryPath)
 	}
 	if strings.TrimSpace(string(registeredTrawlerDeclaration.DefaultTrawlerArchivePaths.TrawlerConfigurationPath)) != "" {
 		paths.TrawlerConfigurationPath = TrawlerConfigurationFilePath(config.ExpandHome(

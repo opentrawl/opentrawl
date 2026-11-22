@@ -39,12 +39,13 @@ var DefaultGoogleOAuthClientSecret string
 type Crawler struct{}
 
 var (
-	_ trawlkit.Trawler                = (*Crawler)(nil)
-	_ trawlkit.Updater                = (*Crawler)(nil)
-	_ trawlkit.Searcher               = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
-	_ trawlkit.RecordOpener           = (*Crawler)(nil)
-	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
+	_ trawlkit.Trawler                        = (*Crawler)(nil)
+	_ trawlkit.Updater                        = (*Crawler)(nil)
+	_ trawlkit.Searcher                       = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher                     = (*Crawler)(nil)
+	_ trawlkit.CanonicalRecordOpener          = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider         = (*Crawler)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -61,7 +62,28 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 			LeavesMachine:   "Nothing. Your archive and your Google credential stay on this Mac.",
 			NetworkRequests: "Connect, update and disconnect talk directly to Google. Search and other archive commands are local.",
 		},
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:              "envelope.fill",
+			AccentColor:             "#EA4335",
+			ArtworkBundleIdentifier: "com.google.Gmail",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE,
 	}
+}
+
+func (c *Crawler) ListArchiveRecordReferencesForShortReferences(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	archiveStore, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, false, archiveErr(err)
+	}
+	candidates, err := archiveStore.ListShortReferenceCandidates(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, false, nil
 }
 
 func (*Crawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {

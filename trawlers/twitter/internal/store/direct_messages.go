@@ -381,7 +381,6 @@ order by m.created_at desc, m.id desc limit ?`
 }
 
 func upsertDirectMessageConversations(ctx context.Context, tx *sql.Tx, convs []DirectMessageConversation) error {
-	candidates := make([]trawlkit.ShortReferenceAssignmentCandidate, 0, len(convs))
 	for _, c := range convs {
 		id := strings.TrimSpace(c.ID)
 		if id == "" {
@@ -429,15 +428,11 @@ last_message_at = case when excluded.last_message_at > dm_conversations.last_mes
 				return err
 			}
 		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(DMConversationRef(id)),
-		})
 	}
-	return trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(ctx, tx, candidates)
+	return nil
 }
 
 func upsertDirectMessages(ctx context.Context, tx *sql.Tx, msgs []DirectMessage) (int, error) {
-	candidates := make([]trawlkit.ShortReferenceAssignmentCandidate, 0, len(msgs))
 	added := 0
 	for _, m := range msgs {
 		id := strings.TrimSpace(m.ID)
@@ -485,12 +480,6 @@ raw_json = coalesce(excluded.raw_json, dm_messages.raw_json)`,
 		if isNew {
 			added++
 		}
-		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(DMMessageRef(id)),
-		})
-	}
-	if err := trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(ctx, tx, candidates); err != nil {
-		return added, err
 	}
 	return added, nil
 }

@@ -57,13 +57,27 @@ message ReconcilePeople {
 
 // Frame is one message on the stream. Exactly one field is set. The parent
 // switches on which one to learn whether the child is still working
-// (Progress, Log) or done (Result).
+// (Progress, Log, ShortReferenceBatch) or done (Result).
 message Frame {
   oneof kind {
     Progress progress = 1;
     Log log = 2;
     Result result = 3;
+    ShortReferenceBatch short_reference_batch = 4;
   }
+}
+
+message ShortReferenceRegistrationEntry {
+  trawl.identity.CanonicalArchiveRecordReference stable_record_reference = 1;
+  trawl.identity.CanonicalArchiveRecordReference resolved_record_reference = 2;
+}
+
+// ShortReferenceBatch streams committed archive record references from a
+// supervised child so the parent updates the core-owned short-reference index
+// without opening the trawler's private database.
+message ShortReferenceBatch {
+  repeated ShortReferenceRegistrationEntry entries = 1;
+  bool complete_snapshot_replacement = 2;
 }
 
 // Progress is a heartbeat with a human breadcrumb, emitted as a long command

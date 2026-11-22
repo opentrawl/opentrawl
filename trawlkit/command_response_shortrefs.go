@@ -31,21 +31,6 @@ func trawlerCommandResponseCanonicalRecordReferences(
 		}
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
-	case *command.TrawlerCommandResponse_MoneyAccountListResponse:
-		for _, account := range typedResponse.MoneyAccountListResponse.GetMoneyAccountsInDisplayOrder() {
-			add(account.GetCanonicalRecordReference())
-		}
-	case *command.TrawlerCommandResponse_MoneyMovementListResponse:
-		for _, group := range typedResponse.MoneyMovementListResponse.GetMoneyAccountMovementLists() {
-			add(group.GetMoneyAccount().GetCanonicalRecordReference())
-			for _, movement := range group.GetBookedMovementsNewestFirst() {
-				add(movement.GetCanonicalRecordReference())
-			}
-			for _, movement := range group.GetPendingMovementsNewestFirst() {
-				add(movement.GetCanonicalRecordReference())
-			}
-		}
-
 	case *command.TrawlerCommandResponse_PhotoListResponse:
 		for _, photoRecord := range typedResponse.PhotoListResponse.GetPhotoRecordsNewestFirst() {
 			add(photoRecord.GetCanonicalRecordReference())
@@ -99,10 +84,17 @@ func trawlerCommandResponseCanonicalRecordReferences(
 	case *command.TrawlerCommandResponse_TrawlerSpecificCommandResponse:
 		addTrawlerSpecificCommandResponseCanonicalRecordReferences(typedResponse.TrawlerSpecificCommandResponse, add)
 	}
+	return deduplicateCanonicalRecordReferences(recordReferences)
+}
+
+func deduplicateCanonicalRecordReferences(recordReferences []*CanonicalArchiveRecordReference) []*CanonicalArchiveRecordReference {
 	uniqueRecordReferences := make([]*CanonicalArchiveRecordReference, 0, len(recordReferences))
 	seenRecordReferences := make(map[string]struct{}, len(recordReferences))
 	for _, recordReference := range recordReferences {
 		recordReferenceText := CanonicalArchiveRecordReferenceText(recordReference)
+		if recordReferenceText == "" {
+			continue
+		}
 		if _, alreadyAdded := seenRecordReferences[recordReferenceText]; alreadyAdded {
 			continue
 		}
@@ -119,20 +111,61 @@ func addTrawlerSpecificCommandResponseCanonicalRecordReferences(
 	if response == nil {
 		return
 	}
-	switch presentation := response.GetTrawlerSpecificCommandPresentation().(type) {
+	switch presentationResponse := response.GetTrawlerSpecificCommandPresentation().(type) {
 	case *command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandListPresentation:
-		for _, row := range presentation.TrawlerSpecificCommandListPresentation.GetRowsInDisplayOrder() {
-			if row == nil {
-				continue
-			}
-			for _, value := range row.GetColumnValuesInDisplayOrder() {
-				add(trawlerSpecificCommandPresentationCanonicalRecordReference(value))
+		list := presentationResponse.TrawlerSpecificCommandListPresentation
+		addTrawlerSpecificRowsCanonicalRecordReferences(list.GetRowsInDisplayOrder(), add)
+		for _, section := range list.GetSectionsInDisplayOrder() {
+			if section != nil {
+				addTrawlerSpecificRowsCanonicalRecordReferences(section.GetRowsInDisplayOrder(), add)
 			}
 		}
+		addDeclarativeNextCommandCanonicalRecordReferences(list.GetNextCommandsInDisplayOrder(), add)
 	case *command.TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation:
-		for _, field := range presentation.TrawlerSpecificCommandDetailPresentation.GetFieldsInDisplayOrder() {
-			if field != nil {
-				add(trawlerSpecificCommandPresentationCanonicalRecordReference(field.GetFieldValue()))
+		addTrawlerSpecificDetailCanonicalRecordReferences(presentationResponse.TrawlerSpecificCommandDetailPresentation, add)
+	}
+}
+
+func addTrawlerSpecificRowsCanonicalRecordReferences(
+	rows []*presentation.TrawlerSpecificCommandListPresentationRow,
+	add func(*CanonicalArchiveRecordReference),
+) {
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		for _, value := range row.GetColumnValuesInDisplayOrder() {
+			add(trawlerSpecificCommandPresentationCanonicalRecordReference(value))
+		}
+	}
+}
+
+func addTrawlerSpecificDetailCanonicalRecordReferences(
+	detail *presentation.TrawlerSpecificCommandDetailPresentation,
+	add func(*CanonicalArchiveRecordReference),
+) {
+	if detail == nil {
+		return
+	}
+	for _, field := range detail.GetFieldsInDisplayOrder() {
+		if field != nil {
+			add(trawlerSpecificCommandPresentationCanonicalRecordReference(field.GetFieldValue()))
+		}
+	}
+	addDeclarativeNextCommandCanonicalRecordReferences(detail.GetNextCommandsInDisplayOrder(), add)
+}
+
+func addDeclarativeNextCommandCanonicalRecordReferences(
+	commands []*presentation.DeclarativeTrawlCommand,
+	add func(*CanonicalArchiveRecordReference),
+) {
+	for _, cmd := range commands {
+		if cmd == nil {
+			continue
+		}
+		for _, arg := range cmd.GetCommandArgumentsAfterTrawlInvocation() {
+			if ref := arg.GetCanonicalRecordReferenceArgument(); ref != nil {
+				add(ref)
 			}
 		}
 	}

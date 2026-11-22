@@ -88,3 +88,50 @@ func TestSQLiteIndexLookupReturnsCanonicalRef(t *testing.T) {
 		t.Fatalf("Aliases = %#v, want canonical:item/1 -> 22222", aliases)
 	}
 }
+
+func TestSQLiteIndexTombstonesDeletedReferencesWithoutRecyclingAliases(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite3", "file:"+t.TempDir()+"/shortrefs.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if err := EnsureSchema(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	index := NewSQLiteIndex(db)
+	if err := index.UpsertCanonical(ctx, "22222", "source:a", "canonical:a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := index.UpsertCanonical(ctx, "33333", "source:b", "canonical:b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := index.DeleteEntriesForFullReferencesAbsentFromCompleteSnapshot(ctx, []string{"source:b"}); err != nil {
+		t.Fatal(err)
+	}
+	gotA, err := index.Lookup(ctx, "22222")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gotA) != 0 {
+		t.Fatalf("Lookup(tombstoned alias) = %#v, want empty", gotA)
+	}
+	allAliases, err := index.AllAliases(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, reserved := allAliases["22222"]; !reserved {
+		t.Fatalf("AllAliases dropped tombstoned alias 22222: %#v", allAliases)
+	}
+	if err := index.UpdateCanonicalRefs(ctx, map[string]string{"source:a": "canonical:a"}); err != nil {
+		t.Fatal(err)
+	}
+	gotA, err = index.Lookup(ctx, "22222")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotA, []string{"canonical:a"}) {
+		t.Fatalf("Lookup(restored alias) = %#v, want [canonical:a]", gotA)
+	}
+}

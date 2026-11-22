@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	"google.golang.org/protobuf/proto"
 )
 
 // Manifest returns the protobuf manifest used by API and app surfaces.
@@ -21,11 +22,17 @@ func Manifest(trawler Trawler) (*federation.RegisteredTrawlerManifest, error) {
 	if err := validateTrawlerCommandDiscoveryPlacements(trawler.TrawlerCommands()); err != nil {
 		return nil, err
 	}
+	var branding *federation.TrawlerBranding
+	if registeredTrawlerDeclaration.RegisteredTrawlerBranding != nil {
+		branding = proto.Clone(registeredTrawlerDeclaration.RegisteredTrawlerBranding).(*federation.TrawlerBranding)
+	}
 	return &federation.RegisteredTrawlerManifest{
 		SearchMatchesResolvedPersonDisplayNames: registeredTrawlerDeclaration.SearchMatchesResolvedPersonDisplayNames,
 		RegisteredTrawler:                       registeredTrawlerDeclaration.RegisteredTrawler,
 		RegisteredTrawlerCommandName:            registeredTrawlerCommandName,
 		RegisteredTrawlerDisplayName:            strings.TrimSpace(registeredTrawlerDeclaration.RegisteredTrawlerDisplayName),
+		TrawlerBranding:                         branding,
+		SourceFreshnessDependency:               registeredTrawlerDeclaration.SourceFreshnessDependency,
 		RegisteredTrawlerAliases:                trimmedAliases(registeredTrawlerDeclaration.RegisteredTrawlerAliases),
 		RegisteredTrawlerCommandDeclarations: registeredTrawlerCommandDeclarationsForManifest(
 			trawler.TrawlerCommands(),

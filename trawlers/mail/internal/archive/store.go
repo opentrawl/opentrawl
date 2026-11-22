@@ -13,7 +13,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/mail/internal/applemailsource"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -94,7 +93,7 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if st == nil {
 		return nil, errors.New("archive store is not open")
 	}
-	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema); err != nil {
 		return nil, fmt.Errorf("apply archive schema: %w", err)
 	}
 	if err := ensureMessagesFTSIncludesParticipants(ctx, st.DB()); err != nil {
@@ -229,7 +228,8 @@ update messages set apple_mail_mailbox_url = ?, apple_mail_mailbox_name = ?, is_
 				return err
 			}
 		}
-		return assignShortReferences(ctx, tx, writtenIdentifiers)
+		_ = writtenIdentifiers
+		return nil
 	})
 	return result, err
 }
@@ -435,14 +435,28 @@ func markArchivedMailMessageDeletedFromSource(ctx context.Context, tx *sql.Tx, i
 	return nil
 }
 
-func assignShortReferences(ctx context.Context, tx *sql.Tx, identifiers []ArchivedMailMessageIdentifier) error {
-	candidates := make([]trawlkit.ShortReferenceAssignmentCandidate, 0, len(identifiers))
-	for _, identifier := range identifiers {
+func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	rows, err := s.store.DB().QueryContext(ctx, `select id from messages order by id`)
+	if err != nil {
+		return nil, err
+	}
+	var candidates []trawlkit.ShortReferenceAssignmentCandidate
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
 		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(MailMessageRecordReference(identifier)),
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				MailMessageRecordReference(ArchivedMailMessageIdentifier(id)),
+			),
 		})
 	}
-	return trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(ctx, tx, candidates)
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	return candidates, nil
 }
 
 func MailMessageRecordReference(identifier ArchivedMailMessageIdentifier) string {

@@ -26,9 +26,11 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Trawler  = (*Crawler)(nil)
-	_ trawlkit.Updater  = (*Crawler)(nil)
-	_ trawlkit.Searcher = (*Crawler)(nil)
+	_ trawlkit.Trawler                        = (*Crawler)(nil)
+	_ trawlkit.Updater                        = (*Crawler)(nil)
+	_ trawlkit.Searcher                       = (*Crawler)(nil)
+	_ trawlkit.CanonicalRecordOpener          = (*Crawler)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -45,7 +47,29 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 			LeavesMachine:   "Nothing. Updates and searches stay on your Mac.",
 			NetworkRequests: "None. Updates use only local data.",
 		},
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:              "note.text",
+			AccentColor:             "#FFD60A",
+			BundleIdentifier:        "com.apple.Notes",
+			ArtworkBundleIdentifier: "com.apple.mobilenotes",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING,
 	}
+}
+
+func (c *Crawler) ListArchiveRecordReferencesForShortReferences(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	st, err := archive.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, false, archiveErr(err)
+	}
+	candidates, err := st.ListShortReferenceCandidates(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, false, nil
 }
 
 func (*Crawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {

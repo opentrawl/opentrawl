@@ -24,17 +24,49 @@ message ArchiveRecordAssociatedTimeForDisplay {
   optional sint32 event_utc_offset_seconds_recorded_by_source_archive = 3;
 }
 
+enum MonetaryAmountDisplaySignStyle {
+  MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_UNSPECIFIED = 0;
+  MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_BALANCE = 1;
+  MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_SIGNED_MOVEMENT = 2;
+}
+
+// Decimal strings, never binary floats. No exponent or grouping separators.
+message ExactMonetaryAmount {
+  string exact_decimal_amount = 1;
+  string iso_4217_currency_code = 2;
+  MonetaryAmountDisplaySignStyle monetary_amount_display_sign_style = 3;
+}
+
+message DeclarativeTrawlCommandArgument {
+  oneof argument_value {
+    string text_argument = 1;
+    trawl.identity.CanonicalArchiveRecordReference canonical_record_reference_argument = 2;
+  }
+}
+
+message DeclarativeTrawlCommand {
+  string command_label = 1;
+  repeated DeclarativeTrawlCommandArgument command_arguments_after_trawl_invocation = 2;
+}
+
 message TrawlerSpecificCommandPresentationValue {
   oneof typed_value {
     string text = 1;
     uint64 unsigned_count = 2;
     ArchiveRecordAssociatedTimeForDisplay archive_record_associated_time_for_display = 3;
     trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 4;
+    ExactMonetaryAmount exact_monetary_amount = 5;
   }
 }
 
 message TrawlerSpecificCommandListPresentationRow {
   repeated TrawlerSpecificCommandPresentationValue column_values_in_display_order = 1;
+}
+
+message TrawlerSpecificCommandListSection {
+  string section_heading = 1;
+  repeated string column_display_names_in_order = 2;
+  repeated TrawlerSpecificCommandListPresentationRow rows_in_display_order = 3;
 }
 
 message TrawlerSpecificCommandListPresentation {
@@ -46,6 +78,11 @@ message TrawlerSpecificCommandListPresentation {
   }
   bool more_rows_exist = 5;
   string concise_text_shown_when_list_is_empty = 6;
+  string list_summary_heading = 7;
+  repeated TrawlerSpecificCommandListSection sections_in_display_order = 8;
+  repeated string footnotes_in_display_order = 9;
+  repeated DeclarativeTrawlCommand next_commands_in_display_order = 10;
+  uint32 next_maximum_row_count = 11;
 }
 
 message TrawlerSpecificCommandDetailPresentationField {
@@ -63,4 +100,7 @@ message TrawlerSpecificCommandDetailPresentation {
     string body_unavailable_explanation = 5;
   }
   trawl.identity.RecordAnchorIdentifier body_anchor = 6;
+  string detail_subtitle = 7;
+  string detail_footer_text = 8;
+  repeated DeclarativeTrawlCommand next_commands_in_display_order = 9;
 }

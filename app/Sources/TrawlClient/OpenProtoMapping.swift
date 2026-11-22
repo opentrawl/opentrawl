@@ -52,8 +52,8 @@ extension Trawl_Open_OpenRecord {
         try trawlerSpecificOpenedRecordPresentation.decodedTrawlerSpecificOpenedRecordPresentation(
           canonicalOpenedRecordReference: canonicalOpenedRecordReference,
           requestedTrawlLink: requestedTrawlLink))
-    case .openedPhotoRecord, .openedEmailMessageRecord, .openedMoneyMovement, .moneyAccount, .openedMoneyPendingMovement, nil:
-      // The app transport projects Photos, Email and Money through the shared detail presentation.
+    case .openedPhotoRecord, .openedEmailMessageRecord, nil:
+      // The app transport projects Photos and Email through the shared detail presentation.
       throw TrawlClientError.invalidProtobuf
     }
 
@@ -464,19 +464,33 @@ extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation {
     else {
       throw TrawlClientError.invalidProtobuf
     }
+    var resolvedLinksByCanonicalReference: [CanonicalArchiveRecordReference: GloballyRoutableTrawlLink] = [:]
+    for resolvedLink in resolvedRecordLinks {
+      let canonicalReference =
+        resolvedLink.canonicalRecordReference.decodedCanonicalArchiveRecordReference
+      let trawlLink = resolvedLink.globallyRoutableTrawlLink.decodedGloballyRoutableTrawlLink
+      if !canonicalReference.canonicalArchiveRecordReference.isEmpty,
+        parseGloballyRoutableTrawlLink(trawlLink) != nil
+      {
+        resolvedLinksByCanonicalReference[canonicalReference] = trawlLink
+      }
+    }
+    if parseGloballyRoutableTrawlLink(requestedTrawlLink) != nil,
+      resolvedLinksByCanonicalReference[canonicalOpenedRecordReference] == nil
+    {
+      resolvedLinksByCanonicalReference[canonicalOpenedRecordReference] = requestedTrawlLink
+    }
     return TrawlerSpecificOpenedRecordPresentation(
       detailPresentation:
         try detailPresentation
         .decodedTrawlerSpecificCommandDetailPresentation(
-          canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-          requestedTrawlLink: requestedTrawlLink))
+          resolvedLinksByCanonicalReference: resolvedLinksByCanonicalReference))
   }
 }
 
 extension Trawl_Presentation_TrawlerSpecificCommandPresentationValue {
   fileprivate func decodedTrawlerSpecificCommandPresentationValue(
-    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
-    requestedTrawlLink: GloballyRoutableTrawlLink
+    resolvedLinksByCanonicalReference: [CanonicalArchiveRecordReference: GloballyRoutableTrawlLink]
   ) throws -> TrawlerSpecificCommandPresentationValue {
     switch typedValue {
     case .text(let text):
@@ -490,17 +504,21 @@ extension Trawl_Presentation_TrawlerSpecificCommandPresentationValue {
         throw TrawlClientError.invalidProtobuf
       }
       return .archiveRecordAssociatedTime(mappedTime)
-    case .canonicalRecordReference(
-      let canonicalRecordReference):
-      let canonicalRecordReference =
+    case .canonicalRecordReference(let canonicalRecordReference):
+      let canonicalReference =
         canonicalRecordReference.decodedCanonicalArchiveRecordReference
-      guard
-        canonicalRecordReference == canonicalOpenedRecordReference,
-        parseGloballyRoutableTrawlLink(requestedTrawlLink) != nil
-      else {
+      guard let resolvedLink = resolvedLinksByCanonicalReference[canonicalReference] else {
         throw TrawlClientError.invalidProtobuf
       }
-      return .globallyRoutableTrawlLink(requestedTrawlLink)
+      return .globallyRoutableTrawlLink(resolvedLink)
+    case .exactMonetaryAmount(let amount):
+      let signStyle: MonetaryAmountDisplaySignStyle =
+        amount.monetaryAmountDisplaySignStyle == .signedMovement ? .signedMovement : .balance
+      return .exactMonetaryAmount(
+        ExactMonetaryAmount(
+          exactDecimalAmount: amount.exactDecimalAmount,
+          iso4217CurrencyCode: amount.iso4217CurrencyCode,
+          monetaryAmountDisplaySignStyle: signStyle))
     case nil:
       throw TrawlClientError.invalidProtobuf
     }
@@ -509,8 +527,7 @@ extension Trawl_Presentation_TrawlerSpecificCommandPresentationValue {
 
 extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentation {
   fileprivate func decodedTrawlerSpecificCommandDetailPresentation(
-    canonicalOpenedRecordReference: CanonicalArchiveRecordReference,
-    requestedTrawlLink: GloballyRoutableTrawlLink
+    resolvedLinksByCanonicalReference: [CanonicalArchiveRecordReference: GloballyRoutableTrawlLink]
   ) throws -> TrawlerSpecificCommandDetailPresentation {
     let mappedBody: TrawlerSpecificCommandDetailPresentationBody?
     switch body {
@@ -521,11 +538,14 @@ extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentation {
     case nil:
       mappedBody = nil
     }
+    let subtitle = detailSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    let footer = detailFooterText.trimmingCharacters(in: .whitespacesAndNewlines)
     return TrawlerSpecificCommandDetailPresentation(
       detailDisplayName: detailDisplayName,
       detailDisplayNameAnchor:
         hasDetailDisplayNameAnchor
         ? detailDisplayNameAnchor.decodedRecordAnchorIdentifier : nil,
+      detailSubtitle: subtitle.isEmpty ? nil : subtitle,
       fieldsInDisplayOrder: try fieldsInDisplayOrder.map { field in
         guard field.hasFieldValue else {
           throw TrawlClientError.invalidProtobuf
@@ -534,14 +554,14 @@ extension Trawl_Presentation_TrawlerSpecificCommandDetailPresentation {
           fieldDisplayName: field.fieldDisplayName,
           fieldValue:
             try field.fieldValue.decodedTrawlerSpecificCommandPresentationValue(
-              canonicalOpenedRecordReference: canonicalOpenedRecordReference,
-              requestedTrawlLink: requestedTrawlLink),
+              resolvedLinksByCanonicalReference: resolvedLinksByCanonicalReference),
           fieldAnchor:
             field.hasFieldAnchor ? field.fieldAnchor.decodedRecordAnchorIdentifier : nil)
       },
       body: mappedBody,
       bodyAnchor:
-        hasBodyAnchor ? bodyAnchor.decodedRecordAnchorIdentifier : nil)
+        hasBodyAnchor ? bodyAnchor.decodedRecordAnchorIdentifier : nil,
+      detailFooterText: footer.isEmpty ? nil : footer)
   }
 }
 

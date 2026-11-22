@@ -36,22 +36,6 @@ func (output TrawlCommandOutput) WriteOpenedRecord(
 		return fmt.Errorf("open response has no record")
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
-	case *open.OpenRecord_MoneyAccount:
-		account := typedOpenedRecord.MoneyAccount
-		links := map[string]string{canonicalArchiveRecordReferenceText(account.GetCanonicalRecordReference()): globallyRoutableTrawlLinkText(response.GetRequestedTrawlLink())}
-		if account.GetMoneyCardBilling() != nil {
-			return output.WriteMoneyCardAccountDetail(account, links)
-		}
-		return output.WriteMoneyAccountDetail(account, links)
-	case *open.OpenRecord_OpenedMoneyMovement:
-		movement := typedOpenedRecord.OpenedMoneyMovement
-		account := movement.GetMoneyAccount()
-		return output.WriteMoneyBookedOpen(movement, map[string]string{canonicalArchiveRecordReferenceText(account.GetCanonicalRecordReference()): globallyRoutableTrawlLinkText(account.GetGloballyRoutableAccountLink())})
-	case *open.OpenRecord_OpenedMoneyPendingMovement:
-		movement := typedOpenedRecord.OpenedMoneyPendingMovement
-		account := movement.GetMoneyAccount()
-		return output.WriteMoneyPendingOpen(movement, map[string]string{canonicalArchiveRecordReferenceText(account.GetCanonicalRecordReference()): globallyRoutableTrawlLinkText(account.GetGloballyRoutableAccountLink())})
-
 	case *open.OpenRecord_OpenedPhotoRecord:
 		return writeOpenedPhotoRecord(writer, typedOpenedRecord.OpenedPhotoRecord)
 	case *open.OpenRecord_OpenedMessageRecordWithConversationContext:
@@ -107,6 +91,18 @@ func (output TrawlCommandOutput) WriteOpenedRecord(
 				CanonicalArchiveRecordReference: record.GetCanonicalRecordReference(),
 				GloballyRoutableTrawlLink:       response.GetRequestedTrawlLink(),
 			}}
+		for _, resolvedLink := range trawlerSpecificOpenedRecordPresentation.GetResolvedRecordLinks() {
+			if resolvedLink == nil {
+				continue
+			}
+			globallyRoutableTrawlLinksByCanonicalRecordReference = append(
+				globallyRoutableTrawlLinksByCanonicalRecordReference,
+				GloballyRoutableTrawlLinkForCanonicalArchiveRecordReference{
+					CanonicalArchiveRecordReference: resolvedLink.GetCanonicalRecordReference(),
+					GloballyRoutableTrawlLink:       resolvedLink.GetGloballyRoutableTrawlLink(),
+				},
+			)
+		}
 		return writeTrawlerSpecificCommandDetailPresentation(
 			writer,
 			trawlerSpecificOpenedRecordPresentation.GetDetailPresentation(),

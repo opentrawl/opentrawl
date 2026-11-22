@@ -4,7 +4,6 @@ package trawl.search;
 
 import "trawl/person/person.proto";
 import "trawl/presentation/presentation.proto";
-import "trawl/money/money.proto";
 import "trawl/identity/identity.proto";
 import "trawl/photo/photo.proto";
 
@@ -30,7 +29,8 @@ message SearchMatchPresentation {
   repeated SearchMatchTextField search_match_text_fields_in_display_order = 7;
   string matching_record_kind_display_name = 8;
   trawl.photo.AppleLibraryPhotoFacts apple_library_photo_facts = 9;
-  trawl.money.MoneyMovementSearchMatch money_movement_search_match = 10;
+  trawl.presentation.ExactMonetaryAmount matching_record_monetary_amount = 10;
+  repeated string matching_record_status_labels = 11;
 }
 
 message TrawlerSearchMatch {
@@ -44,4 +44,5 @@ message TrawlerSearchResponse {
   uint64 total_search_matches = 2;
   bool total_search_matches_is_lower_bound = 3;
   bool more_search_matches_exist = 4;
+  repeated trawl.presentation.DeclarativeTrawlCommand empty_search_next_commands = 5;
 }

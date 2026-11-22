@@ -58,6 +58,25 @@ type RecordOpener interface {
 	) (*open.OpenRecord, error)
 }
 
+// CanonicalRecordOpener opens an archive record identified by its canonical
+// record reference after core resolves any human short-reference link.
+type CanonicalRecordOpener interface {
+	OpenCanonicalRecord(
+		ctx context.Context,
+		req *TrawlerCommandExecutionRequest,
+		canonicalRecordReference *CanonicalArchiveRecordReference,
+	) (*open.OpenRecord, error)
+}
+
+// ShortReferenceSnapshotProvider lists committed archive record references so
+// core maintains the short-reference index without reading private databases.
+type ShortReferenceSnapshotProvider interface {
+	ListArchiveRecordReferencesForShortReferences(
+		ctx context.Context,
+		req *TrawlerCommandExecutionRequest,
+	) ([]ShortReferenceAssignmentCandidate, bool, error)
+}
+
 type TrawlerSpecificOpenedRecordPresentationActionBuilder interface {
 	BuildTrawlerSpecificOpenedRecordPresentationActions(
 		openedRecord *open.OpenRecord,

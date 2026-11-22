@@ -22,23 +22,10 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		UpdatedAt:        updatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction := make(
-			[]trawlkit.ShortReferenceAssignmentCandidate,
-			0,
-			len(calendars)+len(events),
-		)
 		for _, calendar := range calendars {
 			if err := upsertCalendar(ctx, tx, calendar, runID); err != nil {
 				return err
 			}
-			shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction = append(
-				shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction,
-				trawlkit.ShortReferenceAssignmentCandidate{
-					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-						CalendarCanonicalRecordReferenceForIdentifier(calendar.ID),
-					),
-				},
-			)
 		}
 		for _, event := range events {
 			result, err := upsertEvent(ctx, tx, event, runID)
@@ -53,14 +40,6 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 			default:
 				stats.UnchangedEvents++
 			}
-			shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction = append(
-				shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction,
-				trawlkit.ShortReferenceAssignmentCandidate{
-					StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
-						RefForUID(event.UID),
-					),
-				},
-			)
 		}
 		deleted, err := cleanupRun(ctx, tx, runID)
 		if err != nil {
@@ -77,17 +56,52 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 		if err := stateStore.Set(ctx, updateSource, updateEntity, updateLastUpdate, stats.UpdatedAt); err != nil {
 			return err
 		}
-		if err := stateStore.Set(ctx, updateSource, updateEntity, updateSourceModified, sourceModifiedAt); err != nil {
-			return err
-		}
-		err = trawlkit.ReplaceShortReferencesForCompleteArchiveRecordSnapshotUsingCallerOwnedSQLTransaction(
-			ctx,
-			tx,
-			shortReferenceAssignmentCandidatesForRecordsPublishedByCalendarTransaction,
-		)
-		return err
+		return stateStore.Set(ctx, updateSource, updateEntity, updateSourceModified, sourceModifiedAt)
 	})
 	return stats, err
+}
+
+func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	var candidates []trawlkit.ShortReferenceAssignmentCandidate
+	calRows, err := s.store.DB().QueryContext(ctx, `select calendar_id from calendars order by calendar_id`)
+	if err != nil {
+		return nil, err
+	}
+	for calRows.Next() {
+		var calendarID string
+		if err := calRows.Scan(&calendarID); err != nil {
+			_ = calRows.Close()
+			return nil, err
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				CalendarCanonicalRecordReferenceForIdentifier(CalendarIdentifier(calendarID)),
+			),
+		})
+	}
+	if err := errors.Join(calRows.Err(), calRows.Close()); err != nil {
+		return nil, err
+	}
+	eventRows, err := s.store.DB().QueryContext(ctx, `select event_uid from events order by event_uid`)
+	if err != nil {
+		return nil, err
+	}
+	for eventRows.Next() {
+		var eventUID string
+		if err := eventRows.Scan(&eventUID); err != nil {
+			_ = eventRows.Close()
+			return nil, err
+		}
+		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(
+				RefForUID(eventUID),
+			),
+		})
+	}
+	if err := errors.Join(eventRows.Err(), eventRows.Close()); err != nil {
+		return nil, err
+	}
+	return candidates, nil
 }
 
 func upsertCalendar(ctx context.Context, tx *sql.Tx, calendar Calendar, runID string) error {

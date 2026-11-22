@@ -84,13 +84,48 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 	if st != nil {
 		defer func() { _ = st.Close() }()
 	}
+	coreShortRefOpenMode := coreShortReferenceStoreReadOnlyIfPresent
+	switch {
+	case command.writesNoFiles:
+		coreShortRefOpenMode = coreShortReferenceStoreReadOnlyWithoutWritingFilesIfPresent
+	case wireChild && command.mutates:
+		coreShortRefOpenMode = coreShortReferenceStoreReadOnlyIfPresent
+	case command.mutates || st != nil:
+		coreShortRefOpenMode = coreShortReferenceStoreReadWrite
+	}
+	coreShortRefStore, err := openCoreShortReferenceStore(ctx, paths.TrawlerArchivePaths, coreShortRefOpenMode)
+	if err != nil {
+		return executionResult{err: err}
+	}
+	if coreShortRefStore != nil {
+		defer func() { _ = coreShortRefStore.Close() }()
+	}
 	req := &TrawlerCommandExecutionRequest{
 		OpenedTrawlerArchiveStore: st,
 		TrawlerArchivePaths:       paths.TrawlerArchivePaths,
 		TrawlerCommandLog:         runLog,
+		coreShortReferenceStore:   coreShortRefStore,
 		ReportTrawlerCommandProgress: func(progress Progress) {
 			logProgress(runLog, progress)
 		},
+	}
+	if snapshotProvider, ok := trawler.(ShortReferenceSnapshotProvider); ok &&
+		coreShortRefStore != nil &&
+		coreShortRefOpenMode == coreShortReferenceStoreReadWrite &&
+		st != nil &&
+		!command.writesNoFiles {
+		replayed := false
+		req.replayShortReferences = func(replayCtx context.Context) error {
+			if replayed {
+				return nil
+			}
+			replayed = true
+			candidates, completeSnapshot, replayErr := snapshotProvider.ListArchiveRecordReferencesForShortReferences(replayCtx, req)
+			if replayErr != nil {
+				return replayErr
+			}
+			return publishShortReferenceCandidatesToCoreStore(replayCtx, coreShortRefStore, candidates, completeSnapshot)
+		}
 	}
 	if wireChild {
 		req.ReportTrawlerCommandProgress = func(progress Progress) {
@@ -99,15 +134,26 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 	}
 	if command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE {
 		report, err := executeUpdate(ctx, trawler, req)
+		if err == nil {
+			err = r.publishOrStreamShortReferencesAfterMutation(ctx, trawler, req, wireChild)
+		}
 		return executionResult{updateReport: report, err: err}
 	}
 	if peopleReconcile, ok := command.sharedOperationExecution.(*executePeopleReconciliationOperation); ok {
 		err := peopleReconcile.execute(ctx, trawler, req)
+		if err == nil {
+			err = r.publishOrStreamShortReferencesAfterMutation(ctx, trawler, req, wireChild)
+		}
 		return executionResult{updateReport: peopleReconcile.report, err: err}
 	}
 	trawlerCommandResponse, err := executeTrawlerCommand(ctx, trawler, command, req)
 	if err != nil {
 		return executionResult{err: err}
+	}
+	if command.mutates {
+		if err := r.publishOrStreamShortReferencesAfterMutation(ctx, trawler, req, wireChild); err != nil {
+			return executionResult{err: err}
+		}
 	}
 	if trawlerCommandResponse != nil {
 		if wireChild && trawlerCommandResponse.GetPhotosStepRunResponse() != nil {
@@ -117,13 +163,16 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 			}
 			trawlerCommandResponse.TypedTrawlerCommandResponse = &commandcontract.TrawlerCommandResponse_PhotosStepRunResponse{PhotosStepRunResponse: boundedResponse}
 		}
-		localShortReferencesByCanonicalRecordReference, err := trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
-			ctx,
-			req,
-			trawlerCommandResponse,
-		)
-		if err != nil {
-			return executionResult{err: err}
+		var localShortReferencesByCanonicalRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
+		if !wireChild {
+			localShortReferencesByCanonicalRecordReference, err = trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
+				ctx,
+				req,
+				trawlerCommandResponse,
+			)
+			if err != nil {
+				return executionResult{err: err}
+			}
 		}
 		renderContext := trawlerCommandRenderContext(
 			trawler.RegisteredTrawlerDeclaration(),
@@ -144,6 +193,45 @@ func (r runner) runInProcess(ctx context.Context, trawler Trawler, command targe
 		return executionResult{err: err}
 	}
 	return executionResult{}
+}
+
+func (r runner) publishOrStreamShortReferencesAfterMutation(
+	ctx context.Context,
+	trawler Trawler,
+	req *TrawlerCommandExecutionRequest,
+	wireChild bool,
+) error {
+	snapshotProvider, ok := trawler.(ShortReferenceSnapshotProvider)
+	if !ok {
+		return nil
+	}
+	candidates, completeSnapshot, err := snapshotProvider.ListArchiveRecordReferencesForShortReferences(ctx, req)
+	if err != nil {
+		return err
+	}
+	if !wireChild {
+		if req.coreShortReferenceStore == nil {
+			return nil
+		}
+		return publishShortReferenceCandidatesToCoreStore(ctx, req.coreShortReferenceStore, candidates, completeSnapshot)
+	}
+	if len(candidates) == 0 {
+		return writeChildFrame(r.opts.stdout, childShortReferenceBatchFrame(nil, completeSnapshot))
+	}
+	for start := 0; start < len(candidates); start += shortReferenceWireBatchSize {
+		end := start + shortReferenceWireBatchSize
+		if end > len(candidates) {
+			end = len(candidates)
+		}
+		isLast := end == len(candidates)
+		if err := writeChildFrame(
+			r.opts.stdout,
+			childShortReferenceBatchFrame(candidates[start:end], completeSnapshot && isLast),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateBespokeArgs(command TrawlerCommand, args []string) error {

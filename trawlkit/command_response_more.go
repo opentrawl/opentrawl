@@ -38,8 +38,8 @@ func trawlerCommandRenderContext(
 		nextLimit = totalMatchingRowCount
 	}
 
-	if movements := response.GetMoneyMovementListResponse(); movements != nil {
-		nextLimit = uint64(movements.GetNextMaximumMovementCount())
+	if list := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation(); list != nil && list.GetNextMaximumRowCount() > 0 {
+		nextLimit = uint64(list.GetNextMaximumRowCount())
 	}
 	invocationArguments := replaceTrawlerCommandLimitArgument(command.invocationArguments, nextLimit)
 	argumentsAfterTrawlInvocation := []string{trawler.RegisteredTrawlerCommandName}
@@ -59,12 +59,6 @@ func trawlerCommandResponseRowCounts(
 		return 0, 0, false, false
 	}
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
-	case *command.TrawlerCommandResponse_MoneyMovementListResponse:
-		count := uint64(0)
-		for _, group := range typedResponse.MoneyMovementListResponse.GetMoneyAccountMovementLists() {
-			count += uint64(len(group.GetBookedMovementsNewestFirst()) + len(group.GetPendingMovementsNewestFirst()))
-		}
-		return count, typedResponse.MoneyMovementListResponse.GetTotalMatchingMovementCount(), false, typedResponse.MoneyMovementListResponse.GetMoreMatchingMovementsExist()
 	case *command.TrawlerCommandResponse_PhotoListResponse:
 		return uint64(len(typedResponse.PhotoListResponse.GetPhotoRecordsNewestFirst())), typedResponse.PhotoListResponse.GetTotalMatchingPhotoCount(), false, typedResponse.PhotoListResponse.GetMoreMatchingPhotosExist()
 	case *command.TrawlerCommandResponse_PhotoLocalDayListResponse:
@@ -112,6 +106,11 @@ func trawlerCommandResponseRowCounts(
 			return 0, 0, false, false
 		}
 		returnedRowCount := uint64(len(listPresentation.GetRowsInDisplayOrder()))
+		for _, section := range listPresentation.GetSectionsInDisplayOrder() {
+			if section != nil {
+				returnedRowCount += uint64(len(section.GetRowsInDisplayOrder()))
+			}
+		}
 		switch listPresentation.GetTotalRowCount().(type) {
 		case *presentation.TrawlerSpecificCommandListPresentation_ExactTotalRowCount:
 			return returnedRowCount,

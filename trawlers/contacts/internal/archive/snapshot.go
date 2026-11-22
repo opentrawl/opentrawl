@@ -57,7 +57,7 @@ func (s *Store) UpdateContactSnapshot(ctx context.Context, source string, contac
 		); err != nil {
 			return err
 		}
-		return replaceShortReferencesForCurrentPeopleUsingContactsSnapshotTransaction(ctx, scoped.tx)
+		return nil
 	})
 	return stats, err
 }

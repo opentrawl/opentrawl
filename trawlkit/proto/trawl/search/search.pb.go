@@ -8,7 +8,6 @@ package search
 
 import (
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
-	money "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
@@ -141,7 +140,8 @@ type SearchMatchPresentation struct {
 	SearchMatchTextFieldsInDisplayOrder    []*SearchMatchTextField                             `protobuf:"bytes,7,rep,name=search_match_text_fields_in_display_order,json=searchMatchTextFieldsInDisplayOrder,proto3" json:"search_match_text_fields_in_display_order,omitempty"`
 	MatchingRecordKindDisplayName          string                                              `protobuf:"bytes,8,opt,name=matching_record_kind_display_name,json=matchingRecordKindDisplayName,proto3" json:"matching_record_kind_display_name,omitempty"`
 	AppleLibraryPhotoFacts                 *photo.AppleLibraryPhotoFacts                       `protobuf:"bytes,9,opt,name=apple_library_photo_facts,json=appleLibraryPhotoFacts,proto3" json:"apple_library_photo_facts,omitempty"`
-	MoneyMovementSearchMatch               *money.MoneyMovementSearchMatch                     `protobuf:"bytes,10,opt,name=money_movement_search_match,json=moneyMovementSearchMatch,proto3" json:"money_movement_search_match,omitempty"`
+	MatchingRecordMonetaryAmount           *presentation.ExactMonetaryAmount                   `protobuf:"bytes,10,opt,name=matching_record_monetary_amount,json=matchingRecordMonetaryAmount,proto3" json:"matching_record_monetary_amount,omitempty"`
+	MatchingRecordStatusLabels             []string                                            `protobuf:"bytes,11,rep,name=matching_record_status_labels,json=matchingRecordStatusLabels,proto3" json:"matching_record_status_labels,omitempty"`
 	unknownFields                          protoimpl.UnknownFields
 	sizeCache                              protoimpl.SizeCache
 }
@@ -239,9 +239,16 @@ func (x *SearchMatchPresentation) GetAppleLibraryPhotoFacts() *photo.AppleLibrar
 	return nil
 }
 
-func (x *SearchMatchPresentation) GetMoneyMovementSearchMatch() *money.MoneyMovementSearchMatch {
+func (x *SearchMatchPresentation) GetMatchingRecordMonetaryAmount() *presentation.ExactMonetaryAmount {
 	if x != nil {
-		return x.MoneyMovementSearchMatch
+		return x.MatchingRecordMonetaryAmount
+	}
+	return nil
+}
+
+func (x *SearchMatchPresentation) GetMatchingRecordStatusLabels() []string {
+	if x != nil {
+		return x.MatchingRecordStatusLabels
 	}
 	return nil
 }
@@ -307,11 +314,12 @@ func (x *TrawlerSearchMatch) GetSearchMatchPresentation() *SearchMatchPresentati
 }
 
 type TrawlerSearchResponse struct {
-	state                              protoimpl.MessageState `protogen:"open.v1"`
-	TrawlerSearchMatchesInDisplayOrder []*TrawlerSearchMatch  `protobuf:"bytes,1,rep,name=trawler_search_matches_in_display_order,json=trawlerSearchMatchesInDisplayOrder,proto3" json:"trawler_search_matches_in_display_order,omitempty"`
-	TotalSearchMatches                 uint64                 `protobuf:"varint,2,opt,name=total_search_matches,json=totalSearchMatches,proto3" json:"total_search_matches,omitempty"`
-	TotalSearchMatchesIsLowerBound     bool                   `protobuf:"varint,3,opt,name=total_search_matches_is_lower_bound,json=totalSearchMatchesIsLowerBound,proto3" json:"total_search_matches_is_lower_bound,omitempty"`
-	MoreSearchMatchesExist             bool                   `protobuf:"varint,4,opt,name=more_search_matches_exist,json=moreSearchMatchesExist,proto3" json:"more_search_matches_exist,omitempty"`
+	state                              protoimpl.MessageState                  `protogen:"open.v1"`
+	TrawlerSearchMatchesInDisplayOrder []*TrawlerSearchMatch                   `protobuf:"bytes,1,rep,name=trawler_search_matches_in_display_order,json=trawlerSearchMatchesInDisplayOrder,proto3" json:"trawler_search_matches_in_display_order,omitempty"`
+	TotalSearchMatches                 uint64                                  `protobuf:"varint,2,opt,name=total_search_matches,json=totalSearchMatches,proto3" json:"total_search_matches,omitempty"`
+	TotalSearchMatchesIsLowerBound     bool                                    `protobuf:"varint,3,opt,name=total_search_matches_is_lower_bound,json=totalSearchMatchesIsLowerBound,proto3" json:"total_search_matches_is_lower_bound,omitempty"`
+	MoreSearchMatchesExist             bool                                    `protobuf:"varint,4,opt,name=more_search_matches_exist,json=moreSearchMatchesExist,proto3" json:"more_search_matches_exist,omitempty"`
+	EmptySearchNextCommands            []*presentation.DeclarativeTrawlCommand `protobuf:"bytes,5,rep,name=empty_search_next_commands,json=emptySearchNextCommands,proto3" json:"empty_search_next_commands,omitempty"`
 	unknownFields                      protoimpl.UnknownFields
 	sizeCache                          protoimpl.SizeCache
 }
@@ -374,17 +382,24 @@ func (x *TrawlerSearchResponse) GetMoreSearchMatchesExist() bool {
 	return false
 }
 
+func (x *TrawlerSearchResponse) GetEmptySearchNextCommands() []*presentation.DeclarativeTrawlCommand {
+	if x != nil {
+		return x.EmptySearchNextCommands
+	}
+	return nil
+}
+
 var File_trawl_search_search_proto protoreflect.FileDescriptor
 
 const file_trawl_search_search_proto_rawDesc = "" +
 	"\n" +
-	"\x19trawl/search/search.proto\x12\ftrawl.search\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x17trawl/money/money.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x17trawl/photo/photo.proto\"\xc9\x01\n" +
+	"\x19trawl/search/search.proto\x12\ftrawl.search\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x17trawl/photo/photo.proto\"\xc9\x01\n" +
 	"\x17SearchMatchTextFragment\x12J\n" +
 	"\"search_match_text_fragment_content\x18\x01 \x01(\tR\x1esearchMatchTextFragmentContent\x12b\n" +
 	"/search_match_text_fragment_matches_search_query\x18\x02 \x01(\bR)searchMatchTextFragmentMatchesSearchQuery\"\xdc\x01\n" +
 	"\x14SearchMatchTextField\x12>\n" +
 	"\x1csearch_match_text_field_name\x18\x01 \x01(\tR\x18searchMatchTextFieldName\x12\x83\x01\n" +
-	",search_match_text_fragments_in_display_order\x18\x02 \x03(\v2%.trawl.search.SearchMatchTextFragmentR&searchMatchTextFragmentsInDisplayOrder\"\xdc\a\n" +
+	",search_match_text_fragments_in_display_order\x18\x02 \x03(\v2%.trawl.search.SearchMatchTextFragmentR&searchMatchTextFragmentsInDisplayOrder\"\xa9\b\n" +
 	"\x17SearchMatchPresentation\x12\x80\x01\n" +
 	"\x1fmatching_record_associated_time\x18\x01 \x01(\v29.trawl.presentation.ArchiveRecordAssociatedTimeForDisplayR\x1cmatchingRecordAssociatedTime\x12E\n" +
 	"\x1fregistered_trawler_display_name\x18\x02 \x01(\tR\x1cregisteredTrawlerDisplayName\x12?\n" +
@@ -394,18 +409,20 @@ const file_trawl_search_search_proto_rawDesc = "" +
 	")physical_place_names_specific_to_broadest\x18\x06 \x03(\tR$physicalPlaceNamesSpecificToBroadest\x12z\n" +
 	")search_match_text_fields_in_display_order\x18\a \x03(\v2\".trawl.search.SearchMatchTextFieldR#searchMatchTextFieldsInDisplayOrder\x12H\n" +
 	"!matching_record_kind_display_name\x18\b \x01(\tR\x1dmatchingRecordKindDisplayName\x12^\n" +
-	"\x19apple_library_photo_facts\x18\t \x01(\v2#.trawl.photo.AppleLibraryPhotoFactsR\x16appleLibraryPhotoFacts\x12d\n" +
-	"\x1bmoney_movement_search_match\x18\n" +
-	" \x01(\v2%.trawl.money.MoneyMovementSearchMatchR\x18moneyMovementSearchMatch\"\xb3\x02\n" +
+	"\x19apple_library_photo_facts\x18\t \x01(\v2#.trawl.photo.AppleLibraryPhotoFactsR\x16appleLibraryPhotoFacts\x12n\n" +
+	"\x1fmatching_record_monetary_amount\x18\n" +
+	" \x01(\v2'.trawl.presentation.ExactMonetaryAmountR\x1cmatchingRecordMonetaryAmount\x12A\n" +
+	"\x1dmatching_record_status_labels\x18\v \x03(\tR\x1amatchingRecordStatusLabels\"\xb3\x02\n" +
 	"\x12TrawlerSearchMatch\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12K\n" +
 	"\rrecord_anchor\x18\x02 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\frecordAnchor\x12a\n" +
-	"\x19search_match_presentation\x18\x03 \x01(\v2%.trawl.search.SearchMatchPresentationR\x17searchMatchPresentation\"\xc8\x02\n" +
+	"\x19search_match_presentation\x18\x03 \x01(\v2%.trawl.search.SearchMatchPresentationR\x17searchMatchPresentation\"\xb2\x03\n" +
 	"\x15TrawlerSearchResponse\x12u\n" +
 	"'trawler_search_matches_in_display_order\x18\x01 \x03(\v2 .trawl.search.TrawlerSearchMatchR\"trawlerSearchMatchesInDisplayOrder\x120\n" +
 	"\x14total_search_matches\x18\x02 \x01(\x04R\x12totalSearchMatches\x12K\n" +
 	"#total_search_matches_is_lower_bound\x18\x03 \x01(\bR\x1etotalSearchMatchesIsLowerBound\x129\n" +
-	"\x19more_search_matches_exist\x18\x04 \x01(\bR\x16moreSearchMatchesExistBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/search;searchb\x06proto3"
+	"\x19more_search_matches_exist\x18\x04 \x01(\bR\x16moreSearchMatchesExist\x12h\n" +
+	"\x1aempty_search_next_commands\x18\x05 \x03(\v2+.trawl.presentation.DeclarativeTrawlCommandR\x17emptySearchNextCommandsBCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/search;searchb\x06proto3"
 
 var (
 	file_trawl_search_search_proto_rawDescOnce sync.Once
@@ -429,9 +446,10 @@ var file_trawl_search_search_proto_goTypes = []any{
 	(*presentation.ArchiveRecordAssociatedTimeForDisplay)(nil), // 5: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
 	(*person.PersonRelatedToArchiveRecord)(nil),                // 6: trawl.person.PersonRelatedToArchiveRecord
 	(*photo.AppleLibraryPhotoFacts)(nil),                       // 7: trawl.photo.AppleLibraryPhotoFacts
-	(*money.MoneyMovementSearchMatch)(nil),                     // 8: trawl.money.MoneyMovementSearchMatch
+	(*presentation.ExactMonetaryAmount)(nil),                   // 8: trawl.presentation.ExactMonetaryAmount
 	(*identity.CanonicalArchiveRecordReference)(nil),           // 9: trawl.identity.CanonicalArchiveRecordReference
 	(*identity.RecordAnchorIdentifier)(nil),                    // 10: trawl.identity.RecordAnchorIdentifier
+	(*presentation.DeclarativeTrawlCommand)(nil),               // 11: trawl.presentation.DeclarativeTrawlCommand
 }
 var file_trawl_search_search_proto_depIdxs = []int32{
 	0,  // 0: trawl.search.SearchMatchTextField.search_match_text_fragments_in_display_order:type_name -> trawl.search.SearchMatchTextFragment
@@ -439,16 +457,17 @@ var file_trawl_search_search_proto_depIdxs = []int32{
 	6,  // 2: trawl.search.SearchMatchPresentation.people_related_to_matching_record:type_name -> trawl.person.PersonRelatedToArchiveRecord
 	1,  // 3: trawl.search.SearchMatchPresentation.search_match_text_fields_in_display_order:type_name -> trawl.search.SearchMatchTextField
 	7,  // 4: trawl.search.SearchMatchPresentation.apple_library_photo_facts:type_name -> trawl.photo.AppleLibraryPhotoFacts
-	8,  // 5: trawl.search.SearchMatchPresentation.money_movement_search_match:type_name -> trawl.money.MoneyMovementSearchMatch
+	8,  // 5: trawl.search.SearchMatchPresentation.matching_record_monetary_amount:type_name -> trawl.presentation.ExactMonetaryAmount
 	9,  // 6: trawl.search.TrawlerSearchMatch.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	10, // 7: trawl.search.TrawlerSearchMatch.record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
 	2,  // 8: trawl.search.TrawlerSearchMatch.search_match_presentation:type_name -> trawl.search.SearchMatchPresentation
 	3,  // 9: trawl.search.TrawlerSearchResponse.trawler_search_matches_in_display_order:type_name -> trawl.search.TrawlerSearchMatch
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 10: trawl.search.TrawlerSearchResponse.empty_search_next_commands:type_name -> trawl.presentation.DeclarativeTrawlCommand
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_trawl_search_search_proto_init() }

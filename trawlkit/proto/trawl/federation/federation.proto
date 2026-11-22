@@ -7,6 +7,7 @@ import "trawl/conversation/conversation.proto";
 import "trawl/identity/identity.proto";
 import "trawl/person/person.proto";
 import "trawl/photos/step/photos_step.proto";
+import "trawl/presentation/presentation.proto";
 import "trawl/search/search.proto";
 import "trawl/status/status.proto";
 import "trawl/update/update.proto";
@@ -157,6 +158,7 @@ message TrawlerSearchResult {
   uint64 total_search_matches = 5;
   bool more_search_matches_exist = 6;
   bool total_search_matches_is_lower_bound = 7;
+  repeated trawl.presentation.DeclarativeTrawlCommand empty_search_next_commands = 8;
 }
 
 message FederatedTrawlerStatusOperation {

@@ -20,6 +20,37 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated struct Trawl_Open_ResolvedCanonicalRecordTrawlLink: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference {
+    get {_canonicalRecordReference ?? Trawl_Identity_CanonicalArchiveRecordReference()}
+    set {_canonicalRecordReference = newValue}
+  }
+  /// Returns true if `canonicalRecordReference` has been explicitly set.
+  public var hasCanonicalRecordReference: Bool {self._canonicalRecordReference != nil}
+  /// Clears the value of `canonicalRecordReference`. Subsequent reads from it will return its default value.
+  public mutating func clearCanonicalRecordReference() {self._canonicalRecordReference = nil}
+
+  public var globallyRoutableTrawlLink: Trawl_Identity_GloballyRoutableTrawlLink {
+    get {_globallyRoutableTrawlLink ?? Trawl_Identity_GloballyRoutableTrawlLink()}
+    set {_globallyRoutableTrawlLink = newValue}
+  }
+  /// Returns true if `globallyRoutableTrawlLink` has been explicitly set.
+  public var hasGloballyRoutableTrawlLink: Bool {self._globallyRoutableTrawlLink != nil}
+  /// Clears the value of `globallyRoutableTrawlLink`. Subsequent reads from it will return its default value.
+  public mutating func clearGloballyRoutableTrawlLink() {self._globallyRoutableTrawlLink = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _canonicalRecordReference: Trawl_Identity_CanonicalArchiveRecordReference? = nil
+  fileprivate var _globallyRoutableTrawlLink: Trawl_Identity_GloballyRoutableTrawlLink? = nil
+}
+
 public nonisolated struct Trawl_Open_TrawlerSpecificOpenedRecordPresentation: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -33,6 +64,8 @@ public nonisolated struct Trawl_Open_TrawlerSpecificOpenedRecordPresentation: Se
   public var hasDetailPresentation: Bool {self._detailPresentation != nil}
   /// Clears the value of `detailPresentation`. Subsequent reads from it will return its default value.
   public mutating func clearDetailPresentation() {self._detailPresentation = nil}
+
+  public var resolvedRecordLinks: [Trawl_Open_ResolvedCanonicalRecordTrawlLink] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -133,30 +166,6 @@ public nonisolated struct Trawl_Open_OpenRecord: @unchecked Sendable {
     set {_uniqueStorage()._typedOpenedRecord = .openedPhotoRecord(newValue)}
   }
 
-  public var openedMoneyMovement: Trawl_Money_OpenedMoneyMovement {
-    get {
-      if case .openedMoneyMovement(let v)? = _storage._typedOpenedRecord {return v}
-      return Trawl_Money_OpenedMoneyMovement()
-    }
-    set {_uniqueStorage()._typedOpenedRecord = .openedMoneyMovement(newValue)}
-  }
-
-  public var moneyAccount: Trawl_Money_MoneyAccount {
-    get {
-      if case .moneyAccount(let v)? = _storage._typedOpenedRecord {return v}
-      return Trawl_Money_MoneyAccount()
-    }
-    set {_uniqueStorage()._typedOpenedRecord = .moneyAccount(newValue)}
-  }
-
-  public var openedMoneyPendingMovement: Trawl_Money_OpenedMoneyPendingMovement {
-    get {
-      if case .openedMoneyPendingMovement(let v)? = _storage._typedOpenedRecord {return v}
-      return Trawl_Money_OpenedMoneyPendingMovement()
-    }
-    set {_uniqueStorage()._typedOpenedRecord = .openedMoneyPendingMovement(newValue)}
-  }
-
   public var openedEmailMessageRecord: Trawl_Email_OpenedEmailMessageRecord {
     get {
       if case .openedEmailMessageRecord(let v)? = _storage._typedOpenedRecord {return v}
@@ -176,9 +185,6 @@ public nonisolated struct Trawl_Open_OpenRecord: @unchecked Sendable {
     case openedNoteRecord(Trawl_Note_OpenedNoteRecord)
     case calendarRecord(Trawl_Calendar_CalendarRecord)
     case openedPhotoRecord(Trawl_Photo_OpenedPhotoRecord)
-    case openedMoneyMovement(Trawl_Money_OpenedMoneyMovement)
-    case moneyAccount(Trawl_Money_MoneyAccount)
-    case openedMoneyPendingMovement(Trawl_Money_OpenedMoneyPendingMovement)
     case openedEmailMessageRecord(Trawl_Email_OpenedEmailMessageRecord)
 
   }
@@ -245,9 +251,48 @@ public nonisolated struct Trawl_Open_OpenResponse: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "trawl.open"
 
+nonisolated extension Trawl_Open_ResolvedCanonicalRecordTrawlLink: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ResolvedCanonicalRecordTrawlLink"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}canonical_record_reference\0\u{3}globally_routable_trawl_link\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._canonicalRecordReference) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._globallyRoutableTrawlLink) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._canonicalRecordReference {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._globallyRoutableTrawlLink {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Open_ResolvedCanonicalRecordTrawlLink, rhs: Trawl_Open_ResolvedCanonicalRecordTrawlLink) -> Bool {
+    if lhs._canonicalRecordReference != rhs._canonicalRecordReference {return false}
+    if lhs._globallyRoutableTrawlLink != rhs._globallyRoutableTrawlLink {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSpecificOpenedRecordPresentation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detail_presentation\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}detail_presentation\0\u{3}resolved_record_links\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -256,6 +301,7 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation: SwiftP
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._detailPresentation) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.resolvedRecordLinks) }()
       default: break
       }
     }
@@ -269,11 +315,15 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation: SwiftP
     try { if let v = self._detailPresentation {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
+    if !self.resolvedRecordLinks.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.resolvedRecordLinks, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Open_TrawlerSpecificOpenedRecordPresentation, rhs: Trawl_Open_TrawlerSpecificOpenedRecordPresentation) -> Bool {
     if lhs._detailPresentation != rhs._detailPresentation {return false}
+    if lhs.resolvedRecordLinks != rhs.resolvedRecordLinks {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -281,7 +331,7 @@ nonisolated extension Trawl_Open_TrawlerSpecificOpenedRecordPresentation: SwiftP
 
 nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_trawler\0\u{3}canonical_record_reference\0\u{3}opened_message_record_with_conversation_context\0\u{3}conversation_record\0\u{3}person_record\0\u{3}calendar_event_record\0\u{3}trawler_specific_opened_record_presentation\0\u{3}opened_note_record\0\u{3}calendar_record\0\u{3}opened_photo_record\0\u{3}opened_money_movement\0\u{3}money_account\0\u{3}opened_money_pending_movement\0\u{3}opened_email_message_record\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}record_trawler\0\u{3}canonical_record_reference\0\u{3}opened_message_record_with_conversation_context\0\u{3}conversation_record\0\u{3}person_record\0\u{3}calendar_event_record\0\u{3}trawler_specific_opened_record_presentation\0\u{3}opened_note_record\0\u{3}calendar_record\0\u{3}opened_photo_record\0\u{4}\u{4}opened_email_message_record\0")
 
   fileprivate class _StorageClass {
     var _recordTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
@@ -424,45 +474,6 @@ nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobu
             _storage._typedOpenedRecord = .openedPhotoRecord(v)
           }
         }()
-        case 11: try {
-          var v: Trawl_Money_OpenedMoneyMovement?
-          var hadOneofValue = false
-          if let current = _storage._typedOpenedRecord {
-            hadOneofValue = true
-            if case .openedMoneyMovement(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._typedOpenedRecord = .openedMoneyMovement(v)
-          }
-        }()
-        case 12: try {
-          var v: Trawl_Money_MoneyAccount?
-          var hadOneofValue = false
-          if let current = _storage._typedOpenedRecord {
-            hadOneofValue = true
-            if case .moneyAccount(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._typedOpenedRecord = .moneyAccount(v)
-          }
-        }()
-        case 13: try {
-          var v: Trawl_Money_OpenedMoneyPendingMovement?
-          var hadOneofValue = false
-          if let current = _storage._typedOpenedRecord {
-            hadOneofValue = true
-            if case .openedMoneyPendingMovement(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._typedOpenedRecord = .openedMoneyPendingMovement(v)
-          }
-        }()
         case 14: try {
           var v: Trawl_Email_OpenedEmailMessageRecord?
           var hadOneofValue = false
@@ -526,18 +537,6 @@ nonisolated extension Trawl_Open_OpenRecord: SwiftProtobuf.Message, SwiftProtobu
       case .openedPhotoRecord?: try {
         guard case .openedPhotoRecord(let v)? = _storage._typedOpenedRecord else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
-      }()
-      case .openedMoneyMovement?: try {
-        guard case .openedMoneyMovement(let v)? = _storage._typedOpenedRecord else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 11)
-      }()
-      case .moneyAccount?: try {
-        guard case .moneyAccount(let v)? = _storage._typedOpenedRecord else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
-      }()
-      case .openedMoneyPendingMovement?: try {
-        guard case .openedMoneyPendingMovement(let v)? = _storage._typedOpenedRecord else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
       }()
       case .openedEmailMessageRecord?: try {
         guard case .openedEmailMessageRecord(let v)? = _storage._typedOpenedRecord else { preconditionFailure() }

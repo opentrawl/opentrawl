@@ -70,6 +70,8 @@ var (
 	_ trawlkit.TrawlerMessageLister                       = (*Crawler)(nil)
 	_ trawlkit.PeopleSnapshotProvider                     = (*Crawler)(nil)
 	_ trawlkit.SuccessfullyCompletedArchiveUpdateRecorder = (*Crawler)(nil)
+	_ trawlkit.CanonicalRecordOpener                      = (*Crawler)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider             = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -86,7 +88,30 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 			LeavesMachine:   "Nothing leaves your Mac during a default update. If you enable full history or request missing media, OpenTrawl asks Telegram for it using your existing Telegram session.",
 			NetworkRequests: "Default updates are local. --full-history downloads older messages. --fetch-media downloads missing media.",
 		},
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:              "paperplane.fill",
+			AccentColor:             "#229ED9",
+			BundleIdentifier:        "ru.keepcoder.Telegram",
+			ArtworkBundleIdentifier: "ru.keepcoder.Telegram",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING,
 	}
+}
+
+func (c *Crawler) ListArchiveRecordReferencesForShortReferences(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
+	if err != nil {
+		return nil, false, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	defer func() { _ = st.Close() }()
+	candidates, err := st.ListShortReferenceCandidates(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, false, nil
 }
 
 func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.TrawlerConfigurationFilePath) error {

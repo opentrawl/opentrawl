@@ -321,6 +321,10 @@ func NoRecordHasThatLink() CommandFailure {
 	return linkIsUnknown("Nothing in the archives has that link.")
 }
 
+func SeveralRecordsHaveThatLink() CommandFailure {
+	return nothingOrSeveralThingsMatched("More than one record has that link.")
+}
+
 func NoTrawlerHasThatLink() CommandFailure {
 	return linkIsUnknown("No trawler has that link.")
 }

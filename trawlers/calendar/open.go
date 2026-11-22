@@ -28,24 +28,3 @@ func (c *Crawler) loadOpenEvent(
 	}
 	return event, nil
 }
-
-func (c *Crawler) resolveOpenRef(
-	ctx context.Context,
-	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
-) (*trawlkit.CanonicalArchiveRecordReference, error) {
-	if !trawlkit.ValidShortRef(trawlkit.LocalTrawlerShortReferenceText(localShortReference)) {
-		return nil, commandErr(1, "unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounEvent))
-	}
-	matches, err := req.ResolveShortReference(ctx, localShortReference)
-	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return nil, commandErr(1, "unknown_short_ref", render.NoArchiveRecordHasLink(render.ArchiveRecordKindNounEvent))
-	}
-	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return nil, commandErr(1, "ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounEvent))
-	}
-	if err != nil {
-		return nil, err
-	}
-	return matches[0], nil
-}

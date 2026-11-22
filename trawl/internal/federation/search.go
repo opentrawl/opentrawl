@@ -173,6 +173,7 @@ func convertTrawlerSearchResponseToFederationTrawlerSearchResult(
 		TotalSearchMatches:             trawlerSearchResponse.GetTotalSearchMatches(),
 		MoreSearchMatchesExist:         trawlerSearchResponse.GetMoreSearchMatchesExist(),
 		TotalSearchMatchesIsLowerBound: trawlerSearchResponse.GetTotalSearchMatchesIsLowerBound(),
+		EmptySearchNextCommands:        trawlerSearchResponse.GetEmptySearchNextCommands(),
 	}
 	for searchMatchIndex, trawlerFederatedSearchMatch := range trawlerSearchResponse.GetTrawlerSearchMatchesInDisplayOrder() {
 		if trawlerFederatedSearchMatch == nil || trawlerFederatedSearchMatch.GetSearchMatchPresentation() == nil {

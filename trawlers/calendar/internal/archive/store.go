@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/config"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -88,7 +87,7 @@ func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 }
 
 func ensureCurrentSchema(ctx context.Context, st *store.Store) error {
-	_, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema)
+	_, err := st.DB().ExecContext(ctx, schema+state.Schema)
 	return err
 }
 

@@ -22,14 +22,12 @@ type openValue struct {
 	afterTruncated  bool
 }
 
-var _ trawlkit.RecordOpener = (*Crawler)(nil)
-
-func (c *Crawler) OpenRecord(
+func (c *Crawler) OpenCanonicalRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
+	canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference,
 ) (*open.OpenRecord, error) {
-	value, err := c.loadOpenMessage(ctx, req, localShortReference)
+	value, err := c.loadOpenMessage(ctx, req, canonicalRecordReference)
 	if err != nil {
 		return nil, err
 	}

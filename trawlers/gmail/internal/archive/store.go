@@ -12,7 +12,6 @@ import (
 	"github.com/opentrawl/opentrawl/gmail/internal/gmailapi"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/mailparse"
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -41,7 +40,7 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	if st == nil {
 		return nil, errors.New("archive store is not open")
 	}
-	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema); err != nil {
 		return nil, fmt.Errorf("apply archive schema: %w", err)
 	}
 	if err := ensureMessagesFTSIncludesParticipants(ctx, st.DB()); err != nil {
@@ -117,7 +116,6 @@ func (s *Store) WriteArchivedGmailMessages(ctx context.Context, messages []Archi
 
 func writeArchivedGmailMessages(ctx context.Context, tx *sql.Tx, messages []ArchivedGmailMessage) (int, error) {
 	added := 0
-	writtenIdentifiers := make([]gmailapi.GmailMessageIdentifier, 0, len(messages))
 	for _, message := range messages {
 		messageWasAdded, err := writeArchivedGmailMessage(ctx, tx, message)
 		if err != nil {
@@ -126,9 +124,8 @@ func writeArchivedGmailMessages(ctx context.Context, tx *sql.Tx, messages []Arch
 		if messageWasAdded {
 			added++
 		}
-		writtenIdentifiers = append(writtenIdentifiers, message.GmailMessageIdentifier)
 	}
-	return added, assignShortReferences(ctx, tx, writtenIdentifiers)
+	return added, nil
 }
 
 // writeArchivedGmailMessage inserts a message or rewrites it. A message
@@ -385,14 +382,26 @@ where id = ?`,
 	})
 }
 
-func assignShortReferences(ctx context.Context, tx *sql.Tx, identifiers []gmailapi.GmailMessageIdentifier) error {
-	candidates := make([]trawlkit.ShortReferenceAssignmentCandidate, 0, len(identifiers))
-	for _, identifier := range identifiers {
+func (s *Store) ListShortReferenceCandidates(ctx context.Context) ([]trawlkit.ShortReferenceAssignmentCandidate, error) {
+	rows, err := s.store.DB().QueryContext(ctx, `select id from messages order by id`)
+	if err != nil {
+		return nil, err
+	}
+	var candidates []trawlkit.ShortReferenceAssignmentCandidate
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
 		candidates = append(candidates, trawlkit.ShortReferenceAssignmentCandidate{
-			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(RefPrefix + string(identifier)),
+			StableRecordReferenceUsedForShortReferenceAssignment: trawlkit.NewCanonicalArchiveRecordReference(RefPrefix + id),
 		})
 	}
-	return trawlkit.AssignShortReferencesForObservedArchiveRecordsUsingCallerOwnedSQLTransaction(ctx, tx, candidates)
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	return candidates, nil
 }
 
 func (s *Store) MarkUpdateStarted(ctx context.Context, when time.Time) error {

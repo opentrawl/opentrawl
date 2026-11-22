@@ -118,6 +118,13 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return err
 	}
 	if len(merged.Presentations) > 0 || len(response.GetTrawlerSearchResults()) > 0 {
+		var emptySearchNextCommands []render.NextCommand
+		if len(merged.Presentations) == 0 && searchWasExplicitlyScopedToOneTrawler && len(response.GetTrawlerSearchResults()) == 1 {
+			emptySearchNextCommands = render.DeclarativeNextCommandsForHumanOutput(
+				response.GetTrawlerSearchResults()[0].GetEmptySearchNextCommands(),
+				nil,
+			)
+		}
 		searchResults := render.SearchResults{
 			SearchQueryWords:                   query,
 			PersonDisplayNameTheSearchInvolves: resolvedWhoName(whoResolved),
@@ -125,7 +132,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			SearchEndDateAsTyped:               c.Before,
 			SearchMatchesInDisplayOrder:        merged.Presentations,
 			TotalSearchMatchCount:              merged.TotalMatches,
-			SearchedOnlyMoney:                  searchWasExplicitlyScopedToOneTrawler && installedTrawlerIdentityText(selectedTrawlers[0]) == "money",
+			EmptySearchNextCommands:            emptySearchNextCommands,
 		}
 		if merged.More > 0 {
 			searchResults.TrawlCommandArgumentsShowingMoreMatches = c.trawlCommandArgumentsShowingMoreMatches(

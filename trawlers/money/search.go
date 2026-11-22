@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	contract "github.com/opentrawl/opentrawl/trawlers/money/proto/trawl/money"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
-	contract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -79,8 +79,21 @@ func (*App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionReq
 				}
 			}
 			response.TotalSearchMatches++
-
-			response.TrawlerSearchMatchesInDisplayOrder = append(response.TrawlerSearchMatchesInDisplayOrder, &search.TrawlerSearchMatch{RecordAnchor: trawlkit.NewRecordAnchorIdentifier(openrecord.MoneyDetailAnchorID), CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(movement.reference()), SearchMatchPresentation: &search.SearchMatchPresentation{MatchingRecordKindDisplayName: "transaction", MatchingRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay{ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{CalendarDate: calendarDate}}, MoneyMovementSearchMatch: &contract.MoneyMovementSearchMatch{SignedAmountIntoMoneyAccount: amount, MoneyMovementIsPending: pending}, SearchMatchTextFieldsInDisplayOrder: []*search.SearchMatchTextField{trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(snippet.label, store.ParseFTS5MarkedText(snippet.snippet))}}})
+			var statusLabels []string
+			if pending {
+				statusLabels = []string{"Pending"}
+			}
+			response.TrawlerSearchMatchesInDisplayOrder = append(response.TrawlerSearchMatchesInDisplayOrder, &search.TrawlerSearchMatch{
+				RecordAnchor:             trawlkit.NewRecordAnchorIdentifier(openrecord.MoneyDetailAnchorID),
+				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(movement.reference()),
+				SearchMatchPresentation: &search.SearchMatchPresentation{
+					MatchingRecordKindDisplayName:       "transaction",
+					MatchingRecordAssociatedTime:        &presentation.ArchiveRecordAssociatedTimeForDisplay{ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{CalendarDate: calendarDate}},
+					MatchingRecordMonetaryAmount:        presentationAmount(amount, true),
+					MatchingRecordStatusLabels:          statusLabels,
+					SearchMatchTextFieldsInDisplayOrder: []*search.SearchMatchTextField{trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(snippet.label, store.ParseFTS5MarkedText(snippet.snippet))},
+				},
+			})
 		}
 	}
 	sort.SliceStable(response.TrawlerSearchMatchesInDisplayOrder, func(i, j int) bool {
@@ -89,6 +102,15 @@ func (*App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionReq
 	if query.Limit > 0 && len(response.TrawlerSearchMatchesInDisplayOrder) > query.Limit {
 		response.TrawlerSearchMatchesInDisplayOrder = response.TrawlerSearchMatchesInDisplayOrder[:query.Limit]
 		response.MoreSearchMatchesExist = true
+	}
+	if len(response.TrawlerSearchMatchesInDisplayOrder) == 0 {
+		response.EmptySearchNextCommands = []*presentation.DeclarativeTrawlCommand{{
+			CommandLabel: "Coverage",
+			CommandArgumentsAfterTrawlInvocation: []*presentation.DeclarativeTrawlCommandArgument{
+				declarativeTextArg("money"),
+				declarativeTextArg("accounts"),
+			},
+		}}
 	}
 	return response, nil
 }

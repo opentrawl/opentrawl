@@ -203,8 +203,10 @@ func unsupportedSharedTrawlerCommandInterface(trawler Trawler, operation federat
 			return "Searcher"
 		}
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN:
-		if _, ok := trawler.(RecordOpener); !ok {
-			return "RecordOpener"
+		_, implementsCanonicalOpener := trawler.(CanonicalRecordOpener)
+		_, implementsLegacyOpener := trawler.(RecordOpener)
+		if !implementsCanonicalOpener && !implementsLegacyOpener {
+			return "CanonicalRecordOpener"
 		}
 	case federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO:
 		if _, ok := trawler.(WhoMatcher); !ok {

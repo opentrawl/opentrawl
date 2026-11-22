@@ -29,7 +29,7 @@ type SearchResults struct {
 	SearchMatchesInDisplayOrder             []SearchResultPresentationForRootTrawlHumanOutput
 	TotalSearchMatchCount                   int
 	TrawlCommandArgumentsShowingMoreMatches []string
-	SearchedOnlyMoney                       bool
+	EmptySearchNextCommands                 []NextCommand
 }
 
 type SearchResultPresentationForRootTrawlHumanOutput struct {
@@ -45,8 +45,8 @@ func (output TrawlCommandOutput) WriteSearchResults(searchResults SearchResults)
 		if err := writeLine(writer, searchResultsEmptySentence(searchResults)); err != nil {
 			return err
 		}
-		if searchResults.SearchedOnlyMoney {
-			return writeNextCommands(writer, []NextCommand{nextCommandWithLabel(nextCommandLabelCoverage, "money", "accounts")})
+		if len(searchResults.EmptySearchNextCommands) > 0 {
+			return writeNextCommands(writer, searchResults.EmptySearchNextCommands)
 		}
 		return nil
 	}
@@ -157,16 +157,41 @@ func searchResultRowFromPresentation(
 			presentation.GetMatchingRecordKindDisplayName(),
 		),
 	}
-	if facts := presentation.GetMoneyMovementSearchMatch(); facts != nil {
-		row.moneyAmountText = FormatMoneyAmount(facts.GetSignedAmountIntoMoneyAccount(), true)
+	if amount := presentation.GetMatchingRecordMonetaryAmount(); amount != nil {
+		row.moneyAmountText = FormatExactMonetaryAmount(amount)
 		row.what = ""
 		row.match = row.moneyAmountText + " · " + row.match
 		row.moneyAmountMustRemainWhole = true
-		if facts.GetMoneyMovementIsPending() {
-			row.match = "Pending · " + row.match
+	}
+	for labelIndex := len(presentation.GetMatchingRecordStatusLabels()) - 1; labelIndex >= 0; labelIndex-- {
+		if statusLabel := strings.TrimSpace(presentation.GetMatchingRecordStatusLabels()[labelIndex]); statusLabel != "" {
+			row.match = statusLabel + " · " + row.match
 		}
 	}
 	return row
+}
+
+// PrepareSearchMatchMonetaryAmountForApp renders a typed monetary amount and
+// status labels into a leading SearchMatchTextField for app clients.
+func PrepareSearchMatchMonetaryAmountForApp(match *search.SearchMatchPresentation) {
+	if match == nil || match.GetMatchingRecordMonetaryAmount() == nil {
+		return
+	}
+	formatted := FormatExactMonetaryAmount(match.GetMatchingRecordMonetaryAmount())
+	for _, statusLabel := range match.GetMatchingRecordStatusLabels() {
+		if statusLabel = strings.TrimSpace(statusLabel); statusLabel != "" {
+			formatted += " " + strings.ToLower(statusLabel)
+		}
+	}
+	match.SearchMatchTextFieldsInDisplayOrder = append(
+		[]*search.SearchMatchTextField{{
+			SearchMatchTextFieldName: "Amount",
+			SearchMatchTextFragmentsInDisplayOrder: []*search.SearchMatchTextFragment{{
+				SearchMatchTextFragmentContent: formatted,
+			}},
+		}},
+		match.GetSearchMatchTextFieldsInDisplayOrder()...,
+	)
 }
 
 func SearchMatchPhysicalPlaceNamesForHumanOutput(presentation *search.SearchMatchPresentation) []string {

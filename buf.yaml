@@ -2,6 +2,7 @@ version: v2
 modules:
   - path: trawlkit/proto
   - path: trawlers/gmail/proto
+  - path: trawlers/money/proto
   - path: trawlers/twitter/proto
 lint:
   use:

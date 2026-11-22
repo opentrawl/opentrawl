@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -53,7 +52,7 @@ func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, e
 }
 
 func ensureCurrentSchema(ctx context.Context, st *ckstore.Store) error {
-	_, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema)
+	_, err := st.DB().ExecContext(ctx, schema+state.Schema)
 	return err
 }
 

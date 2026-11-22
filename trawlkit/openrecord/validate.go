@@ -51,22 +51,6 @@ func Validate(record *open.OpenRecord) error {
 		return err
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
-	case *open.OpenRecord_MoneyAccount:
-		if !canonicalArchiveRecordReferencesEqual(typedOpenedRecord.MoneyAccount.GetCanonicalRecordReference(), canonicalOpenedRecordReference) {
-			return fmt.Errorf("money account reference differs")
-		}
-		return nil
-	case *open.OpenRecord_OpenedMoneyMovement:
-		if !canonicalArchiveRecordReferencesEqual(typedOpenedRecord.OpenedMoneyMovement.GetMoneyMovement().GetCanonicalRecordReference(), canonicalOpenedRecordReference) {
-			return fmt.Errorf("money movement reference differs")
-		}
-		return nil
-	case *open.OpenRecord_OpenedMoneyPendingMovement:
-		if !canonicalArchiveRecordReferencesEqual(typedOpenedRecord.OpenedMoneyPendingMovement.GetMoneyPendingMovement().GetCanonicalRecordReference(), canonicalOpenedRecordReference) {
-			return fmt.Errorf("pending money movement reference differs")
-		}
-		return nil
-
 	case *open.OpenRecord_OpenedPhotoRecord:
 		if typedOpenedRecord.OpenedPhotoRecord == nil || typedOpenedRecord.OpenedPhotoRecord.GetAppleLibraryPhotoFacts() == nil {
 			return fmt.Errorf("opened photo facts are missing")
@@ -135,11 +119,6 @@ func ValidateRequestedAnchor(
 		return fmt.Errorf("requested anchor identifier is empty")
 	}
 	switch typedOpenedRecord := record.GetTypedOpenedRecord().(type) {
-	case *open.OpenRecord_MoneyAccount, *open.OpenRecord_OpenedMoneyMovement, *open.OpenRecord_OpenedMoneyPendingMovement:
-		if requestedAnchorIdentifier != MoneyDetailAnchorID {
-			return fmt.Errorf("opened Money record does not contain requested anchor %q", requestedAnchorIdentifier)
-		}
-
 	case *open.OpenRecord_OpenedPhotoRecord:
 		if requestedAnchorIdentifier != PhotoDetailAnchorID {
 			return fmt.Errorf("opened photo does not contain requested anchor %q", requestedAnchorIdentifier)

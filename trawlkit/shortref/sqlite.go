@@ -13,6 +13,7 @@ create table if not exists short_refs (
   alias text not null,
   full_ref text not null,
   canonical_ref text not null,
+  tombstoned integer not null default 0,
   primary key (alias, full_ref)
 );
 `
@@ -38,10 +39,44 @@ func EnsureSchema(ctx context.Context, db SQLiteDB) error {
 	if _, err := db.ExecContext(ctx, Schema); err != nil {
 		return fmt.Errorf("ensure short ref schema: %w", err)
 	}
+	hasTombstonedColumn, err := shortRefsTableHasTombstonedColumn(ctx, db)
+	if err != nil {
+		return fmt.Errorf("inspect short ref schema: %w", err)
+	}
+	if !hasTombstonedColumn {
+		if _, err := db.ExecContext(ctx, `alter table short_refs add column tombstoned integer not null default 0`); err != nil {
+			return fmt.Errorf("add tombstoned column to short ref schema: %w", err)
+		}
+	}
 	if _, err := db.ExecContext(ctx, indexSchema); err != nil {
 		return fmt.Errorf("ensure short ref indexes: %w", err)
 	}
 	return nil
+}
+
+func shortRefsTableHasTombstonedColumn(ctx context.Context, db SQLiteDB) (bool, error) {
+	rows, err := db.QueryContext(ctx, `pragma table_info(short_refs)`)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var (
+			cid          int
+			name         string
+			colType      string
+			notNull      int
+			defaultValue sql.NullString
+			pk           int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == "tombstoned" {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func NewSQLiteIndex(db SQLiteDB) *SQLiteIndex {
@@ -57,9 +92,9 @@ func (i *SQLiteIndex) UpsertCanonical(ctx context.Context, alias, fullRef, canon
 		canonicalRef = fullRef
 	}
 	_, err := i.db.ExecContext(ctx, `
-insert into short_refs(alias, full_ref, canonical_ref)
-values (?, ?, ?)
-on conflict(alias, full_ref) do update set canonical_ref = excluded.canonical_ref
+insert into short_refs(alias, full_ref, canonical_ref, tombstoned)
+values (?, ?, ?, 0)
+on conflict(alias, full_ref) do update set canonical_ref = excluded.canonical_ref, tombstoned = 0
 `, alias, fullRef, canonicalRef)
 	if err != nil {
 		return fmt.Errorf("upsert short ref: %w", err)
@@ -102,6 +137,7 @@ func (i *SQLiteIndex) lookup(ctx context.Context, alias string) ([]string, error
 select distinct canonical_ref
 from short_refs
 where alias = ?
+  and tombstoned = 0
 order by canonical_ref
 `, alias)
 	if err != nil {
@@ -196,7 +232,7 @@ func (i *SQLiteIndex) DeleteEntriesForFullReferencesAbsentFromCompleteSnapshot(
 		fullReferenceIsPresentInCompleteSnapshot[fullReferencePresentInCompleteSnapshot] = struct{}{}
 	}
 
-	rows, err := i.db.QueryContext(ctx, `select distinct full_ref from short_refs`)
+	rows, err := i.db.QueryContext(ctx, `select distinct full_ref from short_refs where tombstoned = 0`)
 	if err != nil {
 		return fmt.Errorf("read short references before complete snapshot replacement: %w", err)
 	}
@@ -222,6 +258,8 @@ func (i *SQLiteIndex) DeleteEntriesForFullReferencesAbsentFromCompleteSnapshot(
 		return fmt.Errorf("close short references before complete snapshot replacement: %w", err)
 	}
 
+	// Tombstone absent references instead of deleting their rows so previously
+	// issued aliases stay reserved and can never be recycled onto a new record.
 	for start := 0; start < len(fullReferencesAbsentFromCompleteSnapshot); start += sqliteParameterChunkSize {
 		end := start + sqliteParameterChunkSize
 		if end > len(fullReferencesAbsentFromCompleteSnapshot) {
@@ -234,10 +272,10 @@ func (i *SQLiteIndex) DeleteEntriesForFullReferencesAbsentFromCompleteSnapshot(
 		}
 		if _, err := i.db.ExecContext(
 			ctx,
-			`delete from short_refs where full_ref in (`+placeholders+`)`,
+			`update short_refs set tombstoned = 1 where full_ref in (`+placeholders+`) and tombstoned = 0`,
 			arguments...,
 		); err != nil {
-			return fmt.Errorf("delete short references absent from complete snapshot: %w", err)
+			return fmt.Errorf("tombstone short references absent from complete snapshot: %w", err)
 		}
 	}
 	return nil
@@ -256,9 +294,10 @@ func (i *SQLiteIndex) UpdateCanonicalRefs(ctx context.Context, canonicalRefs map
 		}
 		if _, err := i.db.ExecContext(ctx, `
 update short_refs
-set canonical_ref = ?
+set canonical_ref = ?,
+    tombstoned = 0
 where full_ref = ?
-  and coalesce(canonical_ref, '') <> ?
+  and (coalesce(canonical_ref, '') <> ? or tombstoned <> 0)
 `, canonicalRef, fullRef, canonicalRef); err != nil {
 			return fmt.Errorf("update short ref canonical ref: %w", err)
 		}
@@ -307,6 +346,7 @@ func (i *SQLiteIndex) aliases(ctx context.Context, fullRefs []string) (map[strin
 select canonical_ref, alias
 from short_refs
 where canonical_ref in (`+placeholders+`)
+  and tombstoned = 0
 order by canonical_ref, length(alias) desc
 `, args...)
 	if err != nil {

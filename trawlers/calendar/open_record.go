@@ -11,17 +11,11 @@ import (
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 )
 
-var _ trawlkit.RecordOpener = (*Crawler)(nil)
-
-func (c *Crawler) OpenRecord(
+func (c *Crawler) OpenCanonicalRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
+	canonicalOpenedRecordReference *trawlkit.CanonicalArchiveRecordReference,
 ) (*open.OpenRecord, error) {
-	canonicalOpenedRecordReference, err := c.resolveOpenRef(ctx, req, localShortReference)
-	if err != nil {
-		return nil, err
-	}
 	if calendarIdentifier, isCalendarReference := archive.CalendarIdentifierFromCanonicalRecordReference(trawlkit.CanonicalArchiveRecordReferenceText(canonicalOpenedRecordReference)); isCalendarReference {
 		return c.openCalendarRecord(ctx, req, calendarIdentifier)
 	}

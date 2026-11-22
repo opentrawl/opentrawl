@@ -1,5 +1,6 @@
 // Written by AI on 2026.10.31 by model gpt-6-astra, with claude opus 5.5.
-// Design contract; unreleased. Input and output use the same financial records.
+// Moved to trawlers/money/proto on 2026.11.22 by model gemini-4-neon.
+// Input and stored archive records for the Money trawler.
 syntax = "proto3";
 package trawl.money;
 
@@ -7,7 +8,7 @@ import "google/protobuf/timestamp.proto";
 import "trawl/identity/identity.proto";
 import "trawl/presentation/presentation.proto";
 
-option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money;money";
+option go_package = "github.com/opentrawl/opentrawl/trawlers/money/proto/trawl/money;money";
 
 // Decimal strings, never binary floats. No exponent or grouping separators.
 message ExactMonetaryAmount {
@@ -169,57 +170,6 @@ message MoneyImport {
   string provider_display_name = 1;
   google.protobuf.Timestamp provider_read_time = 2;
   repeated MoneyAccountImport money_account_imports = 3;
-}
-
-message MoneyAccountListResponse {
-  repeated MoneyAccount money_accounts_in_display_order = 1;
-}
-
-message MoneyMovementListRequest {
-  trawl.identity.CanonicalArchiveRecordReference money_account_record_reference = 1;
-  trawl.presentation.CalendarDate first_movement_date = 2;
-  trawl.presentation.CalendarDate last_movement_date = 3;
-  MoneyMovementDateBasis movement_date_filter_basis = 4;
-  bool list_pending_movements = 5;
-  uint32 maximum_movement_count = 6;
-  string matching_text = 7;
-}
-
-// One group per account keeps the account out of every row without making a
-// multi-account result ambiguous. Counts and limits apply across all groups.
-message MoneyAccountMovementList {
-  MoneyAccount money_account = 1;
-  repeated MoneyMovement booked_movements_newest_first = 2;
-  repeated MoneyPendingMovement pending_movements_newest_first = 3;
-}
-
-message MoneyMovementListResponse {
-  repeated MoneyAccountMovementList money_account_movement_lists = 1;
-  uint64 total_matching_movement_count = 2;
-  bool more_matching_movements_exist = 3;
-  bool lists_pending_movements = 4;
-  uint32 next_maximum_movement_count = 5;
- MoneyMovementDateBasis movement_date_basis = 6;
-}
-
-message OpenedMoneyMovement {
-  MoneyMovement money_movement = 1;
-  MoneyAccount money_account = 2;
-  string provider_display_name = 3;
-  google.protobuf.Timestamp provider_read_time = 4;
-}
-
-message OpenedMoneyPendingMovement {
-  MoneyPendingMovement money_pending_movement = 1;
-  MoneyAccount money_account = 2;
-  string provider_display_name = 3;
-  google.protobuf.Timestamp provider_read_time = 4;
-}
-
-// Search keeps its existing columns; the shared renderer formats the amount.
-message MoneyMovementSearchMatch {
-  ExactMonetaryAmount signed_amount_into_money_account = 1;
-  bool money_movement_is_pending = 2;
 }
 
 // Base and quote are explicit: ING and Amex report opposite rate directions.

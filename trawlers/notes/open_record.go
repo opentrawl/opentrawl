@@ -18,14 +18,12 @@ type openedNoteValuesLoadedFromNotesArchive struct {
 	openedNoteVersionBody              archive.VersionBody
 }
 
-var _ trawlkit.RecordOpener = (*Crawler)(nil)
-
-func (c *Crawler) OpenRecord(
+func (c *Crawler) OpenCanonicalRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
+	canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference,
 ) (*open.OpenRecord, error) {
-	openedNoteValues, err := c.loadOpenNote(ctx, req, localShortReference)
+	openedNoteValues, err := c.loadOpenNote(ctx, req, canonicalRecordReference)
 	if err != nil {
 		return nil, err
 	}

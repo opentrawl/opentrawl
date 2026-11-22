@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	contract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
+	contract "github.com/opentrawl/opentrawl/trawlers/money/proto/trawl/money"
 )
 
 var exactMoneyDecimal = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)

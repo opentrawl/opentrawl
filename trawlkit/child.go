@@ -24,12 +24,14 @@ import (
 )
 
 type childFrame struct {
-	kind                   childFrameKind
-	progress               Progress
-	logText                string
-	trawlerCommandResponse *command.TrawlerCommandResponse
-	updateReport           *updatecontract.TrawlerArchiveUpdateReport
-	errorDescription       *output.ErrorDescription
+	kind                                childFrameKind
+	progress                            Progress
+	logText                             string
+	shortReferenceBatch                 []ShortReferenceAssignmentCandidate
+	shortReferenceBatchCompleteSnapshot bool
+	trawlerCommandResponse              *command.TrawlerCommandResponse
+	updateReport                        *updatecontract.TrawlerArchiveUpdateReport
+	errorDescription                    *output.ErrorDescription
 }
 
 type childFrameKind int
@@ -38,6 +40,7 @@ const (
 	childFrameResult childFrameKind = iota
 	childFrameProgress
 	childFrameLog
+	childFrameShortReferenceBatch
 )
 
 const (
@@ -241,7 +244,7 @@ func (r runner) runChild(ctx context.Context, trawler Trawler, command targetTra
 	if command.timeout > 0 {
 		watchdog = command.timeout
 	}
-	result := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr, r.opts.newWatchdogTimer)
+	result, stagedShortReferences, receivedShortReferences, completeShortReferenceSnapshot := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr, r.opts.newWatchdogTimer)
 	if result.err == nil {
 		switch {
 		case command.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE ||
@@ -253,16 +256,35 @@ func (r runner) runChild(ctx context.Context, trawler Trawler, command targetTra
 			result = executionResult{err: errors.New("child returned a update result for a non-update command")}
 		}
 	}
+	if result.err == nil && receivedShortReferences {
+		coreShortRefStore, openErr := openCoreShortReferenceStore(ctx, paths.TrawlerArchivePaths, coreShortReferenceStoreReadWrite)
+		if openErr != nil {
+			result = executionResult{err: openErr}
+		} else if coreShortRefStore != nil {
+			pubErr := publishShortReferenceCandidatesToCoreStore(
+				ctx,
+				coreShortRefStore,
+				stagedShortReferences,
+				completeShortReferenceSnapshot,
+			)
+			closeErr := coreShortRefStore.Close()
+			if pubErr != nil {
+				result = executionResult{err: pubErr}
+			} else if closeErr != nil {
+				result = executionResult{err: closeErr}
+			}
+		}
+	}
 	if result.err == nil && result.trawlerCommandResponse != nil {
 		var localShortReferencesByCanonicalRecordReference []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
 		if len(trawlerCommandResponseCanonicalRecordReferences(result.trawlerCommandResponse)) > 0 {
-			archiveStore, openErr := openStore(ctx, paths.TrawlerArchivePaths, storeRead)
+			coreShortRefStore, openErr := openCoreShortReferenceStore(ctx, paths.TrawlerArchivePaths, coreShortReferenceStoreReadWrite)
 			if openErr != nil {
 				result = executionResult{err: openErr}
 			} else {
 				request := &TrawlerCommandExecutionRequest{
-					OpenedTrawlerArchiveStore: archiveStore,
-					TrawlerArchivePaths:       paths.TrawlerArchivePaths,
+					coreShortReferenceStore: coreShortRefStore,
+					TrawlerArchivePaths:     paths.TrawlerArchivePaths,
 				}
 				localShortReferencesByCanonicalRecordReference, result.err =
 					trawlerCommandResponseLocalShortReferencesByCanonicalRecordReference(
@@ -270,7 +292,7 @@ func (r runner) runChild(ctx context.Context, trawler Trawler, command targetTra
 						request,
 						result.trawlerCommandResponse,
 					)
-				if closeErr := archiveStore.Close(); result.err == nil && closeErr != nil {
+				if closeErr := coreShortRefStore.Close(); result.err == nil && closeErr != nil {
 					result.err = closeErr
 				}
 			}
@@ -342,7 +364,7 @@ func setEnvValue(env []string, key, value string) []string {
 	return append(out, prefix+value)
 }
 
-func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr func() string, watchdog, grace time.Duration, runLog *cklog.Run, verbosity int, logStream io.Writer, newTimer func(time.Duration) watchdogTimer) executionResult {
+func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr func() string, watchdog, grace time.Duration, runLog *cklog.Run, verbosity int, logStream io.Writer, newTimer func(time.Duration) watchdogTimer) (executionResult, []ShortReferenceAssignmentCandidate, bool, bool) {
 	if newTimer == nil {
 		newTimer = newRealWatchdogTimer
 	}
@@ -360,14 +382,17 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 	timer := newTimer(watchdog)
 	defer timer.stop()
 	var terminal *childFrame
+	var stagedShortReferences []ShortReferenceAssignmentCandidate
+	receivedShortReferences := false
+	completeShortReferenceSnapshot := false
 	for {
 		select {
 		case <-ctx.Done():
 			terminateChildAndDrain(cmd, done, frames, decodeErrs, grace)
-			return terminalFailure(terminal, ctx.Err())
+			return terminalFailure(terminal, ctx.Err()), nil, false, false
 		case <-timer.tick():
 			terminateChildAndDrain(cmd, done, frames, decodeErrs, grace)
-			return terminalFailure(terminal, fmt.Errorf("mutating command made no progress for %s", watchdog))
+			return terminalFailure(terminal, fmt.Errorf("mutating command made no progress for %s", watchdog)), nil, false, false
 		case frame, ok := <-frames:
 			if !ok {
 				frames = nil
@@ -375,7 +400,7 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 			}
 			if terminal != nil {
 				terminateChildAndDrain(cmd, done, frames, decodeErrs, grace)
-				return terminalFailure(terminal, errors.New("child sent a frame after its terminal result"))
+				return terminalFailure(terminal, errors.New("child sent a frame after its terminal result")), nil, false, false
 			}
 			timer.reset(watchdog)
 			switch frame.kind {
@@ -383,6 +408,12 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 				logProgress(runLog, frame.progress)
 			case childFrameLog:
 				_ = runLog.ShowAlreadyStoredChildLogLine(frame.logText)
+			case childFrameShortReferenceBatch:
+				receivedShortReferences = true
+				stagedShortReferences = append(stagedShortReferences, frame.shortReferenceBatch...)
+				if frame.shortReferenceBatchCompleteSnapshot {
+					completeShortReferenceSnapshot = true
+				}
 			case childFrameResult:
 				terminal = &frame
 			}
@@ -390,17 +421,17 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 			waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace, newTimer)
 			if !errors.Is(err, io.EOF) {
 				if waitErr != nil {
-					return executionResult{err: childExitError(waitErr, stderr())}
+					return executionResult{err: childExitError(waitErr, stderr())}, nil, false, false
 				}
-				return executionResult{err: fmt.Errorf("read child wire: %w", err)}
+				return executionResult{err: fmt.Errorf("read child wire: %w", err)}, nil, false, false
 			}
 			if terminal == nil {
 				if waitErr != nil {
-					return executionResult{err: childExitError(waitErr, stderr())}
+					return executionResult{err: childExitError(waitErr, stderr())}, nil, false, false
 				}
-				return executionResult{err: errors.New("child exited without a result frame")}
+				return executionResult{err: errors.New("child exited without a result frame")}, nil, false, false
 			}
-			return terminalResult(*terminal, waitErr, stderr())
+			return terminalResult(*terminal, waitErr, stderr()), stagedShortReferences, receivedShortReferences, completeShortReferenceSnapshot
 		}
 	}
 }
@@ -438,6 +469,14 @@ func childProgressFrame(progress Progress) childFrame {
 
 func childLogFrame(text string) childFrame {
 	return childFrame{kind: childFrameLog, logText: text}
+}
+
+func childShortReferenceBatchFrame(entries []ShortReferenceAssignmentCandidate, completeSnapshot bool) childFrame {
+	return childFrame{
+		kind:                                childFrameShortReferenceBatch,
+		shortReferenceBatch:                 entries,
+		shortReferenceBatchCompleteSnapshot: completeSnapshot,
+	}
 }
 
 func childResultFrame(response *command.TrawlerCommandResponse, report *updatecontract.TrawlerArchiveUpdateReport, errorDescription *output.ErrorDescription) childFrame {

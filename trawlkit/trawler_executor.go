@@ -161,20 +161,78 @@ func (operation *executeTrawlerOpenRecordOperation) execute(ctx context.Context,
 		}
 		return nil
 	}
-	opener, ok := trawler.(RecordOpener)
-	if !ok {
+	var record *open.OpenRecord
+	if canonicalOpener, ok := trawler.(CanonicalRecordOpener); ok {
+		canonicalRefs, resolveErr := req.ResolveShortReference(ctx, operation.localShortReference)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		req.RequestedRecordAnchor = operation.recordAnchor
+		record, err = canonicalOpener.OpenCanonicalRecord(ctx, req, canonicalRefs[0])
+		if err != nil {
+			return err
+		}
+	} else if opener, ok := trawler.(RecordOpener); ok {
+		// Temporary fallback for trawlers not yet migrated to CanonicalRecordOpener.
+		req.RequestedRecordAnchor = operation.recordAnchor
+		record, err = opener.OpenRecord(ctx, req, operation.localShortReference)
+		if err != nil {
+			return err
+		}
+	} else {
 		return errors.New("trawler does not support typed open")
-	}
-	req.RequestedRecordAnchor = operation.recordAnchor
-	record, err := opener.OpenRecord(ctx, req, operation.localShortReference)
-	if err != nil {
-		return err
 	}
 	normalizeOpenedMessageConversationContext(record)
 	if err := setGloballyRoutableTrawlLinkForConversationContainingOpenedMessage(ctx, req, record); err != nil {
 		return err
 	}
+	if err := resolveTrawlerSpecificOpenedRecordLinks(ctx, req, record); err != nil {
+		return err
+	}
 	operation.result = record
+	return nil
+}
+
+func resolveTrawlerSpecificOpenedRecordLinks(
+	ctx context.Context,
+	req *TrawlerCommandExecutionRequest,
+	record *open.OpenRecord,
+) error {
+	specific := record.GetTrawlerSpecificOpenedRecordPresentation()
+	if specific == nil || specific.GetDetailPresentation() == nil {
+		return nil
+	}
+	var canonicalRefs []*CanonicalArchiveRecordReference
+	add := func(ref *CanonicalArchiveRecordReference) {
+		if CanonicalArchiveRecordReferenceText(ref) != "" {
+			canonicalRefs = append(canonicalRefs, ref)
+		}
+	}
+	add(record.GetCanonicalRecordReference())
+	addTrawlerSpecificDetailCanonicalRecordReferences(specific.GetDetailPresentation(), add)
+	uniqueRefs := deduplicateCanonicalRecordReferences(canonicalRefs)
+	if len(uniqueRefs) == 0 {
+		return nil
+	}
+	shortRefs, err := req.LocalShortReferencesForCanonicalArchiveRecordReferences(ctx, uniqueRefs)
+	if err != nil {
+		return fmt.Errorf("resolve links for opened record: %w", err)
+	}
+	resolvedLinks := make([]*open.ResolvedCanonicalRecordTrawlLink, 0, len(shortRefs))
+	for _, entry := range shortRefs {
+		trawlLink, err := ComposeGloballyRoutableTrawlLink(GloballyRoutableTrawlLinkRoute{
+			RegisteredTrawler:   record.GetRecordTrawler(),
+			LocalShortReference: entry.LocalTrawlerShortReference,
+		})
+		if err != nil {
+			return fmt.Errorf("compose link for opened record: %w", err)
+		}
+		resolvedLinks = append(resolvedLinks, &open.ResolvedCanonicalRecordTrawlLink{
+			CanonicalRecordReference:  entry.CanonicalArchiveRecordReference,
+			GloballyRoutableTrawlLink: trawlLink,
+		})
+	}
+	specific.ResolvedRecordLinks = resolvedLinks
 	return nil
 }
 

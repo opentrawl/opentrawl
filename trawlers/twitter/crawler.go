@@ -46,15 +46,16 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Trawler                = (*Crawler)(nil)
-	_ trawlkit.Updater                = (*Crawler)(nil)
-	_ trawlkit.Searcher               = (*Crawler)(nil)
-	_ trawlkit.RecordOpener           = (*Crawler)(nil)
-	_ trawlkit.ConversationLister     = (*Crawler)(nil)
-	_ trawlkit.TrawlerMessageLister   = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
-	_ trawlkit.PersonMessageCounter   = (*Crawler)(nil)
-	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
+	_ trawlkit.Trawler                        = (*Crawler)(nil)
+	_ trawlkit.Updater                        = (*Crawler)(nil)
+	_ trawlkit.Searcher                       = (*Crawler)(nil)
+	_ trawlkit.CanonicalRecordOpener          = (*Crawler)(nil)
+	_ trawlkit.ConversationLister             = (*Crawler)(nil)
+	_ trawlkit.TrawlerMessageLister           = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher                     = (*Crawler)(nil)
+	_ trawlkit.PersonMessageCounter           = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider         = (*Crawler)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -72,7 +73,29 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 			LeavesMachine:   "Nothing from your local archive is uploaded. Only explicit connect and update operations request your account data from X.",
 			NetworkRequests: "Web-session mode requests x.com (and abs.twimg.com bundles for query ID discovery); official API mode requests api.x.com. Import, search, browse and open are strictly local.",
 		},
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:              "bubble.left.and.bubble.right.fill",
+			AccentColor:             "#111111",
+			ArtworkBundleIdentifier: "com.atebits.Tweetie2",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE,
 	}
+}
+
+func (c *Crawler) ListArchiveRecordReferencesForShortReferences(
+	ctx context.Context,
+	req *trawlkit.TrawlerCommandExecutionRequest,
+) ([]trawlkit.ShortReferenceAssignmentCandidate, bool, error) {
+	var candidates []trawlkit.ShortReferenceAssignmentCandidate
+	err := c.handler(ctx, req).withReadOnlyStore(func(st *store.Store) error {
+		var listErr error
+		candidates, listErr = st.ListShortReferenceCandidates(ctx)
+		return listErr
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return candidates, false, nil
 }
 
 func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.TrawlerConfigurationFilePath) error {
@@ -250,12 +273,12 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	return c.handler(ctx, req).search(ctx, query)
 }
 
-func (c *Crawler) OpenRecord(
+func (c *Crawler) OpenCanonicalRecord(
 	ctx context.Context,
 	req *trawlkit.TrawlerCommandExecutionRequest,
-	localShortReference *trawlkit.LocalTrawlerShortReference,
+	canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference,
 ) (*open.OpenRecord, error) {
-	record, err := c.handler(ctx, req).loadOpenRecord(localShortReference)
+	record, err := c.handler(ctx, req).loadOpenRecord(canonicalRecordReference)
 	if err != nil {
 		return nil, err
 	}

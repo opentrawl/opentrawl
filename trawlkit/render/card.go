@@ -14,8 +14,10 @@ type cardField struct {
 
 type card struct {
 	title        string
+	subtitle     string
 	fields       []cardField
 	body         string
+	footer       string
 	nextCommands []NextCommand
 }
 
@@ -23,6 +25,12 @@ func writeCard(writer io.Writer, openedRecordCard card) error {
 	wroteTitleOrField := false
 	if title := strings.TrimSpace(openedRecordCard.title); title != "" {
 		if err := writeLines(writer, Wrap(title, OutputWidth(writer))); err != nil {
+			return err
+		}
+		wroteTitleOrField = true
+	}
+	if subtitle := strings.TrimSpace(openedRecordCard.subtitle); subtitle != "" {
+		if err := writeLines(writer, Wrap(subtitle, OutputWidth(writer))); err != nil {
 			return err
 		}
 		wroteTitleOrField = true
@@ -45,6 +53,17 @@ func writeCard(writer io.Writer, openedRecordCard card) error {
 			}
 		}
 		if err := writeLines(writer, Wrap(body, OutputWidth(writer))); err != nil {
+			return err
+		}
+		wroteTitleOrField = true
+	}
+	if footer := strings.TrimSpace(openedRecordCard.footer); footer != "" {
+		if wroteTitleOrField {
+			if err := writeLine(writer, ""); err != nil {
+				return err
+			}
+		}
+		if err := writeLines(writer, Wrap(footer, OutputWidth(writer))); err != nil {
 			return err
 		}
 	}

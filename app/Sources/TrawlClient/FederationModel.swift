@@ -194,6 +194,14 @@ public struct SearchMatchPresentation: Sendable, Equatable {
 public struct SearchMatchIdentifier: Sendable, Hashable {
   public let trawlLink: GloballyRoutableTrawlLink
   public let recordAnchor: RecordAnchorIdentifier
+
+  public init(
+    trawlLink: GloballyRoutableTrawlLink,
+    recordAnchor: RecordAnchorIdentifier
+  ) {
+    self.trawlLink = trawlLink
+    self.recordAnchor = recordAnchor
+  }
 }
 
 public struct SearchMatch: Sendable, Equatable, Identifiable {

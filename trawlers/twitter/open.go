@@ -13,11 +13,8 @@ import (
 
 const openDMContextRadius = 10
 
-func (r *runtime) loadOpenRecord(localShortReference *trawlkit.LocalTrawlerShortReference) (*open.OpenRecord, error) {
-	canonicalRef, err := r.resolveOpenCanonicalReference(localShortReference)
-	if err != nil {
-		return nil, err
-	}
+func (r *runtime) loadOpenRecord(canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference) (*open.OpenRecord, error) {
+	canonicalRef := trawlkit.CanonicalArchiveRecordReferenceText(canonicalRecordReference)
 	switch {
 	case strings.HasPrefix(canonicalRef, store.TweetRefPrefix):
 		tweetID, err := store.ParseTweetRef(canonicalRef)
@@ -138,27 +135,6 @@ func (r *runtime) loadOpenDirectMessageConversationByID(id string) (*open.OpenRe
 			ConversationRecord: record,
 		},
 	}, nil
-}
-
-func (r *runtime) resolveOpenCanonicalReference(localShortReference *trawlkit.LocalTrawlerShortReference) (string, error) {
-	localShortReferenceText := trawlkit.LocalTrawlerShortReferenceText(localShortReference)
-	if !trawlkit.ValidShortRef(localShortReferenceText) {
-		return "", r.unknownShortRef()
-	}
-	matches, err := r.req.ResolveShortReference(r.ctx, localShortReference)
-	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
-		return "", r.unknownShortRef()
-	}
-	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
-		return "", r.contractError("ambiguous_short_ref", render.SeveralArchiveRecordsHaveLink(render.ArchiveRecordKindNounPost).Error())
-	}
-	if err != nil {
-		return "", err
-	}
-	if len(matches) != 1 {
-		return "", r.unknownShortRef()
-	}
-	return trawlkit.CanonicalArchiveRecordReferenceText(matches[0]), nil
 }
 
 func (r *runtime) unknownShortRef() error {

@@ -85,14 +85,16 @@ public nonisolated struct Trawl_Search_SearchMatchPresentation: Sendable {
   /// Clears the value of `appleLibraryPhotoFacts`. Subsequent reads from it will return its default value.
   public mutating func clearAppleLibraryPhotoFacts() {self._appleLibraryPhotoFacts = nil}
 
-  public var moneyMovementSearchMatch: Trawl_Money_MoneyMovementSearchMatch {
-    get {_moneyMovementSearchMatch ?? Trawl_Money_MoneyMovementSearchMatch()}
-    set {_moneyMovementSearchMatch = newValue}
+  public var matchingRecordMonetaryAmount: Trawl_Presentation_ExactMonetaryAmount {
+    get {_matchingRecordMonetaryAmount ?? Trawl_Presentation_ExactMonetaryAmount()}
+    set {_matchingRecordMonetaryAmount = newValue}
   }
-  /// Returns true if `moneyMovementSearchMatch` has been explicitly set.
-  public var hasMoneyMovementSearchMatch: Bool {self._moneyMovementSearchMatch != nil}
-  /// Clears the value of `moneyMovementSearchMatch`. Subsequent reads from it will return its default value.
-  public mutating func clearMoneyMovementSearchMatch() {self._moneyMovementSearchMatch = nil}
+  /// Returns true if `matchingRecordMonetaryAmount` has been explicitly set.
+  public var hasMatchingRecordMonetaryAmount: Bool {self._matchingRecordMonetaryAmount != nil}
+  /// Clears the value of `matchingRecordMonetaryAmount`. Subsequent reads from it will return its default value.
+  public mutating func clearMatchingRecordMonetaryAmount() {self._matchingRecordMonetaryAmount = nil}
+
+  public var matchingRecordStatusLabels: [String] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -100,7 +102,7 @@ public nonisolated struct Trawl_Search_SearchMatchPresentation: Sendable {
 
   fileprivate var _matchingRecordAssociatedTime: Trawl_Presentation_ArchiveRecordAssociatedTimeForDisplay? = nil
   fileprivate var _appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts? = nil
-  fileprivate var _moneyMovementSearchMatch: Trawl_Money_MoneyMovementSearchMatch? = nil
+  fileprivate var _matchingRecordMonetaryAmount: Trawl_Presentation_ExactMonetaryAmount? = nil
 }
 
 public nonisolated struct Trawl_Search_TrawlerSearchMatch: @unchecked Sendable {
@@ -154,6 +156,8 @@ public nonisolated struct Trawl_Search_TrawlerSearchResponse: Sendable {
   public var totalSearchMatchesIsLowerBound: Bool = false
 
   public var moreSearchMatchesExist: Bool = false
+
+  public var emptySearchNextCommands: [Trawl_Presentation_DeclarativeTrawlCommand] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -236,7 +240,7 @@ nonisolated extension Trawl_Search_SearchMatchTextField: SwiftProtobuf.Message, 
 
 nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchMatchPresentation"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}matching_record_associated_time\0\u{3}registered_trawler_display_name\0\u{3}matching_record_display_name\0\u{3}people_related_to_matching_record\0\u{3}digital_container_names_nearest_to_broadest\0\u{3}physical_place_names_specific_to_broadest\0\u{3}search_match_text_fields_in_display_order\0\u{3}matching_record_kind_display_name\0\u{3}apple_library_photo_facts\0\u{3}money_movement_search_match\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}matching_record_associated_time\0\u{3}registered_trawler_display_name\0\u{3}matching_record_display_name\0\u{3}people_related_to_matching_record\0\u{3}digital_container_names_nearest_to_broadest\0\u{3}physical_place_names_specific_to_broadest\0\u{3}search_match_text_fields_in_display_order\0\u{3}matching_record_kind_display_name\0\u{3}apple_library_photo_facts\0\u{3}matching_record_monetary_amount\0\u{3}matching_record_status_labels\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -253,7 +257,8 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.searchMatchTextFieldsInDisplayOrder) }()
       case 8: try { try decoder.decodeSingularStringField(value: &self.matchingRecordKindDisplayName) }()
       case 9: try { try decoder.decodeSingularMessageField(value: &self._appleLibraryPhotoFacts) }()
-      case 10: try { try decoder.decodeSingularMessageField(value: &self._moneyMovementSearchMatch) }()
+      case 10: try { try decoder.decodeSingularMessageField(value: &self._matchingRecordMonetaryAmount) }()
+      case 11: try { try decoder.decodeRepeatedStringField(value: &self.matchingRecordStatusLabels) }()
       default: break
       }
     }
@@ -291,9 +296,12 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
     try { if let v = self._appleLibraryPhotoFacts {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
     } }()
-    try { if let v = self._moneyMovementSearchMatch {
+    try { if let v = self._matchingRecordMonetaryAmount {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
     } }()
+    if !self.matchingRecordStatusLabels.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.matchingRecordStatusLabels, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -307,7 +315,8 @@ nonisolated extension Trawl_Search_SearchMatchPresentation: SwiftProtobuf.Messag
     if lhs.searchMatchTextFieldsInDisplayOrder != rhs.searchMatchTextFieldsInDisplayOrder {return false}
     if lhs.matchingRecordKindDisplayName != rhs.matchingRecordKindDisplayName {return false}
     if lhs._appleLibraryPhotoFacts != rhs._appleLibraryPhotoFacts {return false}
-    if lhs._moneyMovementSearchMatch != rhs._moneyMovementSearchMatch {return false}
+    if lhs._matchingRecordMonetaryAmount != rhs._matchingRecordMonetaryAmount {return false}
+    if lhs.matchingRecordStatusLabels != rhs.matchingRecordStatusLabels {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -399,7 +408,7 @@ nonisolated extension Trawl_Search_TrawlerSearchMatch: SwiftProtobuf.Message, Sw
 
 nonisolated extension Trawl_Search_TrawlerSearchResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerSearchResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}trawler_search_matches_in_display_order\0\u{3}total_search_matches\0\u{3}total_search_matches_is_lower_bound\0\u{3}more_search_matches_exist\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}trawler_search_matches_in_display_order\0\u{3}total_search_matches\0\u{3}total_search_matches_is_lower_bound\0\u{3}more_search_matches_exist\0\u{3}empty_search_next_commands\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -411,6 +420,7 @@ nonisolated extension Trawl_Search_TrawlerSearchResponse: SwiftProtobuf.Message,
       case 2: try { try decoder.decodeSingularUInt64Field(value: &self.totalSearchMatches) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.totalSearchMatchesIsLowerBound) }()
       case 4: try { try decoder.decodeSingularBoolField(value: &self.moreSearchMatchesExist) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.emptySearchNextCommands) }()
       default: break
       }
     }
@@ -429,6 +439,9 @@ nonisolated extension Trawl_Search_TrawlerSearchResponse: SwiftProtobuf.Message,
     if self.moreSearchMatchesExist != false {
       try visitor.visitSingularBoolField(value: self.moreSearchMatchesExist, fieldNumber: 4)
     }
+    if !self.emptySearchNextCommands.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.emptySearchNextCommands, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -437,6 +450,7 @@ nonisolated extension Trawl_Search_TrawlerSearchResponse: SwiftProtobuf.Message,
     if lhs.totalSearchMatches != rhs.totalSearchMatches {return false}
     if lhs.totalSearchMatchesIsLowerBound != rhs.totalSearchMatchesIsLowerBound {return false}
     if lhs.moreSearchMatchesExist != rhs.moreSearchMatchesExist {return false}
+    if lhs.emptySearchNextCommands != rhs.emptySearchNextCommands {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

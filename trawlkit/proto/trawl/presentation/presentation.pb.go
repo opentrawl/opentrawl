@@ -23,6 +23,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type MonetaryAmountDisplaySignStyle int32
+
+const (
+	MonetaryAmountDisplaySignStyle_MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_UNSPECIFIED     MonetaryAmountDisplaySignStyle = 0
+	MonetaryAmountDisplaySignStyle_MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_BALANCE         MonetaryAmountDisplaySignStyle = 1
+	MonetaryAmountDisplaySignStyle_MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_SIGNED_MOVEMENT MonetaryAmountDisplaySignStyle = 2
+)
+
+// Enum value maps for MonetaryAmountDisplaySignStyle.
+var (
+	MonetaryAmountDisplaySignStyle_name = map[int32]string{
+		0: "MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_UNSPECIFIED",
+		1: "MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_BALANCE",
+		2: "MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_SIGNED_MOVEMENT",
+	}
+	MonetaryAmountDisplaySignStyle_value = map[string]int32{
+		"MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_UNSPECIFIED":     0,
+		"MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_BALANCE":         1,
+		"MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_SIGNED_MOVEMENT": 2,
+	}
+)
+
+func (x MonetaryAmountDisplaySignStyle) Enum() *MonetaryAmountDisplaySignStyle {
+	p := new(MonetaryAmountDisplaySignStyle)
+	*p = x
+	return p
+}
+
+func (x MonetaryAmountDisplaySignStyle) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MonetaryAmountDisplaySignStyle) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_presentation_presentation_proto_enumTypes[0].Descriptor()
+}
+
+func (MonetaryAmountDisplaySignStyle) Type() protoreflect.EnumType {
+	return &file_trawl_presentation_presentation_proto_enumTypes[0]
+}
+
+func (x MonetaryAmountDisplaySignStyle) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MonetaryAmountDisplaySignStyle.Descriptor instead.
+func (MonetaryAmountDisplaySignStyle) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{0}
+}
+
 type CalendarDate struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	CalendarYear        int32                  `protobuf:"varint,1,opt,name=calendar_year,json=calendarYear,proto3" json:"calendar_year,omitempty"`
@@ -178,6 +227,203 @@ func (*ArchiveRecordAssociatedTimeForDisplay_ExactTime) isArchiveRecordAssociate
 func (*ArchiveRecordAssociatedTimeForDisplay_CalendarDate) isArchiveRecordAssociatedTimeForDisplay_ArchiveRecordAssociatedTime() {
 }
 
+// Decimal strings, never binary floats. No exponent or grouping separators.
+type ExactMonetaryAmount struct {
+	state                          protoimpl.MessageState         `protogen:"open.v1"`
+	ExactDecimalAmount             string                         `protobuf:"bytes,1,opt,name=exact_decimal_amount,json=exactDecimalAmount,proto3" json:"exact_decimal_amount,omitempty"`
+	Iso_4217CurrencyCode           string                         `protobuf:"bytes,2,opt,name=iso_4217_currency_code,json=iso4217CurrencyCode,proto3" json:"iso_4217_currency_code,omitempty"`
+	MonetaryAmountDisplaySignStyle MonetaryAmountDisplaySignStyle `protobuf:"varint,3,opt,name=monetary_amount_display_sign_style,json=monetaryAmountDisplaySignStyle,proto3,enum=trawl.presentation.MonetaryAmountDisplaySignStyle" json:"monetary_amount_display_sign_style,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
+}
+
+func (x *ExactMonetaryAmount) Reset() {
+	*x = ExactMonetaryAmount{}
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExactMonetaryAmount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExactMonetaryAmount) ProtoMessage() {}
+
+func (x *ExactMonetaryAmount) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExactMonetaryAmount.ProtoReflect.Descriptor instead.
+func (*ExactMonetaryAmount) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ExactMonetaryAmount) GetExactDecimalAmount() string {
+	if x != nil {
+		return x.ExactDecimalAmount
+	}
+	return ""
+}
+
+func (x *ExactMonetaryAmount) GetIso_4217CurrencyCode() string {
+	if x != nil {
+		return x.Iso_4217CurrencyCode
+	}
+	return ""
+}
+
+func (x *ExactMonetaryAmount) GetMonetaryAmountDisplaySignStyle() MonetaryAmountDisplaySignStyle {
+	if x != nil {
+		return x.MonetaryAmountDisplaySignStyle
+	}
+	return MonetaryAmountDisplaySignStyle_MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_UNSPECIFIED
+}
+
+type DeclarativeTrawlCommandArgument struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to ArgumentValue:
+	//
+	//	*DeclarativeTrawlCommandArgument_TextArgument
+	//	*DeclarativeTrawlCommandArgument_CanonicalRecordReferenceArgument
+	ArgumentValue isDeclarativeTrawlCommandArgument_ArgumentValue `protobuf_oneof:"argument_value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeclarativeTrawlCommandArgument) Reset() {
+	*x = DeclarativeTrawlCommandArgument{}
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeclarativeTrawlCommandArgument) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeclarativeTrawlCommandArgument) ProtoMessage() {}
+
+func (x *DeclarativeTrawlCommandArgument) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeclarativeTrawlCommandArgument.ProtoReflect.Descriptor instead.
+func (*DeclarativeTrawlCommandArgument) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DeclarativeTrawlCommandArgument) GetArgumentValue() isDeclarativeTrawlCommandArgument_ArgumentValue {
+	if x != nil {
+		return x.ArgumentValue
+	}
+	return nil
+}
+
+func (x *DeclarativeTrawlCommandArgument) GetTextArgument() string {
+	if x != nil {
+		if x, ok := x.ArgumentValue.(*DeclarativeTrawlCommandArgument_TextArgument); ok {
+			return x.TextArgument
+		}
+	}
+	return ""
+}
+
+func (x *DeclarativeTrawlCommandArgument) GetCanonicalRecordReferenceArgument() *identity.CanonicalArchiveRecordReference {
+	if x != nil {
+		if x, ok := x.ArgumentValue.(*DeclarativeTrawlCommandArgument_CanonicalRecordReferenceArgument); ok {
+			return x.CanonicalRecordReferenceArgument
+		}
+	}
+	return nil
+}
+
+type isDeclarativeTrawlCommandArgument_ArgumentValue interface {
+	isDeclarativeTrawlCommandArgument_ArgumentValue()
+}
+
+type DeclarativeTrawlCommandArgument_TextArgument struct {
+	TextArgument string `protobuf:"bytes,1,opt,name=text_argument,json=textArgument,proto3,oneof"`
+}
+
+type DeclarativeTrawlCommandArgument_CanonicalRecordReferenceArgument struct {
+	CanonicalRecordReferenceArgument *identity.CanonicalArchiveRecordReference `protobuf:"bytes,2,opt,name=canonical_record_reference_argument,json=canonicalRecordReferenceArgument,proto3,oneof"`
+}
+
+func (*DeclarativeTrawlCommandArgument_TextArgument) isDeclarativeTrawlCommandArgument_ArgumentValue() {
+}
+
+func (*DeclarativeTrawlCommandArgument_CanonicalRecordReferenceArgument) isDeclarativeTrawlCommandArgument_ArgumentValue() {
+}
+
+type DeclarativeTrawlCommand struct {
+	state                                protoimpl.MessageState             `protogen:"open.v1"`
+	CommandLabel                         string                             `protobuf:"bytes,1,opt,name=command_label,json=commandLabel,proto3" json:"command_label,omitempty"`
+	CommandArgumentsAfterTrawlInvocation []*DeclarativeTrawlCommandArgument `protobuf:"bytes,2,rep,name=command_arguments_after_trawl_invocation,json=commandArgumentsAfterTrawlInvocation,proto3" json:"command_arguments_after_trawl_invocation,omitempty"`
+	unknownFields                        protoimpl.UnknownFields
+	sizeCache                            protoimpl.SizeCache
+}
+
+func (x *DeclarativeTrawlCommand) Reset() {
+	*x = DeclarativeTrawlCommand{}
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeclarativeTrawlCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeclarativeTrawlCommand) ProtoMessage() {}
+
+func (x *DeclarativeTrawlCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeclarativeTrawlCommand.ProtoReflect.Descriptor instead.
+func (*DeclarativeTrawlCommand) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DeclarativeTrawlCommand) GetCommandLabel() string {
+	if x != nil {
+		return x.CommandLabel
+	}
+	return ""
+}
+
+func (x *DeclarativeTrawlCommand) GetCommandArgumentsAfterTrawlInvocation() []*DeclarativeTrawlCommandArgument {
+	if x != nil {
+		return x.CommandArgumentsAfterTrawlInvocation
+	}
+	return nil
+}
+
 type TrawlerSpecificCommandPresentationValue struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to TypedValue:
@@ -186,6 +432,7 @@ type TrawlerSpecificCommandPresentationValue struct {
 	//	*TrawlerSpecificCommandPresentationValue_UnsignedCount
 	//	*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay
 	//	*TrawlerSpecificCommandPresentationValue_CanonicalRecordReference
+	//	*TrawlerSpecificCommandPresentationValue_ExactMonetaryAmount
 	TypedValue    isTrawlerSpecificCommandPresentationValue_TypedValue `protobuf_oneof:"typed_value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -193,7 +440,7 @@ type TrawlerSpecificCommandPresentationValue struct {
 
 func (x *TrawlerSpecificCommandPresentationValue) Reset() {
 	*x = TrawlerSpecificCommandPresentationValue{}
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[2]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -205,7 +452,7 @@ func (x *TrawlerSpecificCommandPresentationValue) String() string {
 func (*TrawlerSpecificCommandPresentationValue) ProtoMessage() {}
 
 func (x *TrawlerSpecificCommandPresentationValue) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[2]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -218,7 +465,7 @@ func (x *TrawlerSpecificCommandPresentationValue) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use TrawlerSpecificCommandPresentationValue.ProtoReflect.Descriptor instead.
 func (*TrawlerSpecificCommandPresentationValue) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{2}
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *TrawlerSpecificCommandPresentationValue) GetTypedValue() isTrawlerSpecificCommandPresentationValue_TypedValue {
@@ -264,6 +511,15 @@ func (x *TrawlerSpecificCommandPresentationValue) GetCanonicalRecordReference() 
 	return nil
 }
 
+func (x *TrawlerSpecificCommandPresentationValue) GetExactMonetaryAmount() *ExactMonetaryAmount {
+	if x != nil {
+		if x, ok := x.TypedValue.(*TrawlerSpecificCommandPresentationValue_ExactMonetaryAmount); ok {
+			return x.ExactMonetaryAmount
+		}
+	}
+	return nil
+}
+
 type isTrawlerSpecificCommandPresentationValue_TypedValue interface {
 	isTrawlerSpecificCommandPresentationValue_TypedValue()
 }
@@ -284,6 +540,10 @@ type TrawlerSpecificCommandPresentationValue_CanonicalRecordReference struct {
 	CanonicalRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,4,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3,oneof"`
 }
 
+type TrawlerSpecificCommandPresentationValue_ExactMonetaryAmount struct {
+	ExactMonetaryAmount *ExactMonetaryAmount `protobuf:"bytes,5,opt,name=exact_monetary_amount,json=exactMonetaryAmount,proto3,oneof"`
+}
+
 func (*TrawlerSpecificCommandPresentationValue_Text) isTrawlerSpecificCommandPresentationValue_TypedValue() {
 }
 
@@ -296,6 +556,9 @@ func (*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDis
 func (*TrawlerSpecificCommandPresentationValue_CanonicalRecordReference) isTrawlerSpecificCommandPresentationValue_TypedValue() {
 }
 
+func (*TrawlerSpecificCommandPresentationValue_ExactMonetaryAmount) isTrawlerSpecificCommandPresentationValue_TypedValue() {
+}
+
 type TrawlerSpecificCommandListPresentationRow struct {
 	state                      protoimpl.MessageState                     `protogen:"open.v1"`
 	ColumnValuesInDisplayOrder []*TrawlerSpecificCommandPresentationValue `protobuf:"bytes,1,rep,name=column_values_in_display_order,json=columnValuesInDisplayOrder,proto3" json:"column_values_in_display_order,omitempty"`
@@ -305,7 +568,7 @@ type TrawlerSpecificCommandListPresentationRow struct {
 
 func (x *TrawlerSpecificCommandListPresentationRow) Reset() {
 	*x = TrawlerSpecificCommandListPresentationRow{}
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[3]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -317,7 +580,7 @@ func (x *TrawlerSpecificCommandListPresentationRow) String() string {
 func (*TrawlerSpecificCommandListPresentationRow) ProtoMessage() {}
 
 func (x *TrawlerSpecificCommandListPresentationRow) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[3]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -330,12 +593,72 @@ func (x *TrawlerSpecificCommandListPresentationRow) ProtoReflect() protoreflect.
 
 // Deprecated: Use TrawlerSpecificCommandListPresentationRow.ProtoReflect.Descriptor instead.
 func (*TrawlerSpecificCommandListPresentationRow) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{3}
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TrawlerSpecificCommandListPresentationRow) GetColumnValuesInDisplayOrder() []*TrawlerSpecificCommandPresentationValue {
 	if x != nil {
 		return x.ColumnValuesInDisplayOrder
+	}
+	return nil
+}
+
+type TrawlerSpecificCommandListSection struct {
+	state                     protoimpl.MessageState                       `protogen:"open.v1"`
+	SectionHeading            string                                       `protobuf:"bytes,1,opt,name=section_heading,json=sectionHeading,proto3" json:"section_heading,omitempty"`
+	ColumnDisplayNamesInOrder []string                                     `protobuf:"bytes,2,rep,name=column_display_names_in_order,json=columnDisplayNamesInOrder,proto3" json:"column_display_names_in_order,omitempty"`
+	RowsInDisplayOrder        []*TrawlerSpecificCommandListPresentationRow `protobuf:"bytes,3,rep,name=rows_in_display_order,json=rowsInDisplayOrder,proto3" json:"rows_in_display_order,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *TrawlerSpecificCommandListSection) Reset() {
+	*x = TrawlerSpecificCommandListSection{}
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrawlerSpecificCommandListSection) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrawlerSpecificCommandListSection) ProtoMessage() {}
+
+func (x *TrawlerSpecificCommandListSection) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrawlerSpecificCommandListSection.ProtoReflect.Descriptor instead.
+func (*TrawlerSpecificCommandListSection) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TrawlerSpecificCommandListSection) GetSectionHeading() string {
+	if x != nil {
+		return x.SectionHeading
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandListSection) GetColumnDisplayNamesInOrder() []string {
+	if x != nil {
+		return x.ColumnDisplayNamesInOrder
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandListSection) GetRowsInDisplayOrder() []*TrawlerSpecificCommandListPresentationRow {
+	if x != nil {
+		return x.RowsInDisplayOrder
 	}
 	return nil
 }
@@ -351,13 +674,18 @@ type TrawlerSpecificCommandListPresentation struct {
 	TotalRowCount                   isTrawlerSpecificCommandListPresentation_TotalRowCount `protobuf_oneof:"total_row_count"`
 	MoreRowsExist                   bool                                                   `protobuf:"varint,5,opt,name=more_rows_exist,json=moreRowsExist,proto3" json:"more_rows_exist,omitempty"`
 	ConciseTextShownWhenListIsEmpty string                                                 `protobuf:"bytes,6,opt,name=concise_text_shown_when_list_is_empty,json=conciseTextShownWhenListIsEmpty,proto3" json:"concise_text_shown_when_list_is_empty,omitempty"`
+	ListSummaryHeading              string                                                 `protobuf:"bytes,7,opt,name=list_summary_heading,json=listSummaryHeading,proto3" json:"list_summary_heading,omitempty"`
+	SectionsInDisplayOrder          []*TrawlerSpecificCommandListSection                   `protobuf:"bytes,8,rep,name=sections_in_display_order,json=sectionsInDisplayOrder,proto3" json:"sections_in_display_order,omitempty"`
+	FootnotesInDisplayOrder         []string                                               `protobuf:"bytes,9,rep,name=footnotes_in_display_order,json=footnotesInDisplayOrder,proto3" json:"footnotes_in_display_order,omitempty"`
+	NextCommandsInDisplayOrder      []*DeclarativeTrawlCommand                             `protobuf:"bytes,10,rep,name=next_commands_in_display_order,json=nextCommandsInDisplayOrder,proto3" json:"next_commands_in_display_order,omitempty"`
+	NextMaximumRowCount             uint32                                                 `protobuf:"varint,11,opt,name=next_maximum_row_count,json=nextMaximumRowCount,proto3" json:"next_maximum_row_count,omitempty"`
 	unknownFields                   protoimpl.UnknownFields
 	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *TrawlerSpecificCommandListPresentation) Reset() {
 	*x = TrawlerSpecificCommandListPresentation{}
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[4]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -369,7 +697,7 @@ func (x *TrawlerSpecificCommandListPresentation) String() string {
 func (*TrawlerSpecificCommandListPresentation) ProtoMessage() {}
 
 func (x *TrawlerSpecificCommandListPresentation) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[4]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -382,7 +710,7 @@ func (x *TrawlerSpecificCommandListPresentation) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use TrawlerSpecificCommandListPresentation.ProtoReflect.Descriptor instead.
 func (*TrawlerSpecificCommandListPresentation) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{4}
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TrawlerSpecificCommandListPresentation) GetColumnDisplayNamesInOrder() []string {
@@ -438,6 +766,41 @@ func (x *TrawlerSpecificCommandListPresentation) GetConciseTextShownWhenListIsEm
 	return ""
 }
 
+func (x *TrawlerSpecificCommandListPresentation) GetListSummaryHeading() string {
+	if x != nil {
+		return x.ListSummaryHeading
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetSectionsInDisplayOrder() []*TrawlerSpecificCommandListSection {
+	if x != nil {
+		return x.SectionsInDisplayOrder
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetFootnotesInDisplayOrder() []string {
+	if x != nil {
+		return x.FootnotesInDisplayOrder
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetNextCommandsInDisplayOrder() []*DeclarativeTrawlCommand {
+	if x != nil {
+		return x.NextCommandsInDisplayOrder
+	}
+	return nil
+}
+
+func (x *TrawlerSpecificCommandListPresentation) GetNextMaximumRowCount() uint32 {
+	if x != nil {
+		return x.NextMaximumRowCount
+	}
+	return 0
+}
+
 type isTrawlerSpecificCommandListPresentation_TotalRowCount interface {
 	isTrawlerSpecificCommandListPresentation_TotalRowCount()
 }
@@ -467,7 +830,7 @@ type TrawlerSpecificCommandDetailPresentationField struct {
 
 func (x *TrawlerSpecificCommandDetailPresentationField) Reset() {
 	*x = TrawlerSpecificCommandDetailPresentationField{}
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[5]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -479,7 +842,7 @@ func (x *TrawlerSpecificCommandDetailPresentationField) String() string {
 func (*TrawlerSpecificCommandDetailPresentationField) ProtoMessage() {}
 
 func (x *TrawlerSpecificCommandDetailPresentationField) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[5]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -492,7 +855,7 @@ func (x *TrawlerSpecificCommandDetailPresentationField) ProtoReflect() protorefl
 
 // Deprecated: Use TrawlerSpecificCommandDetailPresentationField.ProtoReflect.Descriptor instead.
 func (*TrawlerSpecificCommandDetailPresentationField) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{5}
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TrawlerSpecificCommandDetailPresentationField) GetFieldDisplayName() string {
@@ -525,15 +888,18 @@ type TrawlerSpecificCommandDetailPresentation struct {
 	//
 	//	*TrawlerSpecificCommandDetailPresentation_BodyText
 	//	*TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation
-	Body          isTrawlerSpecificCommandDetailPresentation_Body `protobuf_oneof:"body"`
-	BodyAnchor    *identity.RecordAnchorIdentifier                `protobuf:"bytes,6,opt,name=body_anchor,json=bodyAnchor,proto3" json:"body_anchor,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Body                       isTrawlerSpecificCommandDetailPresentation_Body `protobuf_oneof:"body"`
+	BodyAnchor                 *identity.RecordAnchorIdentifier                `protobuf:"bytes,6,opt,name=body_anchor,json=bodyAnchor,proto3" json:"body_anchor,omitempty"`
+	DetailSubtitle             string                                          `protobuf:"bytes,7,opt,name=detail_subtitle,json=detailSubtitle,proto3" json:"detail_subtitle,omitempty"`
+	DetailFooterText           string                                          `protobuf:"bytes,8,opt,name=detail_footer_text,json=detailFooterText,proto3" json:"detail_footer_text,omitempty"`
+	NextCommandsInDisplayOrder []*DeclarativeTrawlCommand                      `protobuf:"bytes,9,rep,name=next_commands_in_display_order,json=nextCommandsInDisplayOrder,proto3" json:"next_commands_in_display_order,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *TrawlerSpecificCommandDetailPresentation) Reset() {
 	*x = TrawlerSpecificCommandDetailPresentation{}
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[6]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -545,7 +911,7 @@ func (x *TrawlerSpecificCommandDetailPresentation) String() string {
 func (*TrawlerSpecificCommandDetailPresentation) ProtoMessage() {}
 
 func (x *TrawlerSpecificCommandDetailPresentation) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_presentation_presentation_proto_msgTypes[6]
+	mi := &file_trawl_presentation_presentation_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -558,7 +924,7 @@ func (x *TrawlerSpecificCommandDetailPresentation) ProtoReflect() protoreflect.M
 
 // Deprecated: Use TrawlerSpecificCommandDetailPresentation.ProtoReflect.Descriptor instead.
 func (*TrawlerSpecificCommandDetailPresentation) Descriptor() ([]byte, []int) {
-	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{6}
+	return file_trawl_presentation_presentation_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TrawlerSpecificCommandDetailPresentation) GetDetailDisplayName() string {
@@ -614,6 +980,27 @@ func (x *TrawlerSpecificCommandDetailPresentation) GetBodyAnchor() *identity.Rec
 	return nil
 }
 
+func (x *TrawlerSpecificCommandDetailPresentation) GetDetailSubtitle() string {
+	if x != nil {
+		return x.DetailSubtitle
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetDetailFooterText() string {
+	if x != nil {
+		return x.DetailFooterText
+	}
+	return ""
+}
+
+func (x *TrawlerSpecificCommandDetailPresentation) GetNextCommandsInDisplayOrder() []*DeclarativeTrawlCommand {
+	if x != nil {
+		return x.NextCommandsInDisplayOrder
+	}
+	return nil
+}
+
 type isTrawlerSpecificCommandDetailPresentation_Body interface {
 	isTrawlerSpecificCommandDetailPresentation_Body()
 }
@@ -647,28 +1034,50 @@ const file_trawl_presentation_presentation_proto_rawDesc = "" +
 	"\rcalendar_date\x18\x02 \x01(\v2 .trawl.presentation.CalendarDateH\x00R\fcalendarDate\x12n\n" +
 	"3event_utc_offset_seconds_recorded_by_source_archive\x18\x03 \x01(\x11H\x01R,eventUtcOffsetSecondsRecordedBySourceArchive\x88\x01\x01B \n" +
 	"\x1earchive_record_associated_timeB6\n" +
-	"4_event_utc_offset_seconds_recorded_by_source_archive\"\x81\x03\n" +
+	"4_event_utc_offset_seconds_recorded_by_source_archive\"\xfc\x01\n" +
+	"\x13ExactMonetaryAmount\x120\n" +
+	"\x14exact_decimal_amount\x18\x01 \x01(\tR\x12exactDecimalAmount\x123\n" +
+	"\x16iso_4217_currency_code\x18\x02 \x01(\tR\x13iso4217CurrencyCode\x12~\n" +
+	"\"monetary_amount_display_sign_style\x18\x03 \x01(\x0e22.trawl.presentation.MonetaryAmountDisplaySignStyleR\x1emonetaryAmountDisplaySignStyle\"\xdd\x01\n" +
+	"\x1fDeclarativeTrawlCommandArgument\x12%\n" +
+	"\rtext_argument\x18\x01 \x01(\tH\x00R\ftextArgument\x12\x80\x01\n" +
+	"#canonical_record_reference_argument\x18\x02 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceH\x00R canonicalRecordReferenceArgumentB\x10\n" +
+	"\x0eargument_value\"\xcc\x01\n" +
+	"\x17DeclarativeTrawlCommand\x12#\n" +
+	"\rcommand_label\x18\x01 \x01(\tR\fcommandLabel\x12\x8b\x01\n" +
+	"(command_arguments_after_trawl_invocation\x18\x02 \x03(\v23.trawl.presentation.DeclarativeTrawlCommandArgumentR$commandArgumentsAfterTrawlInvocation\"\xe0\x03\n" +
 	"'TrawlerSpecificCommandPresentationValue\x12\x14\n" +
 	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12'\n" +
 	"\x0eunsigned_count\x18\x02 \x01(\x04H\x00R\runsignedCount\x12\x96\x01\n" +
 	"*archive_record_associated_time_for_display\x18\x03 \x01(\v29.trawl.presentation.ArchiveRecordAssociatedTimeForDisplayH\x00R%archiveRecordAssociatedTimeForDisplay\x12o\n" +
-	"\x1acanonical_record_reference\x18\x04 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceH\x00R\x18canonicalRecordReferenceB\r\n" +
+	"\x1acanonical_record_reference\x18\x04 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceH\x00R\x18canonicalRecordReference\x12]\n" +
+	"\x15exact_monetary_amount\x18\x05 \x01(\v2'.trawl.presentation.ExactMonetaryAmountH\x00R\x13exactMonetaryAmountB\r\n" +
 	"\vtyped_value\"\xac\x01\n" +
 	")TrawlerSpecificCommandListPresentationRow\x12\x7f\n" +
-	"\x1ecolumn_values_in_display_order\x18\x01 \x03(\v2;.trawl.presentation.TrawlerSpecificCommandPresentationValueR\x1acolumnValuesInDisplayOrder\"\xdc\x03\n" +
+	"\x1ecolumn_values_in_display_order\x18\x01 \x03(\v2;.trawl.presentation.TrawlerSpecificCommandPresentationValueR\x1acolumnValuesInDisplayOrder\"\x80\x02\n" +
+	"!TrawlerSpecificCommandListSection\x12'\n" +
+	"\x0fsection_heading\x18\x01 \x01(\tR\x0esectionHeading\x12@\n" +
+	"\x1dcolumn_display_names_in_order\x18\x02 \x03(\tR\x19columnDisplayNamesInOrder\x12p\n" +
+	"\x15rows_in_display_order\x18\x03 \x03(\v2=.trawl.presentation.TrawlerSpecificCommandListPresentationRowR\x12rowsInDisplayOrder\"\xe3\x06\n" +
 	"&TrawlerSpecificCommandListPresentation\x12@\n" +
 	"\x1dcolumn_display_names_in_order\x18\x01 \x03(\tR\x19columnDisplayNamesInOrder\x12p\n" +
 	"\x15rows_in_display_order\x18\x02 \x03(\v2=.trawl.presentation.TrawlerSpecificCommandListPresentationRowR\x12rowsInDisplayOrder\x123\n" +
 	"\x15exact_total_row_count\x18\x03 \x01(\x04H\x00R\x12exactTotalRowCount\x12>\n" +
 	"\x1blower_bound_total_row_count\x18\x04 \x01(\x04H\x00R\x17lowerBoundTotalRowCount\x12&\n" +
 	"\x0fmore_rows_exist\x18\x05 \x01(\bR\rmoreRowsExist\x12N\n" +
-	"%concise_text_shown_when_list_is_empty\x18\x06 \x01(\tR\x1fconciseTextShownWhenListIsEmptyB\x11\n" +
+	"%concise_text_shown_when_list_is_empty\x18\x06 \x01(\tR\x1fconciseTextShownWhenListIsEmpty\x120\n" +
+	"\x14list_summary_heading\x18\a \x01(\tR\x12listSummaryHeading\x12p\n" +
+	"\x19sections_in_display_order\x18\b \x03(\v25.trawl.presentation.TrawlerSpecificCommandListSectionR\x16sectionsInDisplayOrder\x12;\n" +
+	"\x1afootnotes_in_display_order\x18\t \x03(\tR\x17footnotesInDisplayOrder\x12o\n" +
+	"\x1enext_commands_in_display_order\x18\n" +
+	" \x03(\v2+.trawl.presentation.DeclarativeTrawlCommandR\x1anextCommandsInDisplayOrder\x123\n" +
+	"\x16next_maximum_row_count\x18\v \x01(\rR\x13nextMaximumRowCountB\x11\n" +
 	"\x0ftotal_row_count\"\x86\x02\n" +
 	"-TrawlerSpecificCommandDetailPresentationField\x12,\n" +
 	"\x12field_display_name\x18\x01 \x01(\tR\x10fieldDisplayName\x12\\\n" +
 	"\vfield_value\x18\x02 \x01(\v2;.trawl.presentation.TrawlerSpecificCommandPresentationValueR\n" +
 	"fieldValue\x12I\n" +
-	"\ffield_anchor\x18\x03 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\vfieldAnchor\"\xed\x03\n" +
+	"\ffield_anchor\x18\x03 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\vfieldAnchor\"\xb5\x05\n" +
 	"(TrawlerSpecificCommandDetailPresentation\x12.\n" +
 	"\x13detail_display_name\x18\x01 \x01(\tR\x11detailDisplayName\x12c\n" +
 	"\x1adetail_display_name_anchor\x18\x02 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\x17detailDisplayNameAnchor\x12x\n" +
@@ -676,8 +1085,15 @@ const file_trawl_presentation_presentation_proto_rawDesc = "" +
 	"\tbody_text\x18\x04 \x01(\tH\x00R\bbodyText\x12B\n" +
 	"\x1cbody_unavailable_explanation\x18\x05 \x01(\tH\x00R\x1abodyUnavailableExplanation\x12G\n" +
 	"\vbody_anchor\x18\x06 \x01(\v2&.trawl.identity.RecordAnchorIdentifierR\n" +
-	"bodyAnchorB\x06\n" +
-	"\x04bodyBOZMgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation;presentationb\x06proto3"
+	"bodyAnchor\x12'\n" +
+	"\x0fdetail_subtitle\x18\a \x01(\tR\x0edetailSubtitle\x12,\n" +
+	"\x12detail_footer_text\x18\b \x01(\tR\x10detailFooterText\x12o\n" +
+	"\x1enext_commands_in_display_order\x18\t \x03(\v2+.trawl.presentation.DeclarativeTrawlCommandR\x1anextCommandsInDisplayOrderB\x06\n" +
+	"\x04body*\xbc\x01\n" +
+	"\x1eMonetaryAmountDisplaySignStyle\x122\n" +
+	".MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_UNSPECIFIED\x10\x00\x12.\n" +
+	"*MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_BALANCE\x10\x01\x126\n" +
+	"2MONETARY_AMOUNT_DISPLAY_SIGN_STYLE_SIGNED_MOVEMENT\x10\x02BOZMgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation;presentationb\x06proto3"
 
 var (
 	file_trawl_presentation_presentation_proto_rawDescOnce sync.Once
@@ -691,36 +1107,50 @@ func file_trawl_presentation_presentation_proto_rawDescGZIP() []byte {
 	return file_trawl_presentation_presentation_proto_rawDescData
 }
 
-var file_trawl_presentation_presentation_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_trawl_presentation_presentation_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_trawl_presentation_presentation_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_trawl_presentation_presentation_proto_goTypes = []any{
-	(*CalendarDate)(nil),                                  // 0: trawl.presentation.CalendarDate
-	(*ArchiveRecordAssociatedTimeForDisplay)(nil),         // 1: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
-	(*TrawlerSpecificCommandPresentationValue)(nil),       // 2: trawl.presentation.TrawlerSpecificCommandPresentationValue
-	(*TrawlerSpecificCommandListPresentationRow)(nil),     // 3: trawl.presentation.TrawlerSpecificCommandListPresentationRow
-	(*TrawlerSpecificCommandListPresentation)(nil),        // 4: trawl.presentation.TrawlerSpecificCommandListPresentation
-	(*TrawlerSpecificCommandDetailPresentationField)(nil), // 5: trawl.presentation.TrawlerSpecificCommandDetailPresentationField
-	(*TrawlerSpecificCommandDetailPresentation)(nil),      // 6: trawl.presentation.TrawlerSpecificCommandDetailPresentation
-	(*timestamppb.Timestamp)(nil),                         // 7: google.protobuf.Timestamp
-	(*identity.CanonicalArchiveRecordReference)(nil),      // 8: trawl.identity.CanonicalArchiveRecordReference
-	(*identity.RecordAnchorIdentifier)(nil),               // 9: trawl.identity.RecordAnchorIdentifier
+	(MonetaryAmountDisplaySignStyle)(0),                   // 0: trawl.presentation.MonetaryAmountDisplaySignStyle
+	(*CalendarDate)(nil),                                  // 1: trawl.presentation.CalendarDate
+	(*ArchiveRecordAssociatedTimeForDisplay)(nil),         // 2: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
+	(*ExactMonetaryAmount)(nil),                           // 3: trawl.presentation.ExactMonetaryAmount
+	(*DeclarativeTrawlCommandArgument)(nil),               // 4: trawl.presentation.DeclarativeTrawlCommandArgument
+	(*DeclarativeTrawlCommand)(nil),                       // 5: trawl.presentation.DeclarativeTrawlCommand
+	(*TrawlerSpecificCommandPresentationValue)(nil),       // 6: trawl.presentation.TrawlerSpecificCommandPresentationValue
+	(*TrawlerSpecificCommandListPresentationRow)(nil),     // 7: trawl.presentation.TrawlerSpecificCommandListPresentationRow
+	(*TrawlerSpecificCommandListSection)(nil),             // 8: trawl.presentation.TrawlerSpecificCommandListSection
+	(*TrawlerSpecificCommandListPresentation)(nil),        // 9: trawl.presentation.TrawlerSpecificCommandListPresentation
+	(*TrawlerSpecificCommandDetailPresentationField)(nil), // 10: trawl.presentation.TrawlerSpecificCommandDetailPresentationField
+	(*TrawlerSpecificCommandDetailPresentation)(nil),      // 11: trawl.presentation.TrawlerSpecificCommandDetailPresentation
+	(*timestamppb.Timestamp)(nil),                         // 12: google.protobuf.Timestamp
+	(*identity.CanonicalArchiveRecordReference)(nil),      // 13: trawl.identity.CanonicalArchiveRecordReference
+	(*identity.RecordAnchorIdentifier)(nil),               // 14: trawl.identity.RecordAnchorIdentifier
 }
 var file_trawl_presentation_presentation_proto_depIdxs = []int32{
-	7,  // 0: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay.exact_time:type_name -> google.protobuf.Timestamp
-	0,  // 1: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay.calendar_date:type_name -> trawl.presentation.CalendarDate
-	1,  // 2: trawl.presentation.TrawlerSpecificCommandPresentationValue.archive_record_associated_time_for_display:type_name -> trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
-	8,  // 3: trawl.presentation.TrawlerSpecificCommandPresentationValue.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	2,  // 4: trawl.presentation.TrawlerSpecificCommandListPresentationRow.column_values_in_display_order:type_name -> trawl.presentation.TrawlerSpecificCommandPresentationValue
-	3,  // 5: trawl.presentation.TrawlerSpecificCommandListPresentation.rows_in_display_order:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentationRow
-	2,  // 6: trawl.presentation.TrawlerSpecificCommandDetailPresentationField.field_value:type_name -> trawl.presentation.TrawlerSpecificCommandPresentationValue
-	9,  // 7: trawl.presentation.TrawlerSpecificCommandDetailPresentationField.field_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	9,  // 8: trawl.presentation.TrawlerSpecificCommandDetailPresentation.detail_display_name_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	5,  // 9: trawl.presentation.TrawlerSpecificCommandDetailPresentation.fields_in_display_order:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentationField
-	9,  // 10: trawl.presentation.TrawlerSpecificCommandDetailPresentation.body_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	12, // 0: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay.exact_time:type_name -> google.protobuf.Timestamp
+	1,  // 1: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay.calendar_date:type_name -> trawl.presentation.CalendarDate
+	0,  // 2: trawl.presentation.ExactMonetaryAmount.monetary_amount_display_sign_style:type_name -> trawl.presentation.MonetaryAmountDisplaySignStyle
+	13, // 3: trawl.presentation.DeclarativeTrawlCommandArgument.canonical_record_reference_argument:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	4,  // 4: trawl.presentation.DeclarativeTrawlCommand.command_arguments_after_trawl_invocation:type_name -> trawl.presentation.DeclarativeTrawlCommandArgument
+	2,  // 5: trawl.presentation.TrawlerSpecificCommandPresentationValue.archive_record_associated_time_for_display:type_name -> trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
+	13, // 6: trawl.presentation.TrawlerSpecificCommandPresentationValue.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	3,  // 7: trawl.presentation.TrawlerSpecificCommandPresentationValue.exact_monetary_amount:type_name -> trawl.presentation.ExactMonetaryAmount
+	6,  // 8: trawl.presentation.TrawlerSpecificCommandListPresentationRow.column_values_in_display_order:type_name -> trawl.presentation.TrawlerSpecificCommandPresentationValue
+	7,  // 9: trawl.presentation.TrawlerSpecificCommandListSection.rows_in_display_order:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentationRow
+	7,  // 10: trawl.presentation.TrawlerSpecificCommandListPresentation.rows_in_display_order:type_name -> trawl.presentation.TrawlerSpecificCommandListPresentationRow
+	8,  // 11: trawl.presentation.TrawlerSpecificCommandListPresentation.sections_in_display_order:type_name -> trawl.presentation.TrawlerSpecificCommandListSection
+	5,  // 12: trawl.presentation.TrawlerSpecificCommandListPresentation.next_commands_in_display_order:type_name -> trawl.presentation.DeclarativeTrawlCommand
+	6,  // 13: trawl.presentation.TrawlerSpecificCommandDetailPresentationField.field_value:type_name -> trawl.presentation.TrawlerSpecificCommandPresentationValue
+	14, // 14: trawl.presentation.TrawlerSpecificCommandDetailPresentationField.field_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	14, // 15: trawl.presentation.TrawlerSpecificCommandDetailPresentation.detail_display_name_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	10, // 16: trawl.presentation.TrawlerSpecificCommandDetailPresentation.fields_in_display_order:type_name -> trawl.presentation.TrawlerSpecificCommandDetailPresentationField
+	14, // 17: trawl.presentation.TrawlerSpecificCommandDetailPresentation.body_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	5,  // 18: trawl.presentation.TrawlerSpecificCommandDetailPresentation.next_commands_in_display_order:type_name -> trawl.presentation.DeclarativeTrawlCommand
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_trawl_presentation_presentation_proto_init() }
@@ -732,17 +1162,22 @@ func file_trawl_presentation_presentation_proto_init() {
 		(*ArchiveRecordAssociatedTimeForDisplay_ExactTime)(nil),
 		(*ArchiveRecordAssociatedTimeForDisplay_CalendarDate)(nil),
 	}
-	file_trawl_presentation_presentation_proto_msgTypes[2].OneofWrappers = []any{
+	file_trawl_presentation_presentation_proto_msgTypes[3].OneofWrappers = []any{
+		(*DeclarativeTrawlCommandArgument_TextArgument)(nil),
+		(*DeclarativeTrawlCommandArgument_CanonicalRecordReferenceArgument)(nil),
+	}
+	file_trawl_presentation_presentation_proto_msgTypes[5].OneofWrappers = []any{
 		(*TrawlerSpecificCommandPresentationValue_Text)(nil),
 		(*TrawlerSpecificCommandPresentationValue_UnsignedCount)(nil),
 		(*TrawlerSpecificCommandPresentationValue_ArchiveRecordAssociatedTimeForDisplay)(nil),
 		(*TrawlerSpecificCommandPresentationValue_CanonicalRecordReference)(nil),
+		(*TrawlerSpecificCommandPresentationValue_ExactMonetaryAmount)(nil),
 	}
-	file_trawl_presentation_presentation_proto_msgTypes[4].OneofWrappers = []any{
+	file_trawl_presentation_presentation_proto_msgTypes[8].OneofWrappers = []any{
 		(*TrawlerSpecificCommandListPresentation_ExactTotalRowCount)(nil),
 		(*TrawlerSpecificCommandListPresentation_LowerBoundTotalRowCount)(nil),
 	}
-	file_trawl_presentation_presentation_proto_msgTypes[6].OneofWrappers = []any{
+	file_trawl_presentation_presentation_proto_msgTypes[10].OneofWrappers = []any{
 		(*TrawlerSpecificCommandDetailPresentation_BodyText)(nil),
 		(*TrawlerSpecificCommandDetailPresentation_BodyUnavailableExplanation)(nil),
 	}
@@ -751,13 +1186,14 @@ func file_trawl_presentation_presentation_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_presentation_presentation_proto_rawDesc), len(file_trawl_presentation_presentation_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   7,
+			NumEnums:      1,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_trawl_presentation_presentation_proto_goTypes,
 		DependencyIndexes: file_trawl_presentation_presentation_proto_depIdxs,
+		EnumInfos:         file_trawl_presentation_presentation_proto_enumTypes,
 		MessageInfos:      file_trawl_presentation_presentation_proto_msgTypes,
 	}.Build()
 	File_trawl_presentation_presentation_proto = out.File

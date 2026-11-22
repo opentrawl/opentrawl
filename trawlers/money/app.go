@@ -14,7 +14,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
-	contract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/money"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
@@ -24,10 +23,30 @@ import (
 
 type App struct{}
 
+var (
+	_ trawlkit.CanonicalRecordOpener          = (*App)(nil)
+	_ trawlkit.ShortReferenceSnapshotProvider = (*App)(nil)
+)
+
 func New() *App                                                                   { return &App{} }
 func (*App) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error { return nil }
 func (*App) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
-	return trawlkit.RegisteredTrawlerDeclaration{RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity("money"), RegisteredTrawlerCommandName: "money", RegisteredTrawlerDisplayName: "Money", RegisteredTrawlerPrivacyBoundary: control.Privacy{Reads: "Completed financial imports.", LeavesMachine: "Nothing when reading the archive.", NetworkRequests: "Configured Enable Banking consent only."}}
+	return trawlkit.RegisteredTrawlerDeclaration{
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity("money"),
+		RegisteredTrawlerCommandName: "money",
+		RegisteredTrawlerDisplayName: "Money",
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:                   "banknote.fill",
+			AccentColor:                  "#0A9A63",
+			IconNameInMacAppAssetCatalog: "MoneyTrawlerIcon",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE,
+		RegisteredTrawlerPrivacyBoundary: control.Privacy{
+			Reads:           "Completed financial imports.",
+			LeavesMachine:   "Nothing when reading the archive.",
+			NetworkRequests: "Configured Enable Banking consent only.",
+		},
+	}
 }
 func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 	var commands []trawlkit.TrawlerCommand
@@ -36,7 +55,10 @@ func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 	}
 	commands = append(commands, trawlkit.TrawlerCommand{TrawlerCommandName: "accounts", TrawlerCommandHelpDescription: "List balances and complete history", TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessRequired, ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 		accounts, err := readAccounts(ctx, req)
-		return &command.TrawlerCommandResponse{TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_MoneyAccountListResponse{MoneyAccountListResponse: &contract.MoneyAccountListResponse{MoneyAccountsInDisplayOrder: accounts}}}, err
+		if err != nil {
+			return nil, err
+		}
+		return buildMoneyAccountsPresentation(accounts), nil
 	}})
 	var account, after, before, basis, matchingText string
 	var pending bool
@@ -86,12 +108,6 @@ func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 				return nil, err
 			}
 		}
-		response := &contract.MoneyMovementListResponse{ListsPendingMovements: pending, NextMaximumMovementCount: uint32(limit + 10)}
-		if basis == "charged" {
-			response.MovementDateBasis = contract.MoneyMovementDateBasis_MONEY_MOVEMENT_DATE_BASIS_CHARGE_DATE
-		} else {
-			response.MovementDateBasis = contract.MoneyMovementDateBasis_MONEY_MOVEMENT_DATE_BASIS_BOOKING_DATE
-		}
 		var matching []storedMovement
 		for _, movement := range movements {
 			if matchingFields != nil {
@@ -118,28 +134,11 @@ func (a *App) TrawlerCommands() []trawlkit.TrawlerCommand {
 			matching = append(matching, movement)
 		}
 		sort.SliceStable(matching, func(i, j int) bool { return matching[i].date(basis) > matching[j].date(basis) })
-		response.TotalMatchingMovementCount = uint64(len(matching))
-		response.MoreMatchingMovementsExist = len(matching) > limit
+		totalMatching := len(matching)
 		if len(matching) > limit {
 			matching = matching[:limit]
 		}
-		for _, account := range accounts {
-			group := &contract.MoneyAccountMovementList{MoneyAccount: account}
-			for _, movement := range matching {
-				if movement.accountReference != trawlkit.CanonicalArchiveRecordReferenceText(account.CanonicalRecordReference) {
-					continue
-				}
-				if pending {
-					group.PendingMovementsNewestFirst = append(group.PendingMovementsNewestFirst, movement.pending)
-				} else {
-					group.BookedMovementsNewestFirst = append(group.BookedMovementsNewestFirst, movement.booked)
-				}
-			}
-			if len(group.BookedMovementsNewestFirst)+len(group.PendingMovementsNewestFirst) > 0 {
-				response.MoneyAccountMovementLists = append(response.MoneyAccountMovementLists, group)
-			}
-		}
-		return &command.TrawlerCommandResponse{TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_MoneyMovementListResponse{MoneyMovementListResponse: response}}, nil
+		return buildMoneyTransactionsPresentation(accounts, matching, totalMatching, limit, basis, pending), nil
 	}})
 	return commands
 }
@@ -189,31 +188,18 @@ func newestMoneyMovementDate(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	}
 	return newest, nil
 }
-func (*App) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, local *trawlkit.LocalTrawlerShortReference) (*open.OpenRecord, error) {
-	refs, err := req.ResolveShortReference(ctx, local)
-	if err != nil {
-		return nil, err
-	}
-	reference := trawlkit.CanonicalArchiveRecordReferenceText(refs[0])
+func (*App) OpenCanonicalRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest, canonicalReference *trawlkit.CanonicalArchiveRecordReference) (*open.OpenRecord, error) {
+	reference := trawlkit.CanonicalArchiveRecordReferenceText(canonicalReference)
 	accounts, err := readAccounts(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	for _, account := range accounts {
-		assigned, err := req.LocalShortReferencesForCanonicalArchiveRecordReferences(ctx, []*trawlkit.CanonicalArchiveRecordReference{account.CanonicalRecordReference})
-		if err != nil {
-			return nil, err
-		}
-		local := trawlkit.LocalTrawlerShortReferenceForCanonicalArchiveRecordReference(assigned, account.CanonicalRecordReference)
-		account.GloballyRoutableAccountLink, err = trawlkit.ComposeGloballyRoutableTrawlLink(trawlkit.GloballyRoutableTrawlLinkRoute{RegisteredTrawler: trawlkit.NewRegisteredTrawlerIdentity("money"), LocalShortReference: local})
-		if err != nil {
-			return nil, err
-		}
-	}
-	record := &open.OpenRecord{RecordTrawler: trawlkit.NewRegisteredTrawlerIdentity("money"), CanonicalRecordReference: refs[0]}
+	record := &open.OpenRecord{RecordTrawler: trawlkit.NewRegisteredTrawlerIdentity("money"), CanonicalRecordReference: canonicalReference}
 	for _, account := range accounts {
 		if trawlkit.CanonicalArchiveRecordReferenceText(account.CanonicalRecordReference) == reference {
-			record.TypedOpenedRecord = &open.OpenRecord_MoneyAccount{MoneyAccount: account}
+			record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
+				TrawlerSpecificOpenedRecordPresentation: buildOpenedMoneyAccountPresentation(account),
+			}
 			return record, nil
 		}
 	}
@@ -231,9 +217,13 @@ func (*App) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandExecutio
 					continue
 				}
 				if pending {
-					record.TypedOpenedRecord = &open.OpenRecord_OpenedMoneyPendingMovement{OpenedMoneyPendingMovement: &contract.OpenedMoneyPendingMovement{MoneyPendingMovement: movement.pending, MoneyAccount: account, ProviderDisplayName: movement.provider, ProviderReadTime: movement.readTime}}
+					record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
+						TrawlerSpecificOpenedRecordPresentation: buildOpenedMoneyPendingMovementPresentation(movement.pending, account, movement.provider, movement.readTime),
+					}
 				} else {
-					record.TypedOpenedRecord = &open.OpenRecord_OpenedMoneyMovement{OpenedMoneyMovement: &contract.OpenedMoneyMovement{MoneyMovement: movement.booked, MoneyAccount: account, ProviderDisplayName: movement.provider, ProviderReadTime: movement.readTime}}
+					record.TypedOpenedRecord = &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
+						TrawlerSpecificOpenedRecordPresentation: buildOpenedMoneyMovementPresentation(movement.booked, account, movement.provider, movement.readTime),
+					}
 				}
 				return record, nil
 			}

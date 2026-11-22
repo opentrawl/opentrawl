@@ -2,7 +2,7 @@
 #import <Foundation/Foundation.h>
 #include <string.h>
 
-char *money_native_currency(const char *decimal, const char *currency, int signed_movement) {
+char *trawl_native_currency(const char *decimal, const char *currency, int signed_movement) {
     @autoreleasepool {
         NSString *decimalText = [NSString stringWithUTF8String:decimal];
         NSDecimalNumber *amount = [NSDecimalNumber decimalNumberWithString:decimalText

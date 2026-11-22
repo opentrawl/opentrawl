@@ -5,6 +5,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -29,6 +30,8 @@ type RegisteredTrawlerDeclaration struct {
 	RegisteredTrawlerCommandName            string
 	RegisteredTrawlerAliases                []string
 	RegisteredTrawlerDisplayName            string
+	RegisteredTrawlerBranding               *federation.TrawlerBranding
+	SourceFreshnessDependency               federation.SourceFreshnessDependency
 	RegisteredTrawlerPrivacyBoundary        control.Privacy
 	// DefaultTrawlerArchivePaths overrides the runner defaults when a trawler
 	// owns a non-SQLite archive or an existing archive layout.
@@ -38,9 +41,11 @@ type RegisteredTrawlerDeclaration struct {
 type TrawlerConfigurationFilePath string
 
 type TrawlerArchivePaths struct {
-	TrawlerArchivePath       string
-	TrawlerConfigurationPath TrawlerConfigurationFilePath
-	TrawlerLogDirectoryPath  string
+	TrawlerArchiveDirectoryPath    string
+	TrawlerArchivePath             string
+	TrawlerConfigurationPath       TrawlerConfigurationFilePath
+	TrawlerLogDirectoryPath        string
+	TrawlerShortReferenceIndexPath string
 }
 
 type TrawlerCommandExecutionRequest struct {
@@ -51,6 +56,8 @@ type TrawlerCommandExecutionRequest struct {
 	ReportTrawlerCommandProgress      func(Progress)
 	RequestedRecordAnchor             *RecordAnchorIdentifier
 	readOnlyShortReferenceCatalog     []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference
+	coreShortReferenceStore           *store.Store
+	replayShortReferences             func(context.Context) error
 }
 
 type ShortReferenceAssignmentCandidate struct {

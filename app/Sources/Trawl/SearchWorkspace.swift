@@ -151,14 +151,24 @@ struct SearchWorkspace: View {
         CompactRecordWorkspace(
           phase: model.openPhase,
           focus: $focus,
-          onReturnToResults: onReturnToResults
+          onReturnToResults: onReturnToResults,
+          onOpenLink: openLinkedRecord
         )
       }
     case .split:
       wideWorkspace(layout: .split) {
         Divider()
-        ResultPreview(phase: model.openPhase)
+        ResultPreview(phase: model.openPhase, onOpenLink: openLinkedRecord)
       }
+    }
+  }
+
+  private func openLinkedRecord(
+    _ link: GloballyRoutableTrawlLink,
+    anchor: RecordAnchorIdentifier
+  ) {
+    Task {
+      await model.open(link: link, anchor: anchor)
     }
   }
 
@@ -222,6 +232,7 @@ private struct CompactRecordWorkspace: View {
   let phase: SearchOpenPhase
   @FocusState.Binding var focus: SearchFocus?
   let onReturnToResults: () -> Void
+  let onOpenLink: (GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void
 
   var body: some View {
     VStack(spacing: 0) {
@@ -237,7 +248,7 @@ private struct CompactRecordWorkspace: View {
       .padding(.horizontal, 14)
       .padding(.vertical, 9)
       Divider()
-      ResultPreview(phase: phase)
+      ResultPreview(phase: phase, onOpenLink: onOpenLink)
     }
     .onAppear { focus = .record }
   }

@@ -45,11 +45,6 @@ func (output TrawlCommandOutput) WriteTrawlerCommandResponse(
 	}
 	var err error
 	switch typedResponse := response.GetTypedTrawlerCommandResponse().(type) {
-	case *command.TrawlerCommandResponse_MoneyAccountListResponse:
-		return output.WriteMoneyAccounts(typedResponse.MoneyAccountListResponse, moneyRenderLinks(globallyRoutableTrawlLinksByCanonicalRecordReference))
-	case *command.TrawlerCommandResponse_MoneyMovementListResponse:
-		return output.WriteMoneyTransactions(typedResponse.MoneyMovementListResponse, moneyRenderLinks(globallyRoutableTrawlLinksByCanonicalRecordReference), context.MoreTrawlerCommandArgumentsAfterTrawlInvocation)
-
 	case *command.TrawlerCommandResponse_PhotosStepRunResponse:
 		err = writePhotosStepRunResponse(writer, typedResponse.PhotosStepRunResponse)
 	case *command.TrawlerCommandResponse_PhotoListResponse:
@@ -101,6 +96,12 @@ func (output TrawlCommandOutput) WriteTrawlerCommandResponse(
 	}
 	nextCommands := []NextCommand{
 		nextCommandForFirstRowOfTrawlerCommandResponse(response, globallyRoutableTrawlLinksByCanonicalRecordReference),
+	}
+	if list := response.GetTrawlerSpecificCommandResponse().GetTrawlerSpecificCommandListPresentation(); list != nil {
+		nextCommands = append(nextCommands, DeclarativeNextCommandsForHumanOutput(
+			list.GetNextCommandsInDisplayOrder(),
+			globallyRoutableTrawlLinksByCanonicalRecordReference,
+		)...)
 	}
 	if trawlerCommandResponseHasMore(response) && len(context.MoreTrawlerCommandArgumentsAfterTrawlInvocation) > 0 {
 		nextCommands = append(nextCommands, NextCommandShowingMoreRows(context.MoreTrawlerCommandArgumentsAfterTrawlInvocation))
