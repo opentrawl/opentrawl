@@ -23,6 +23,9 @@
 
   enterShell = ''
     export PATH="$DEVENV_ROOT/.dev/bin:$PATH"
+    # Share Go module cache across worktrees instead of duplicating it in .devenv/state/go.
+    export GOPATH="$HOME/go"
+    export GOMODCACHE="$HOME/go/pkg/mod"
     # trawlkit/store uses C SQLite (mattn/go-sqlite3); FTS5 is a build tag.
     export GOFLAGS="-tags=sqlite_fts5"
   '';

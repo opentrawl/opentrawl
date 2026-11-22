@@ -25,13 +25,33 @@ for module in "${modules[@]}"; do
   )
 done
 
-echo "test: generated app protobufs"
-app/scripts/generate-app-protobuf --check
+swift_test_args=()
+if [[ -n "${OPENTRAWL_SWIFT_SCRATCH_PATH:-}" ]]; then
+  swift_test_args+=(--scratch-path "$OPENTRAWL_SWIFT_SCRATCH_PATH")
+elif [[ "${GITHUB_ACTIONS:-}" != "true" && "$(uname -s)" == "Darwin" ]]; then
+  export OPENTRAWL_SWIFT_SCRATCH_PATH="$HOME/Library/Developer/OpenTrawl/DerivedData"
+  swift_test_args+=(--scratch-path "$OPENTRAWL_SWIFT_SCRATCH_PATH")
+fi
 
-echo "test: app"
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
   export OPENTRAWL_SKIP_WINDOW_FOCUS_TESTS=1
 fi
-app/scripts/swift-with-trawl test --no-parallel
+
+if [[ "${OPENTRAWL_SWIFT_SCRATCH_PATH:-}" == "$HOME/Library/Developer/OpenTrawl/DerivedData" && "${OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD:-}" != "1" ]]; then
+  mkdir -p "$HOME/Library/Developer/OpenTrawl"
+  OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD=1 /usr/bin/lockf -k "$HOME/Library/Developer/OpenTrawl/build.lock" \
+    /usr/bin/env bash -euo pipefail -c '
+      cd "$1"
+      echo "test: generated app protobufs"
+      app/scripts/generate-app-protobuf --check
+      echo "test: app"
+      app/scripts/swift-with-trawl test --scratch-path "$2" --no-parallel
+    ' _ "$root" "$OPENTRAWL_SWIFT_SCRATCH_PATH"
+else
+  echo "test: generated app protobufs"
+  app/scripts/generate-app-protobuf --check
+  echo "test: app"
+  app/scripts/swift-with-trawl test ${swift_test_args[@]+"${swift_test_args[@]}"} --no-parallel
+fi
 
 echo "check-test: ok"

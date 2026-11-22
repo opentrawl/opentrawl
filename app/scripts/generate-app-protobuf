@@ -18,10 +18,27 @@ run_host_swift_without_xcode_environment() {
   env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
 }
 
-swift_protobuf_source_checkout="$application_directory/.build/checkouts/swift-protobuf"
+if [[ -n "${OPENTRAWL_SWIFT_SCRATCH_PATH:-}" ]]; then
+  swift_scratch_path="$OPENTRAWL_SWIFT_SCRATCH_PATH"
+elif [[ "${GITHUB_ACTIONS:-}" != "true" && "$(uname -s)" == "Darwin" ]]; then
+  swift_scratch_path="$HOME/Library/Developer/OpenTrawl/DerivedData"
+else
+  swift_scratch_path="$application_directory/.build"
+fi
+
+swift_protobuf_source_checkout="$swift_scratch_path/checkouts/swift-protobuf"
 protoc_gen_swift_executable="$swift_protobuf_source_checkout/.build/release/protoc-gen-swift"
 if [[ ! -x "$protoc_gen_swift_executable" ]]; then
-  run_host_swift_without_xcode_environment package --package-path "$application_directory" resolve
+  if [[ "$swift_scratch_path" == "$HOME/Library/Developer/OpenTrawl/DerivedData" && "${OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD:-}" != "1" ]]; then
+    mkdir -p "$HOME/Library/Developer/OpenTrawl"
+    exec env OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD=1 \
+      /usr/bin/lockf -k "$HOME/Library/Developer/OpenTrawl/build.lock" \
+      "$0" "$@"
+  fi
+  run_host_swift_without_xcode_environment package \
+    --package-path "$application_directory" \
+    --scratch-path "$swift_scratch_path" \
+    resolve
   run_host_swift_without_xcode_environment build \
     --package-path "$swift_protobuf_source_checkout" \
     --configuration release \
