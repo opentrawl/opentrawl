@@ -20,6 +20,8 @@ import (
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
+	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
+	"github.com/opentrawl/opentrawl/twitter/internal/xweb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -37,13 +39,22 @@ type Crawler struct {
 	statsBy       string
 	statsLimit    int
 	statsLimitSet bool
+
+	connect    connectOptions
+	updateOpts updateFlags
+	dmOpts     dmMessageOptions
 }
 
 var (
-	_ trawlkit.Trawler      = (*Crawler)(nil)
-	_ trawlkit.Updater      = (*Crawler)(nil)
-	_ trawlkit.Searcher     = (*Crawler)(nil)
-	_ trawlkit.RecordOpener = (*Crawler)(nil)
+	_ trawlkit.Trawler                = (*Crawler)(nil)
+	_ trawlkit.Updater                = (*Crawler)(nil)
+	_ trawlkit.Searcher               = (*Crawler)(nil)
+	_ trawlkit.RecordOpener           = (*Crawler)(nil)
+	_ trawlkit.ConversationLister     = (*Crawler)(nil)
+	_ trawlkit.TrawlerMessageLister   = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
+	_ trawlkit.PersonMessageCounter   = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -57,9 +68,9 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerAliases:     []string{"x"},
 		RegisteredTrawlerDisplayName: "Twitter",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "An X archive you import and, when you run update, your posts, likes, bookmarks, mentions and engagement counts from X.",
-			LeavesMachine:   "Nothing from your local archive is uploaded. An explicit update requests your account data from X.",
-			NetworkRequests: "Only an explicit update requests data from api.x.com. Import, search and other archive commands are local.",
+			Reads:           "An X archive you import and, when connected, your posts, likes, bookmarks, mentions and direct messages from X (read-only via your web session or official X API credentials).",
+			LeavesMachine:   "Nothing from your local archive is uploaded. Only explicit connect and update operations request your account data from X.",
+			NetworkRequests: "Web-session mode requests x.com (and abs.twimg.com bundles for query ID discovery); official API mode requests api.x.com. Import, search, browse and open are strictly local.",
 		},
 	}
 }
@@ -79,13 +90,46 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
-		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{
+			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
+			RegisterTrawlerCommandFlags:      c.updateFlags,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand,
+		},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
-		c.browseVerb("tweets"),
-		c.browseVerb("bookmarks"),
-		c.browseVerb("likes"),
-		c.browseVerb("mentions"),
+		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_WHO, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
+		{
+			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_CONVERSATIONS,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+		},
+		{
+			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
+			RegisterTrawlerCommandFlags:      c.dmMessageFlags,
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+		},
+		c.browseVerb("bookmarks", trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp),
+		c.browseVerb("tweets", trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp),
+		c.browseVerb("likes", trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp),
+		c.browseVerb("mentions", trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp),
+		{
+			TrawlerCommandName:               "connect",
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+			TrawlerCommandHelpDescription:    "Connect an X web session (auth_token and ct0) for read-only syncing",
+			RegisterTrawlerCommandFlags:      c.connectFlags,
+			TrawlerCommandChangesArchive:     true,
+			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+				return c.handler(ctx, req).runConnect()
+			},
+		},
+		{
+			TrawlerCommandName:               "disconnect",
+			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
+			TrawlerCommandHelpDescription:    "Remove stored X web session cookies; keep the archive",
+			TrawlerCommandChangesArchive:     true,
+			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
+				return c.handler(ctx, req).runDisconnect()
+			},
+		},
 		{
 			TrawlerCommandName:               "stats",
 			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
@@ -116,12 +160,12 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	}
 }
 
-func (c *Crawler) browseVerb(name string) trawlkit.TrawlerCommand {
+func (c *Crawler) browseVerb(name string, placement trawlkit.TrawlerCommandDiscoveryPlacement) trawlkit.TrawlerCommand {
 	selectedBrowseCommand := browseCommands[name]
 	return trawlkit.TrawlerCommand{
 		TrawlerCommandName:               name,
 		TrawlerCommandHelpDescription:    selectedBrowseCommand.title,
-		TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownInBareTrawlOverviewAndTrawlerNamespaceHelp,
+		TrawlerCommandDiscoveryPlacement: placement,
 		RegisterTrawlerCommandFlags:      c.browseFlags,
 		ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
 			return c.handler(ctx, req).runBrowse(selectedBrowseCommand)
@@ -144,20 +188,57 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
-	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
-		{ArchiveContentKindName: "authored", ArchiveContentKindDisplayName: "authored", ArchiveContentCount: uint64(archiveStatus.Authored)},
-		{ArchiveContentKindName: "bookmarks", ArchiveContentKindDisplayName: "bookmarks", ArchiveContentCount: uint64(archiveStatus.Bookmarks)},
-		{ArchiveContentKindName: "likes_seen", ArchiveContentKindDisplayName: "tweets liked", ArchiveContentCount: uint64(archiveStatus.LikesSeen)},
-		{ArchiveContentKindName: "replies_to_me", ArchiveContentKindDisplayName: "replies to me", ArchiveContentCount: uint64(archiveStatus.RepliesToMe)},
+	counts := []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
+		{ArchiveContentKindName: "authored", ArchiveContentKindDisplayName: "authored", ArchiveContentCount: uint64(max(archiveStatus.Authored, 0))},
+		{ArchiveContentKindName: "bookmarks", ArchiveContentKindDisplayName: "bookmarks", ArchiveContentCount: uint64(max(archiveStatus.Bookmarks, 0))},
+		{ArchiveContentKindName: "likes_seen", ArchiveContentKindDisplayName: "likes", ArchiveContentCount: uint64(max(archiveStatus.LikesSeen, 0))},
+		{ArchiveContentKindName: "replies_to_me", ArchiveContentKindDisplayName: "mentions", ArchiveContentCount: uint64(max(archiveStatus.RepliesToMe, 0))},
 	}
-	lastSuccessfullyCompletedArchiveUpdateTime := archiveStatus.LastImportAt
-	if archiveStatus.LiveUpdateResult == "ok" && archiveStatus.LastLiveUpdate.After(lastSuccessfullyCompletedArchiveUpdateTime) {
-		lastSuccessfullyCompletedArchiveUpdateTime = archiveStatus.LastLiveUpdate
+	if archiveStatus.DMMessages > 0 || archiveStatus.DMConversations > 0 {
+		counts = append(counts,
+			&status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
+				ArchiveContentKindName:        "dm_messages",
+				ArchiveContentKindDisplayName: "DMs",
+				ArchiveContentCount:           uint64(max(archiveStatus.DMMessages, 0)),
+			},
+			&status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
+				ArchiveContentKindName:        "dm_conversations",
+				ArchiveContentKindDisplayName: "DM threads",
+				ArchiveContentCount:           uint64(max(archiveStatus.DMConversations, 0)),
+			},
+		)
 	}
-	if !lastSuccessfullyCompletedArchiveUpdateTime.IsZero() {
-		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(lastSuccessfullyCompletedArchiveUpdateTime)
+	trawlerArchiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = counts
+
+	lastUpdated := archiveStatus.LastImportAt
+	if archiveStatus.LastLiveUpdate.After(lastUpdated) {
+		lastUpdated = archiveStatus.LastLiveUpdate
 	}
-	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
+	if !lastUpdated.IsZero() {
+		trawlerArchiveStatus.LastSuccessfullyCompletedArchiveUpdateTime = timestamppb.New(lastUpdated)
+	}
+	newest := archiveStatus.NewestTweet
+	if archiveStatus.NewestDM.After(newest) {
+		newest = archiveStatus.NewestDM
+	}
+	if !newest.IsZero() {
+		trawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(newest)
+	}
+
+	cfg, _ := loadBirdConfig(string(req.TrawlerArchivePaths.TrawlerConfigurationPath))
+	source, sourceErr := cfg.ResolveSyncSource()
+	works := false
+	if sourceErr == nil {
+		switch source {
+		case TwitterSyncSourceWebSession:
+			works = xweb.WebSessionPresent(cfg.SessionPath()) && archiveStatus.WebSessionValid
+		case TwitterSyncSourceOfficialAPI:
+			works = xapi.CredentialsPresent(cfg.OfficialAPICredentialsPath())
+		case TwitterSyncSourceUnset:
+			works = archiveStatus.Tweets > 0 || archiveStatus.DMMessages > 0
+		}
+	}
+	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = works
 	return response, nil
 }
 
@@ -174,19 +255,9 @@ func (c *Crawler) OpenRecord(
 	req *trawlkit.TrawlerCommandExecutionRequest,
 	localShortReference *trawlkit.LocalTrawlerShortReference,
 ) (*open.OpenRecord, error) {
-	value, err := c.handler(ctx, req).loadOpenPost(localShortReference)
+	record, err := c.handler(ctx, req).loadOpenRecord(localShortReference)
 	if err != nil {
 		return nil, err
-	}
-	openedTwitterPostRecord := projectOpenRecord(value)
-	record := &open.OpenRecord{
-		RecordTrawler:            c.RegisteredTrawlerDeclaration().RegisteredTrawler,
-		CanonicalRecordReference: openedTwitterPostRecord.GetCanonicalTwitterPostRecordReference(),
-		TypedOpenedRecord: &open.OpenRecord_TrawlerSpecificOpenedRecordPresentation{
-			TrawlerSpecificOpenedRecordPresentation: &open.TrawlerSpecificOpenedRecordPresentation{
-				DetailPresentation: projectOpenDetailPresentation(value),
-			},
-		},
 	}
 	if err := openrecord.Validate(record); err != nil {
 		return nil, err
@@ -250,6 +321,30 @@ func (c *Crawler) statsFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.statsWindow, "window", "30d", "look back over this duration")
 	fs.StringVar(&c.statsBy, "by", "likes", "sort by likes, retweets, or replies")
 	fs.Var(trackedInt{value: &c.statsLimit, set: &c.statsLimitSet}, "limit", "maximum results")
+}
+
+func (c *Crawler) connectFlags(fs *flag.FlagSet) {
+	c.connect = connectOptions{}
+	fs.StringVar(&c.connect.authToken, "auth-token", "", "X auth_token session cookie")
+	fs.StringVar(&c.connect.ct0, "ct0", "", "X ct0 CSRF session cookie")
+	fs.StringVar(&c.connect.filePath, "file", "", "Read AUTH_TOKEN and CT0 from a local file")
+	fs.BoolVar(&c.connect.fromEnv, "from-env", false, "Read AUTH_TOKEN and CT0 from environment variables")
+}
+
+func (c *Crawler) updateFlags(fs *flag.FlagSet) {
+	c.updateOpts = updateFlags{}
+	fs.BoolVar(&c.updateOpts.force, "force", false, "Bypass the 15-minute web-session sync cooldown")
+	fs.BoolVar(&c.updateOpts.full, "full", false, "Sweep deeper bookmark, timeline and DM history instead of stopping at known records")
+	fs.IntVar(&c.updateOpts.maxPages, "max-pages", 0, "Maximum pages to fetch per endpoint during this update")
+}
+
+func (c *Crawler) dmMessageFlags(fs *flag.FlagSet) {
+	c.dmOpts = dmMessageOptions{}
+	fs.StringVar(&c.dmOpts.who, "who", "", "Show only direct messages involving `PERSON`")
+	fs.StringVar(&c.dmOpts.after, "after", "", render.OnOrAfterDateOptionDescription)
+	fs.StringVar(&c.dmOpts.before, "before", "", render.OnOrBeforeDateOptionDescription)
+	fs.BoolVar(&c.dmOpts.fromMe, "from-me", false, "Show only direct messages sent by you")
+	fs.BoolVar(&c.dmOpts.fromThem, "from-them", false, "Show only direct messages sent by other people")
 }
 
 func timePtr(t time.Time) *time.Time {

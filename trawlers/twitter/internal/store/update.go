@@ -159,9 +159,60 @@ func (s *Store) SetAuthTokenValid(ctx context.Context, valid bool, at time.Time)
 	}}})
 }
 
+func (s *Store) SetWebSessionValid(ctx context.Context, valid bool, at time.Time) error {
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	cursor := "false"
+	if valid {
+		cursor = "true"
+	}
+	return s.CommitLivePage(ctx, LivePage{UpdatedAt: at, States: []UpdateStateUpdate{{
+		Kind:       "auth:session_valid",
+		Cursor:     cursor,
+		LastResult: cursor,
+	}}})
+}
+
+func (s *Store) EndpointRateLimitResetAt(ctx context.Context, endpoint string) (time.Time, error) {
+	state, err := s.UpdateState(ctx, "ratelimit_reset:"+strings.TrimSpace(endpoint))
+	if err != nil {
+		return time.Time{}, err
+	}
+	if strings.TrimSpace(state.Cursor) == "" {
+		return time.Time{}, nil
+	}
+	return parseStoredTime(state.Cursor), nil
+}
+
+func (s *Store) RecordEndpointRateLimit(ctx context.Context, endpoint string, resetAt time.Time, remaining int, limit int, at time.Time) error {
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	resetStr := ""
+	if !resetAt.IsZero() {
+		resetStr = formatUTC(resetAt)
+	}
+	return s.CommitLivePage(ctx, LivePage{UpdatedAt: at, States: []UpdateStateUpdate{{
+		Kind:         "ratelimit_reset:" + strings.TrimSpace(endpoint),
+		Cursor:       resetStr,
+		LastUpdateAt: at,
+		LastResult:   strconv.Itoa(remaining) + "/" + strconv.Itoa(limit),
+	}}})
+}
+
 func (s *Store) HasRole(ctx context.Context, tweetID, role string) (bool, error) {
 	var exists int
 	err := s.db.QueryRowContext(ctx, `select 1 from tweet_roles where tweet_id = ? and role = ? limit 1`, tweetID, role).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (s *Store) HasTweet(ctx context.Context, tweetID string) (bool, error) {
+	var exists int
+	err := s.db.QueryRowContext(ctx, `select 1 from tweets where id = ? limit 1`, tweetID).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}

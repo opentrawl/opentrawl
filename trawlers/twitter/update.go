@@ -12,6 +12,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"github.com/opentrawl/opentrawl/twitter/internal/store"
 	"github.com/opentrawl/opentrawl/twitter/internal/xapi"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -72,9 +73,30 @@ func (r *runtime) runUpdateReport() (*updatecontract.TrawlerArchiveUpdateReport,
 	if err != nil {
 		return nil, err
 	}
+	source, err := cfg.ResolveSyncSource()
+	if err != nil {
+		return nil, r.contractError("config_invalid", err.Error())
+	}
+	switch source {
+	case TwitterSyncSourceWebSession:
+		return r.runWebSessionUpdateReport(cfg)
+	case TwitterSyncSourceOfficialAPI:
+		return r.runOfficialAPIUpdateReport(cfg)
+	case TwitterSyncSourceUnset:
+		return nil, render.TrawlerIsNotConnected(twitterDisplayName)
+	default:
+		return nil, render.TrawlerIsNotConnected(twitterDisplayName)
+	}
+}
+
+func (r *runtime) runOfficialAPIUpdateReport(cfg birdConfig) (*updatecontract.TrawlerArchiveUpdateReport, error) {
 	var report *updatecontract.TrawlerArchiveUpdateReport
-	err = r.withStore(func(st *store.Store) error {
-		client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
+	err := r.withStore(func(st *store.Store) error {
+		client, err := xapi.New(xapi.Options{
+			BaseURL:         xapiBaseURL,
+			HTTPClient:      xapiHTTPClient,
+			CredentialsPath: cfg.OfficialAPICredentialsPath(),
+		})
 		if err != nil {
 			return r.updateError(st, err, false)
 		}
@@ -396,8 +418,10 @@ func (s *updateRunner) print(event updateEvent) error {
 	return nil
 }
 
-func updateReport(_ updateTotals) *updatecontract.TrawlerArchiveUpdateReport {
-	return &updatecontract.TrawlerArchiveUpdateReport{}
+func updateReport(totals updateTotals) *updatecontract.TrawlerArchiveUpdateReport {
+	return &updatecontract.TrawlerArchiveUpdateReport{
+		ArchiveRecordCountAddedByThisUpdate: proto.Uint64(uint64(max(totals.Tweets, 0))),
+	}
 }
 
 func (r *runtime) updateError(st *store.Store, err error, fetched bool) error {

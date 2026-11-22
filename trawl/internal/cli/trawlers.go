@@ -60,7 +60,7 @@ var trawlerFactories = []trawlerRegistration{
 	{factory: func() trawlkit.Trawler { return gmail.New() }, beta: true, branding: appStoreBranding("envelope.fill", "#EA4335", "com.google.Gmail"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
 	{factory: func() trawlkit.Trawler { return calendar.New() }, beta: true, branding: macAppBranding("calendar", "#FF3B30", "com.apple.iCal", "com.apple.mobilecal"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
 	{factory: func() trawlkit.Trawler { return photos.New() }, beta: true, branding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos", "com.apple.mobileslideshow"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
-	{factory: func() trawlkit.Trawler { return twitter.New() }, branding: appStoreBranding("bubble.left.and.bubble.right.fill", "#111111", "com.atebits.Tweetie2"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
+	{factory: func() trawlkit.Trawler { return twitter.New() }, beta: true, branding: appStoreBranding("bubble.left.and.bubble.right.fill", "#111111", "com.atebits.Tweetie2"), sourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
 }
 
 func macAppBranding(symbolName, accentColor, bundleIdentifier, artworkBundleIdentifier string) *federation.TrawlerBranding {

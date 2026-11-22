@@ -12,8 +12,11 @@ type Status struct {
 	Bookmarks        int
 	LikesSeen        int
 	Tweets           int
+	DMConversations  int
+	DMMessages       int
 	OldestTweet      time.Time
 	NewestTweet      time.Time
+	NewestDM         time.Time
 	LastImportAt     time.Time
 	LastLiveUpdate   time.Time
 	LiveUpdateResult string
@@ -21,6 +24,7 @@ type Status struct {
 	SpendMonth       string
 	SpendMicros      int64
 	TokenValid       bool
+	WebSessionValid  bool
 	FTSTweets        int
 	FTSRows          int
 	IntegrityText    string
@@ -36,6 +40,8 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		{&out.Authored, `select count(*) from tweet_roles where role = 'authored'`},
 		{&out.RepliesToMe, `select count(*) from tweet_roles where role = 'mention'`},
 		{&out.LikesSeen, `select count(*) from tweet_roles where role = 'like'`},
+		{&out.DMConversations, `select count(*) from dm_conversations`},
+		{&out.DMMessages, `select count(*) from dm_messages`},
 		{&out.FTSTweets, `select count(*) from tweets`},
 		{&out.FTSRows, `select count(*) from tweets_fts`},
 	} {
@@ -52,6 +58,13 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	}
 	if newest.Valid {
 		out.NewestTweet = parseStoredTime(newest.String)
+	}
+	var newestDM sql.NullString
+	if err := s.db.QueryRowContext(ctx, `select max(created_at) from dm_messages where created_at <> ?`, UnknownTimeRFC3339).Scan(&newestDM); err != nil {
+		return out, err
+	}
+	if newestDM.Valid {
+		out.NewestDM = parseStoredTime(newestDM.String)
 	}
 	bookmarkPass, err := s.UpdateState(ctx, "bookmark_pass")
 	if err != nil {
@@ -83,6 +96,11 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		return out, err
 	}
 	out.TokenValid = tokenState.Cursor == "true"
+	sessionState, err := s.UpdateState(ctx, "auth:session_valid")
+	if err != nil {
+		return out, err
+	}
+	out.WebSessionValid = sessionState.Cursor != "false"
 	out.SpendMonth = time.Now().UTC().Format("2006-01")
 	out.SpendMicros, _ = s.SpendMicros(ctx, out.SpendMonth)
 	out.IntegrityText, _ = s.Integrity(ctx)

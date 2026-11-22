@@ -68,4 +68,62 @@ create trigger if not exists tweets_fts_au after update on tweets begin
 	insert into tweets_fts(rowid, text, author_handle, author_name)
 	values (new.rowid, new.text, new.author_handle, new.author_name);
 end;
+
+create table if not exists dm_conversations (
+	id text primary key,
+	inbox_kind text not null default 'accepted' check(inbox_kind in ('accepted', 'request')),
+	conversation_kind text not null default 'direct' check(conversation_kind in ('direct', 'group')),
+	title text not null default '',
+	participant_author_id text not null default '',
+	unread_count integer not null default 0,
+	needs_reply integer not null default 0,
+	last_message_at text not null default ''
+);
+
+create table if not exists dm_conversation_participants (
+	conversation_id text not null references dm_conversations(id) on delete cascade,
+	author_id text not null,
+	primary key(conversation_id, author_id)
+);
+
+create table if not exists dm_messages (
+	id text primary key,
+	conversation_id text not null references dm_conversations(id) on delete cascade,
+	created_at text not null,
+	sender_author_id text not null default '',
+	direction text not null default 'inbound' check(direction in ('inbound', 'outbound')),
+	text text not null default '',
+	media_count integer not null default 0,
+	raw_json text
+);
+
+create index if not exists idx_dm_conversations_last_message on dm_conversations(last_message_at desc, id);
+create index if not exists idx_dm_conversations_participant on dm_conversations(participant_author_id);
+create index if not exists idx_dm_conversation_participants_author on dm_conversation_participants(author_id);
+create index if not exists idx_dm_messages_conversation_time on dm_messages(conversation_id, created_at desc, id desc);
+create index if not exists idx_dm_messages_created_at on dm_messages(created_at desc, id desc);
+create index if not exists idx_dm_messages_sender on dm_messages(sender_author_id);
+
+create virtual table if not exists dm_messages_fts using fts5(
+	text,
+	content='dm_messages',
+	content_rowid='rowid'
+);
+
+create trigger if not exists dm_messages_fts_ai after insert on dm_messages begin
+	insert into dm_messages_fts(rowid, text)
+	values (new.rowid, new.text);
+end;
+
+create trigger if not exists dm_messages_fts_ad after delete on dm_messages begin
+	insert into dm_messages_fts(dm_messages_fts, rowid, text)
+	values ('delete', old.rowid, old.text);
+end;
+
+create trigger if not exists dm_messages_fts_au after update on dm_messages begin
+	insert into dm_messages_fts(dm_messages_fts, rowid, text)
+	values ('delete', old.rowid, old.text);
+	insert into dm_messages_fts(rowid, text)
+	values (new.rowid, new.text);
+end;
 `
