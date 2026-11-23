@@ -37,6 +37,7 @@ const (
 	ArchiveRecordKind_ARCHIVE_RECORD_KIND_PHOTO              ArchiveRecordKind = 6
 	ArchiveRecordKind_ARCHIVE_RECORD_KIND_FINANCIAL_MOVEMENT ArchiveRecordKind = 7
 	ArchiveRecordKind_ARCHIVE_RECORD_KIND_PERSON             ArchiveRecordKind = 8
+	ArchiveRecordKind_ARCHIVE_RECORD_KIND_HEALTH_RECORD      ArchiveRecordKind = 9
 )
 
 // Enum value maps for ArchiveRecordKind.
@@ -51,6 +52,7 @@ var (
 		6: "ARCHIVE_RECORD_KIND_PHOTO",
 		7: "ARCHIVE_RECORD_KIND_FINANCIAL_MOVEMENT",
 		8: "ARCHIVE_RECORD_KIND_PERSON",
+		9: "ARCHIVE_RECORD_KIND_HEALTH_RECORD",
 	}
 	ArchiveRecordKind_value = map[string]int32{
 		"ARCHIVE_RECORD_KIND_UNSPECIFIED":        0,
@@ -62,6 +64,7 @@ var (
 		"ARCHIVE_RECORD_KIND_PHOTO":              6,
 		"ARCHIVE_RECORD_KIND_FINANCIAL_MOVEMENT": 7,
 		"ARCHIVE_RECORD_KIND_PERSON":             8,
+		"ARCHIVE_RECORD_KIND_HEALTH_RECORD":      9,
 	}
 )
 
@@ -1024,7 +1027,7 @@ const file_trawl_index_index_proto_rawDesc = "" +
 	"\x19deleted_record_references\x18\x03 \x03(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x17deletedRecordReferences\x12H\n" +
 	"\ftime_windows\x18\x04 \x03(\v2%.trawl.index.IndexedArchiveTimeWindowR\vtimeWindows\x12B\n" +
 	"\x1dcomplete_snapshot_replacement\x18\x05 \x01(\bR\x1bcompleteSnapshotReplacement\x12,\n" +
-	"\x12next_opaque_cursor\x18\x06 \x01(\tR\x10nextOpaqueCursor*\xd3\x02\n" +
+	"\x12next_opaque_cursor\x18\x06 \x01(\tR\x10nextOpaqueCursor*\xfa\x02\n" +
 	"\x11ArchiveRecordKind\x12#\n" +
 	"\x1fARCHIVE_RECORD_KIND_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19ARCHIVE_RECORD_KIND_EMAIL\x10\x01\x12$\n" +
@@ -1034,7 +1037,8 @@ const file_trawl_index_index_proto_rawDesc = "" +
 	"\"ARCHIVE_RECORD_KIND_CALENDAR_EVENT\x10\x05\x12\x1d\n" +
 	"\x19ARCHIVE_RECORD_KIND_PHOTO\x10\x06\x12*\n" +
 	"&ARCHIVE_RECORD_KIND_FINANCIAL_MOVEMENT\x10\a\x12\x1e\n" +
-	"\x1aARCHIVE_RECORD_KIND_PERSON\x10\b*\xa4\x03\n" +
+	"\x1aARCHIVE_RECORD_KIND_PERSON\x10\b\x12%\n" +
+	"!ARCHIVE_RECORD_KIND_HEALTH_RECORD\x10\t*\xa4\x03\n" +
 	"\x19ObservedArchiveRecordRole\x12,\n" +
 	"(OBSERVED_ARCHIVE_RECORD_ROLE_UNSPECIFIED\x10\x00\x12)\n" +
 	"%OBSERVED_ARCHIVE_RECORD_ROLE_AUTHORED\x10\x01\x12)\n" +

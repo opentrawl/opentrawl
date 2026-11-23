@@ -499,6 +499,8 @@ func kindDisplayNameForCandidate(c indexedRecordCandidate) string {
 		return "Movement"
 	case "person":
 		return "Person"
+	case "health":
+		return "Health"
 	default:
 		return ""
 	}
