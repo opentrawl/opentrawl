@@ -5,9 +5,11 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/semantic"
 )
 
 type UpdateCmd struct {
@@ -63,7 +65,22 @@ func (c *UpdateCmd) Run(r *Runtime) error {
 	if err := r.output.WriteArchiveUpdate(operation); err != nil {
 		return err
 	}
+	r.syncSemanticIndexIncrementallyIfEnabled(r.ctx)
 	return outcomeExit(operation.GetOutcome())
+}
+
+func (r *Runtime) syncSemanticIndexIncrementallyIfEnabled(ctx context.Context) {
+	stateRoot, err := trawlkit.ResolveStateRoot(r.stateRoot)
+	if err != nil {
+		return
+	}
+	ready, err := semantic.IsSemanticSearchEnabledAndReady(ctx, stateRoot)
+	if err != nil || !ready {
+		return
+	}
+	if _, buildErr := semantic.BuildOrUpdateSemanticIndexWithStoredWindow(ctx, stateRoot); buildErr != nil {
+		r.logInfo("semantic_incremental_sync_failed", "error="+logQuote(buildErr.Error()))
+	}
 }
 
 func (r *Runtime) updateTrawler(

@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package trawl.semantic;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/semantic;semantic";
+
+// SemanticEmbedderRequest is one length-delimited request sent from trawl to
+// the local Apple Silicon native MLX embedding helper over its Unix socket.
+message SemanticEmbedderRequest {
+  oneof request_payload {
+    SemanticEmbedderHealthCheckRequest health_check = 1;
+    SemanticEmbedderEmbedTextsRequest embed_texts = 2;
+    SemanticEmbedderUnloadModelRequest unload_model = 3;
+    SemanticEmbedderShutdownRequest shutdown = 4;
+  }
+}
+
+message SemanticEmbedderHealthCheckRequest {}
+
+message SemanticEmbedderEmbedTextsRequest {
+  string local_model_directory_path = 1;
+  string model_identifier = 2;
+  repeated string input_texts = 3;
+  uint32 output_embedding_dimensions = 4;
+  uint32 maximum_input_token_count = 5;
+  bool input_represents_search_query = 6;
+}
+
+message SemanticEmbedderUnloadModelRequest {}
+
+message SemanticEmbedderShutdownRequest {}
+
+// SemanticEmbedderResponse is one length-delimited response returned by the
+// local Apple Silicon native MLX embedding helper.
+message SemanticEmbedderResponse {
+  oneof response_payload {
+    SemanticEmbedderHealthResponse health = 1;
+    SemanticEmbedderEmbedTextsResponse embeddings = 2;
+    SemanticEmbedderAcknowledgedResponse acknowledged = 3;
+    SemanticEmbedderFailureResponse failure = 4;
+  }
+}
+
+message SemanticEmbedderHealthResponse {
+  string loaded_model_identifier = 1;
+  bool model_currently_loaded = 2;
+  uint64 active_metal_memory_bytes = 3;
+  uint64 peak_metal_memory_bytes = 4;
+}
+
+message SemanticEmbedderEmbedTextsResponse {
+  string model_identifier = 1;
+  uint32 output_embedding_dimensions = 2;
+  repeated bytes quantized_int8_vectors = 3;
+  uint64 elapsed_milliseconds = 4;
+}
+
+message SemanticEmbedderAcknowledgedResponse {}
+
+message SemanticEmbedderFailureResponse {
+  string failure_message = 1;
+}

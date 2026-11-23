@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Build the native Apple Silicon Swift/MLX semantic embedding helper
+# (`trawl-embed` + `mlx-swift_Cmlx.bundle`) using host Xcode so Metal shaders
+# compile cleanly with zero Python runtime dependency.
+set -euo pipefail
+
+usage() {
+  echo "usage: scripts/build-semantic-helper --output-dir DIR [--metallib-dir DIR] [--derived-data DIR]" >&2
+  exit 2
+}
+
+output_dir=""
+metallib_dir=""
+derived_data=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-dir) output_dir="${2:-}"; shift 2 ;;
+    --metallib-dir) metallib_dir="${2:-}"; shift 2 ;;
+    --derived-data) derived_data="${2:-}"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+[[ -n "$output_dir" ]] || usage
+if [[ -z "$metallib_dir" ]]; then
+  metallib_dir="$output_dir"
+fi
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+helper_dir="$repo_root/helpers/trawl-embed"
+if [[ -z "$derived_data" ]]; then
+  derived_data="$HOME/Library/Developer/OpenTrawl/SemanticHelperDerivedData"
+fi
+
+mkdir -p "$output_dir" "$metallib_dir" "$(dirname "$derived_data")"
+
+build_cmd() {
+  (
+    cd "$helper_dir"
+    env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET \
+      xcodebuild \
+      -scheme trawl-embed \
+      -destination 'platform=macOS,arch=arm64' \
+      -configuration Release \
+      -derivedDataPath "$derived_data" \
+      build
+  )
+}
+
+if [[ "$derived_data" == "$HOME/Library/Developer/OpenTrawl/"* && "${OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD:-}" != "1" ]]; then
+  mkdir -p "$HOME/Library/Developer/OpenTrawl"
+  OPENTRAWL_DEVELOPMENT_BUILD_LOCK_HELD=1 /usr/bin/lockf -k "$HOME/Library/Developer/OpenTrawl/semantic-build.lock" \
+    /usr/bin/env bash -euo pipefail -c '
+      cd "$1"
+      env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET \
+        xcodebuild \
+        -scheme trawl-embed \
+        -destination "platform=macOS,arch=arm64" \
+        -configuration Release \
+        -derivedDataPath "$2" \
+        build
+    ' _ "$helper_dir" "$derived_data"
+else
+  build_cmd
+fi
+
+products_dir="$derived_data/Build/Products/Release"
+[[ -x "$products_dir/trawl-embed" ]] || {
+  echo "build-semantic-helper: missing compiled binary at $products_dir/trawl-embed" >&2
+  exit 1
+}
+metallib_source="$products_dir/mlx-swift_Cmlx.bundle/Contents/Resources/default.metallib"
+[[ -f "$metallib_source" ]] || {
+  echo "build-semantic-helper: missing compiled Metal shader library at $metallib_source" >&2
+  exit 1
+}
+
+cp "$products_dir/trawl-embed" "$output_dir/trawl-embed"
+chmod +x "$output_dir/trawl-embed"
+cp "$metallib_source" "$metallib_dir/mlx.metallib"

@@ -223,6 +223,12 @@ MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
   --arch arm64 \
   --trimpath
 
+echo "Building native Apple Silicon semantic embedding helper"
+"$repo_root/scripts/build-semantic-helper" \
+  --output-dir "$contents/Helpers" \
+  --metallib-dir "$contents/Resources" \
+  --derived-data "$work/semantic-helper"
+
 sparkle_framework="$(find "$swift_scratch/artifacts" -type d -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
 [[ -n "$sparkle_framework" ]] || {
   echo "build-release: SwiftPM did not produce Sparkle.framework" >&2
@@ -259,6 +265,7 @@ rewrite_and_check_libraries() {
   done < <(otool -L "$binary" | awk 'NR > 1 { print $1 }')
 }
 rewrite_and_check_libraries "$contents/MacOS/Trawl"
+rewrite_and_check_libraries "$contents/Helpers/trawl-embed"
 while IFS= read -r plugin_binary; do
   chmod +x "$plugin_binary"
   rewrite_and_check_libraries "$plugin_binary"
@@ -328,6 +335,7 @@ codesign "${sign_args[@]}" --preserve-metadata=entitlements "$sparkle/Versions/B
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Autoupdate"
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Updater.app"
 codesign "${sign_args[@]}" "$sparkle"
+codesign "${sign_args[@]}" "$contents/Helpers/trawl-embed"
 while IFS= read -r plugin_binary; do
   codesign "${sign_args[@]}" "$plugin_binary"
 done < <(find "$contents/Helpers/plugins" -mindepth 1 -maxdepth 1 -type f -name 'trawl-*' | sort)

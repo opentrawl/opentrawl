@@ -5,10 +5,13 @@
 included:
   - app/Sources
   - app/Tests
+  - helpers/trawl-embed/Sources
 
 excluded:
   - app/Sources/TrawlClient/Generated
   - app/.build
+  - helpers/trawl-embed/Sources/trawl-embed/Generated
+  - helpers/trawl-embed/.build
 
 only_rules:
   - compiler_protocol_init

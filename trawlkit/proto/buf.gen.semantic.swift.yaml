@@ -1,0 +1,7 @@
+version: v1
+plugins:
+  - plugin: swift
+    out: ../../helpers/trawl-embed/Sources/trawl-embed/Generated
+    opt:
+      - Visibility=Internal
+      - FileNaming=DropPath

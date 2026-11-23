@@ -8,6 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	"github.com/opentrawl/opentrawl/trawlkit/semantic"
 	"github.com/opentrawl/opentrawl/trawlkit/unifiedindex"
 )
 
@@ -141,6 +142,28 @@ func (r *Runtime) runUnifiedAndFederatedSearch(
 	unifiedOut, err := unifiedindex.SearchUnifiedIndex(ctx, indexStore.DB(), uq)
 	if err != nil {
 		return r.fallbackSearchAllTrawlers(ctx, selectedTrawlers, crawlQuery, limit, resolvedPersonDisplayName, resolvedPersonFacts)
+	}
+
+	if strings.TrimSpace(uq.QueryText) != "" {
+		if semReady, semCheckErr := semantic.IsSemanticSearchEnabledAndReady(ctx, stateRoot); semCheckErr == nil && semReady {
+			semHits, semErr := semantic.SearchSemanticIndex(ctx, stateRoot, indexStore.DB(), semantic.SemanticSearchQuery{
+				QueryText:         uq.QueryText,
+				Trawlers:          uq.Trawlers,
+				PersonFilterTerms: uq.PersonFilterTerms,
+				AfterUnix:         uq.AfterUnix,
+				BeforeUnix:        uq.BeforeUnix,
+				Limit:             limit,
+			})
+			if semErr == nil && len(semHits) > 0 {
+				fused := semantic.FuseLexicalAndSemanticSearchMatches(unifiedOut.Matches, semHits, limit)
+				unifiedOut.Matches = fused
+				if uint64(len(fused)) > unifiedOut.TotalRawMatches {
+					unifiedOut.TotalRawMatches = uint64(len(fused))
+				}
+			} else if semErr != nil {
+				r.logInfo("semantic_search_fallback_to_lexical", "error="+logQuote(semErr.Error()))
+			}
+		}
 	}
 
 	return mergeUnifiedAndFallbackSearchOperations(
