@@ -12,10 +12,7 @@ import (
 	contacts "github.com/opentrawl/opentrawl/trawlers/contacts"
 	imessage "github.com/opentrawl/opentrawl/trawlers/imessage"
 	mail "github.com/opentrawl/opentrawl/trawlers/mail"
-	notes "github.com/opentrawl/opentrawl/trawlers/notes"
 	photos "github.com/opentrawl/opentrawl/trawlers/photos"
-	telegram "github.com/opentrawl/opentrawl/trawlers/telegram"
-	whatsapp "github.com/opentrawl/opentrawl/trawlers/whatsapp"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/pluginruntime"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
@@ -53,9 +50,6 @@ type registeredTrawlerManifestSnapshot struct {
 // The environment override enables local development beyond the beta set.
 var trawlerFactories = []trawlerRegistration{
 	{factory: func() trawlkit.Trawler { return imessage.New() }, beta: true},
-	{factory: func() trawlkit.Trawler { return whatsapp.New() }, beta: true},
-	{factory: func() trawlkit.Trawler { return telegram.New() }, beta: true},
-	{factory: func() trawlkit.Trawler { return notes.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return contacts.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return mail.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return gmail.New() }, beta: true},

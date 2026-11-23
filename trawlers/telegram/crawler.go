@@ -13,6 +13,7 @@ import (
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
+	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 )
 
 const appID = "telegram"
@@ -73,10 +74,18 @@ var (
 	_ trawlkit.SuccessfullyCompletedArchiveUpdateRecorder = (*Crawler)(nil)
 	_ trawlkit.CanonicalRecordOpener                      = (*Crawler)(nil)
 	_ trawlkit.ArchiveIndexChangeExporter                 = (*Crawler)(nil)
+	_ trawlkit.PluginCapabilityDeclarator                 = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
+}
+
+func (*Crawler) DeclaredPluginCapabilities() *plugincontract.PluginDeclaredCapabilities {
+	return &plugincontract.PluginDeclaredCapabilities{
+		DeclaredReadPaths:                []string{"~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"},
+		SupportsArchiveIndexChangeExport: true,
+	}
 }
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {

@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
+	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 )
 
 type WhatsAppCrawlerConfiguration struct {
@@ -33,10 +34,19 @@ var (
 	_ trawlkit.PeopleSnapshotProvider     = (*Crawler)(nil)
 	_ trawlkit.CanonicalRecordOpener      = (*Crawler)(nil)
 	_ trawlkit.ArchiveIndexChangeExporter = (*Crawler)(nil)
+	_ trawlkit.PluginCapabilityDeclarator = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
+}
+
+func (*Crawler) DeclaredPluginCapabilities() *plugincontract.PluginDeclaredCapabilities {
+	return &plugincontract.PluginDeclaredCapabilities{
+		DeclaredReadPaths:                []string{"~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared"},
+		DeclaredConfigReadPathFields:     []string{"source"},
+		SupportsArchiveIndexChangeExport: true,
+	}
 }
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {

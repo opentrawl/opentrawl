@@ -181,7 +181,7 @@ func buildMinimalPluginEnvironment(privateTempDir string) []string {
 		"PATH=/usr/bin:/bin",
 		"TMPDIR=" + privateTempDir,
 	}
-	for _, key := range []string{"TZ", "LANG", "LC_ALL", "LC_CTYPE"} {
+	for _, key := range []string{"HOME", "TZ", "LANG", "LC_ALL", "LC_CTYPE"} {
 		if val := strings.TrimSpace(os.Getenv(key)); val != "" {
 			env = append(env, key+"="+val)
 		}

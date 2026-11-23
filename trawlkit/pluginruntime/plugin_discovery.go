@@ -435,16 +435,16 @@ func parseTrustSelfHostedApprovals(approvals []*plugincontract.SelfHostedNetwork
 }
 
 // extractBundledConfigReadPaths reads host-owned read-only config.toml for a
-// bundled first-party plugin and returns existing literal file paths referenced
-// by the plugin's declared_config_read_path_fields (e.g.
-// "enable_banking.private_key_file", "enable_banking.connections.session_file").
-func extractBundledConfigReadPaths(configPath string, fieldPaths []string) []string {
+// bundled first-party plugin and returns existing file and directory paths
+// referenced by the plugin's declared_config_read_path_fields (e.g.
+// "enable_banking.private_key_file", "source").
+func extractBundledConfigReadPaths(configPath string, fieldPaths []string) (files []string, dirs []string) {
 	if strings.TrimSpace(configPath) == "" || len(fieldPaths) == 0 {
-		return nil
+		return nil, nil
 	}
 	encoded, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	wanted := make(map[string]struct{}, len(fieldPaths))
 	for _, field := range fieldPaths {
@@ -452,24 +452,49 @@ func extractBundledConfigReadPaths(configPath string, fieldPaths []string) []str
 			wanted[trimmed] = struct{}{}
 		}
 	}
-	var resolvedPaths []string
+	return resolveExistingBundledReadPaths(scanTOMLStringValuesForDottedFields(string(encoded), wanted))
+}
+
+func resolveExistingBundledReadPaths(rawPaths []string) (files []string, dirs []string) {
 	seen := make(map[string]struct{})
-	for _, candidatePath := range scanTOMLStringValuesForDottedFields(string(encoded), wanted) {
-		trimmed := strings.TrimSpace(candidatePath)
-		if trimmed == "" || !filepath.IsAbs(trimmed) {
+	for _, rawPath := range rawPaths {
+		expanded := expandBundledHomeRelativePath(rawPath)
+		if expanded == "" || !filepath.IsAbs(expanded) {
 			continue
 		}
-		stat, statErr := os.Stat(trimmed)
-		if statErr != nil || !stat.Mode().IsRegular() {
+		stat, statErr := os.Stat(expanded)
+		if statErr != nil {
 			continue
 		}
-		if _, dup := seen[trimmed]; dup {
+		if _, dup := seen[expanded]; dup {
 			continue
 		}
-		seen[trimmed] = struct{}{}
-		resolvedPaths = append(resolvedPaths, trimmed)
+		seen[expanded] = struct{}{}
+		if stat.IsDir() {
+			dirs = append(dirs, expanded)
+		} else if stat.Mode().IsRegular() {
+			files = append(files, expanded)
+		}
 	}
-	return resolvedPaths
+	return files, dirs
+}
+
+func expandBundledHomeRelativePath(rawPath string) string {
+	trimmed := strings.TrimSpace(rawPath)
+	if trimmed == "" {
+		return ""
+	}
+	if trimmed == "~" || strings.HasPrefix(trimmed, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil || strings.TrimSpace(home) == "" {
+			return ""
+		}
+		if trimmed == "~" {
+			return filepath.Clean(home)
+		}
+		return filepath.Join(home, strings.TrimPrefix(trimmed, "~/"))
+	}
+	return filepath.Clean(trimmed)
 }
 
 func scanTOMLStringValuesForDottedFields(content string, wantedFields map[string]struct{}) []string {

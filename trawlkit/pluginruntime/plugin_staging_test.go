@@ -104,3 +104,36 @@ func TestStagedPluginTrustRecordRejectsBinaryHashMismatchAndRemovalPreservesArch
 		t.Fatalf("expected plugin archive file to be preserved, stat err: %v", err)
 	}
 }
+
+func TestBundledReadPathResolutionHandlesDirectoriesFilesAndConfigFields(t *testing.T) {
+	root := t.TempDir()
+	sourceDir := filepath.Join(root, "group-container")
+	keyFile := filepath.Join(root, "private.pem")
+	if err := os.MkdirAll(sourceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyFile, []byte("key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	files, dirs := resolveExistingBundledReadPaths([]string{sourceDir, keyFile, filepath.Join(root, "missing")})
+	if len(files) != 1 || files[0] != keyFile {
+		t.Fatalf("unexpected resolved files: %v", files)
+	}
+	if len(dirs) != 1 || dirs[0] != sourceDir {
+		t.Fatalf("unexpected resolved dirs: %v", dirs)
+	}
+
+	configPath := filepath.Join(root, "config.toml")
+	configBody := "source = \"" + sourceDir + "\"\n[enable_banking]\nprivate_key_file = \"" + keyFile + "\"\n"
+	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfgFiles, cfgDirs := extractBundledConfigReadPaths(configPath, []string{"source", "enable_banking.private_key_file"})
+	if len(cfgFiles) != 1 || cfgFiles[0] != keyFile {
+		t.Fatalf("unexpected config files: %v", cfgFiles)
+	}
+	if len(cfgDirs) != 1 || cfgDirs[0] != sourceDir {
+		t.Fatalf("unexpected config dirs: %v", cfgDirs)
+	}
+}

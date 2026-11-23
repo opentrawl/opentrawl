@@ -300,14 +300,21 @@ func (p *ExternalPluginTrawler) ExecuteExternalPluginUpdate(
 	}
 
 	sinceCursor := trawlkit.ReadExternalPluginIndexCursor(ctx, opts.StateRoot, p.pluginIdentifier)
-	outcome, invokeErr := p.invokeMutatingOperation(ctx, opts, paths, runLog, &plugincontract.PluginInvocationRequest{
+	preResolvedRefs, err := p.preResolveCommandArgumentTrawlLinks(ctx, opts.StateRoot, paths.TrawlerArchivePath, args)
+	if err != nil {
+		_ = runLog.Finish(err)
+		return nil, err
+	}
+	extraReadFiles, extraReadDirs := collectExplicitCommandInputPaths(args)
+	outcome, invokeErr := p.invokeMutatingOperationWithExtraReadPaths(ctx, opts, paths, runLog, &plugincontract.PluginInvocationRequest{
 		Operation: &plugincontract.PluginInvocationRequest_Update{
 			Update: &plugincontract.PluginUpdateOperationRequest{
 				UpdateArguments:        append([]string(nil), args...),
 				SinceOpaqueIndexCursor: sinceCursor,
 			},
 		},
-	})
+		PreResolvedLocalShortReferences: preResolvedRefs,
+	}, extraReadFiles, extraReadDirs)
 	if invokeErr != nil {
 		_ = runLog.Finish(invokeErr)
 		return nil, invokeErr
@@ -496,7 +503,7 @@ func collectExplicitCommandInputPaths(args []string) (files []string, dirs []str
 			addExistingPath(afterEq)
 			continue
 		}
-		if arg == "--file" || arg == "-file" {
+		if arg == "--file" || arg == "-file" || arg == "--path" || arg == "-path" {
 			if i+1 < len(args) {
 				addExistingPath(args[i+1])
 				i++
@@ -777,16 +784,6 @@ func (p *ExternalPluginTrawler) invokeReadOnlyOperation(
 	})
 }
 
-func (p *ExternalPluginTrawler) invokeMutatingOperation(
-	ctx context.Context,
-	opts trawlkit.TrawlerExecutorOptions,
-	paths trawlkit.TrawlerArchivePaths,
-	runLog *cklog.Run,
-	req *plugincontract.PluginInvocationRequest,
-) (pluginInvocationOutcome, error) {
-	return p.invokeMutatingOperationWithExtraReadPaths(ctx, opts, paths, runLog, req, nil, nil)
-}
-
 func (p *ExternalPluginTrawler) invokeMutatingOperationWithExtraReadPaths(
 	ctx context.Context,
 	opts trawlkit.TrawlerExecutorOptions,
@@ -860,7 +857,13 @@ func (p *ExternalPluginTrawler) effectiveNetworkPolicy() ([]string, []pluginprox
 
 func (p *ExternalPluginTrawler) effectiveMutatingReadPaths(configPath string) (files []string, dirs []string) {
 	if p.isBundledFirstParty {
-		files = append(files, extractBundledConfigReadPaths(configPath, p.manifest.GetDeclaredCapabilities().GetDeclaredConfigReadPathFields())...)
+		declared := p.manifest.GetDeclaredCapabilities()
+		declaredFiles, declaredDirs := resolveExistingBundledReadPaths(declared.GetDeclaredReadPaths())
+		files = append(files, declaredFiles...)
+		dirs = append(dirs, declaredDirs...)
+		configFiles, configDirs := extractBundledConfigReadPaths(configPath, declared.GetDeclaredConfigReadPathFields())
+		files = append(files, configFiles...)
+		dirs = append(dirs, configDirs...)
 	}
 	if p.trustRecord != nil {
 		for _, rawPath := range p.trustRecord.GetApprovedReadPaths() {
@@ -973,6 +976,8 @@ func (p *ExternalPluginTrawler) preResolveCommandArgumentTrawlLinks(
 			candidate = afterEq
 			isConversationFlagValue = flagName == "--conversation" || flagName == "-conversation"
 		} else if i > 0 && (args[i-1] == "--conversation" || args[i-1] == "-conversation") {
+			isConversationFlagValue = true
+		} else if i == 1 && args[0] == "versions" {
 			isConversationFlagValue = true
 		}
 		localAlias, ok, err := trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(candidate, p.pluginIdentifier)

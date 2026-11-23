@@ -133,6 +133,9 @@ func formatDiscoveredPluginCapabilities(plugin pluginruntime.DiscoveredExternalP
 		for _, host := range declared.GetDeclaredNetworkHosts() {
 			parts = append(parts, "host:"+host)
 		}
+		for _, path := range declared.GetDeclaredReadPaths() {
+			parts = append(parts, "read:"+path)
+		}
 		for _, field := range declared.GetDeclaredConfigReadPathFields() {
 			parts = append(parts, "config-read:"+field)
 		}
@@ -189,6 +192,7 @@ func findUnapprovedDeclaredCapabilities(
 	for _, selfHosted := range trust.GetApprovedSelfHostedNetworkHosts() {
 		approvedHosts[selfHosted.GetHostAndPort()] = struct{}{}
 	}
+	approvedReadPaths := stringSet(trust.GetApprovedReadPaths())
 	approvedReadSecrets := stringSet(trust.GetApprovedReadSecretKeys())
 	approvedWriteSecrets := stringSet(trust.GetApprovedWriteSecretKeys())
 	approvedOrigins := stringSet(trust.GetApprovedAuthOrigins())
@@ -197,6 +201,11 @@ func findUnapprovedDeclaredCapabilities(
 	for _, host := range declared.GetDeclaredNetworkHosts() {
 		if _, ok := approvedHosts[host]; !ok {
 			unapproved = append(unapproved, "--allow-host "+host)
+		}
+	}
+	for _, path := range declared.GetDeclaredReadPaths() {
+		if _, ok := approvedReadPaths[path]; !ok {
+			unapproved = append(unapproved, "--allow-read-path "+path)
 		}
 	}
 	for _, key := range declared.GetDeclaredReadSecretKeys() {

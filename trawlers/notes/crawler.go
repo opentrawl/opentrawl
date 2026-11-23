@@ -11,6 +11,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
+	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -32,10 +33,18 @@ var (
 	_ trawlkit.Searcher                   = (*Crawler)(nil)
 	_ trawlkit.CanonicalRecordOpener      = (*Crawler)(nil)
 	_ trawlkit.ArchiveIndexChangeExporter = (*Crawler)(nil)
+	_ trawlkit.PluginCapabilityDeclarator = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{listLimit: defaultListLimit, versionListLimit: defaultListLimit}
+}
+
+func (*Crawler) DeclaredPluginCapabilities() *plugincontract.PluginDeclaredCapabilities {
+	return &plugincontract.PluginDeclaredCapabilities{
+		DeclaredReadPaths:                []string{"~/Library/Group Containers/group.com.apple.notes"},
+		SupportsArchiveIndexChangeExport: true,
+	}
 }
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
