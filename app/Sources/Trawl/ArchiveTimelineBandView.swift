@@ -36,13 +36,13 @@ struct ArchiveTimelineBandView: View {
   }
 
   private var axis: ArchiveTimelineTimeAxis {
-    let histories = trawlers.compactMap { statusesByID[$0.id]?.archiveMonthlyHistory }
+    let histories = trawlers.compactMap { statusesByID[$0.id]?.archiveWeeklyHistory }
     return ArchiveTimelineTimeAxis.build(from: histories)
   }
 
   private var hasAnyUndatedRecords: Bool {
     trawlers.contains { trawler in
-      (statusesByID[trawler.id]?.archiveMonthlyHistory?.undatedRecordCount ?? 0) > 0
+      (statusesByID[trawler.id]?.archiveWeeklyHistory?.undatedRecordCount ?? 0) > 0
     }
   }
 
@@ -118,7 +118,9 @@ struct ArchiveTimelineBandView: View {
 
   private var axisHeaderRow: some View {
     HStack(spacing: 0) {
-      intensityLegend
+      Text("Apps")
+        .font(TrawlDesign.Typography.monoAxis)
+        .foregroundStyle(TrawlDesign.Colors.mutedInk)
         .padding(.leading, TrawlDesign.Space.md)
         .padding(.trailing, TrawlDesign.Space.sm)
         .frame(width: TrawlDesign.timelineLabelColumnWidth, alignment: .leading)
@@ -199,32 +201,6 @@ struct ArchiveTimelineBandView: View {
     .frame(height: TrawlDesign.timelineAxisHeight)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Archive timeline axis. Use the Dates control in the search bar or drag across the dated timeline to filter by date range.")
-  }
-
-  private var intensityLegend: some View {
-    HStack(spacing: 6) {
-      ForEach(ArchiveTimelineIntensityScale.legendReferenceCounts, id: \.self) { count in
-        let barHeight = CGFloat(ArchiveTimelineIntensityScale.barHeightFraction(forRecordCount: count)) * 12
-        let opacity = ArchiveTimelineIntensityScale.fillOpacity(forRecordCount: count)
-        HStack(spacing: 3) {
-          Rectangle()
-            .fill(TrawlDesign.Colors.ink.opacity(opacity))
-            .frame(width: 4, height: max(2, barHeight))
-          Text(legendLabel(for: count))
-            .font(TrawlDesign.Typography.monoAxis)
-            .foregroundStyle(TrawlDesign.Colors.mutedInk)
-        }
-      }
-    }
-    .accessibilityLabel("Monthly volume scale: 10, 1 thousand, and 10 thousand records per month.")
-  }
-
-  private func legendLabel(for count: UInt64) -> String {
-    switch count {
-    case 1_000: "1k"
-    case 10_000: "10k"
-    default: "\(count)"
-    }
   }
 
   @ViewBuilder
@@ -563,9 +539,9 @@ private struct ArchiveTimelineLaneRow: View {
       return CountReadout(text: "0", color: TrawlDesign.Colors.mutedInk.opacity(0.6), emphasized: false)
     }
 
-    // At rest, report the exact record total from the same ArchiveMonthlyHistory
-    // that drives this lane's bars so every row uses one consistent unit.
-    if let history = status?.archiveMonthlyHistory {
+    // At rest, report the exact record total from the same ArchiveWeeklyHistory
+    // that drives this lane's curve so every row uses one consistent unit.
+    if let history = status?.archiveWeeklyHistory {
       let total = history.totalMeasuredRecordCount
       let hasWarning = trawler.state == .failed || trawler.state == .skipped || trawler.needsAttention
       return CountReadout(
@@ -599,8 +575,8 @@ private struct ArchiveTimelineLaneRow: View {
     if trawler.state == .comingSoon {
       return "\(base). Coming soon."
     }
-    if status?.archiveMonthlyHistory == nil {
-      return "\(base). Monthly history will populate on next archive update."
+    if status?.archiveWeeklyHistory == nil {
+      return "\(base). Weekly history will populate on next archive update."
     }
     return isFocused
       ? "\(base). Filtered to this app. Activate to clear filter."
@@ -614,8 +590,6 @@ private struct ArchiveTimelineLaneRow: View {
     placements: [ArchiveTimelineMatchMarkerPlacement]
   ) {
     let midY = size.height / 2
-    let verticalMargin: CGFloat = isSlimmed ? 4 : (isRestingExpanded ? 12 : 8)
-    let maxBarHeight = max(5, size.height - verticalMargin)
 
     // Brushed date band highlight across the dated track.
     if let range = highlightedRange {
@@ -647,12 +621,17 @@ private struct ArchiveTimelineLaneRow: View {
     todayLine.addLine(to: CGPoint(x: todayX, y: size.height - 1))
     context.stroke(todayLine, with: .color(TrawlDesign.Colors.hairline), lineWidth: 0.75)
 
-    // Lane baseline.
-    var baseline = Path()
-    baseline.move(to: CGPoint(x: geometry.datedMinX, y: midY))
-    baseline.addLine(to: CGPoint(x: geometry.datedMaxX, y: midY))
+    let bottomInset: CGFloat = isSlimmed ? 2.5 : (isRestingExpanded ? 7.0 : 4.5)
+    let topInset: CGFloat = isSlimmed ? 2.5 : (isRestingExpanded ? 7.0 : 4.5)
+    let baseY = size.height - bottomInset
+    let plotHeight = max(4, baseY - topInset)
 
-    guard let history = status?.archiveMonthlyHistory, trawler.state != .comingSoon else {
+    // Lane baseline along the bottom of the plot area.
+    var baseline = Path()
+    baseline.move(to: CGPoint(x: geometry.datedMinX, y: baseY))
+    baseline.addLine(to: CGPoint(x: geometry.datedMaxX, y: baseY))
+
+    guard let history = status?.archiveWeeklyHistory, trawler.state != .comingSoon else {
       // Unmeasured or coming-soon archive: draw a subtle dashed line, never flat zeros.
       context.stroke(
         baseline,
@@ -662,77 +641,165 @@ private struct ArchiveTimelineLaneRow: View {
       return
     }
 
-    context.stroke(baseline, with: .color(TrawlDesign.Colors.hairline.opacity(0.55)), lineWidth: 0.5)
+    context.stroke(baseline, with: .color(TrawlDesign.Colors.hairline.opacity(0.6)), lineWidth: 0.5)
 
     let scopeOpacityMultiplier: Double = isExcludedByScope ? 0.32 : 1.0
 
-    // Undated record bar (left dedicated slot, e.g. Contacts).
+    // Undated record bar (left dedicated slot, e.g. Contacts, undated Gmail).
     if showsUndatedColumn && history.undatedRecordCount > 0 {
-      let heightFrac = ArchiveTimelineIntensityScale.barHeightFraction(forRecordCount: history.undatedRecordCount)
-      let fillAlpha = ArchiveTimelineIntensityScale.fillOpacity(forRecordCount: history.undatedRecordCount)
-      let barH = max(3, CGFloat(heightFrac) * maxBarHeight)
-      let barW = min(14, geometry.undatedWidth - 6)
+      let barH = max(3, plotHeight * 0.65)
+      let barW = min(12, geometry.undatedWidth - 8)
       let rect = CGRect(
         x: geometry.undatedCenterX - barW / 2,
-        y: midY - barH / 2,
+        y: baseY - barH,
         width: barW,
         height: barH
       )
       let dateFilterDim: Double = highlightedRange != nil ? 0.25 : 1.0
       context.fill(
         Path(rect),
-        with: .color(accentColor.opacity(fillAlpha * scopeOpacityMultiplier * dateFilterDim))
+        with: .color(accentColor.opacity(0.75 * scopeOpacityMultiplier * dateFilterDim))
       )
     }
 
-    // Dated and future monthly bars using the shared squared-log intensity scale.
-    for bucket in history.monthlyRecordCountsInChronologicalOrder where bucket.recordCount > 0 {
-      guard
-        let monthStart = ArchiveTimelineTimeAxis.utcMonthStart(
-          year: Int(bucket.calendarYear),
-          month: Int(bucket.calendarMonth)
-        ),
-        let monthEnd = ArchiveTimelineTimeAxis.utcMonthEndExclusive(
-          year: Int(bucket.calendarYear),
-          month: Int(bucket.calendarMonth)
-        )
-      else {
-        continue
+    // Separate dated past weeks from upcoming future weeks.
+    var pastWeekCounts: [Int64: UInt64] = [:]
+    var futureBuckets: [ArchiveWeeklyRecordCount] = []
+    var pastRowMax: UInt64 = 0
+    for bucket in history.weeklyRecordCountsInChronologicalOrder where bucket.recordCount > 0 {
+      if axis.isFuture(bucket.utcWeekStartTime) {
+        futureBuckets.append(bucket)
+      } else {
+        pastWeekCounts[bucket.utcWeekStartUnixSeconds, default: 0] &+= bucket.recordCount
+        if let total = pastWeekCounts[bucket.utcWeekStartUnixSeconds], total > pastRowMax {
+          pastRowMax = total
+        }
+      }
+    }
+
+    if pastRowMax > 0 {
+      let firstWeekUnix = ArchiveTimelineTimeAxis.utcWeekStartUnixSeconds(for: axis.earliestAxisDate)
+      let lastWeekUnix = ArchiveTimelineTimeAxis.utcWeekStartUnixSeconds(for: axis.referenceDate)
+      let weekStep: Int64 = 604_800
+      let halfWeekSeconds: TimeInterval = 302_400
+
+      struct CurvePoint {
+        let x: CGFloat
+        let recordCount: UInt64
       }
 
-      let heightFrac = ArchiveTimelineIntensityScale.barHeightFraction(forRecordCount: bucket.recordCount)
-      let fillAlpha = ArchiveTimelineIntensityScale.fillOpacity(forRecordCount: bucket.recordCount)
-      let barH = max(3, CGFloat(heightFrac) * maxBarHeight)
-
-      if axis.isFuture(monthStart) {
-        let u0 = axis.futureNormalizedPosition(for: monthStart)
-        let u1 = axis.futureNormalizedPosition(for: monthEnd)
-        let x0 = geometry.futureMinX + CGFloat(u0) * geometry.futureWidth
-        let x1 = geometry.futureMinX + CGFloat(u1) * geometry.futureWidth
-        let barW = max(2.2, x1 - x0 - 0.6)
-        let rect = CGRect(x: x0, y: midY - barH / 2, width: barW, height: barH)
-        let dateFilterDim: Double = highlightedRange != nil ? 0.25 : 1.0
-        context.fill(
-          Path(rect),
-          with: .color(accentColor.opacity(fillAlpha * scopeOpacityMultiplier * dateFilterDim))
+      var rawPoints: [CurvePoint] = []
+      var weekUnix = firstWeekUnix
+      while weekUnix <= lastWeekUnix {
+        let midDate = min(
+          axis.referenceDate,
+          Date(timeIntervalSince1970: TimeInterval(weekUnix) + halfWeekSeconds)
         )
-      } else {
-        let clampedEnd = min(monthEnd, axis.referenceDate)
-        let u0 = axis.datedNormalizedPosition(for: monthStart)
-        let u1 = axis.datedNormalizedPosition(for: clampedEnd)
-        let x0 = geometry.datedMinX + CGFloat(u0) * geometry.datedWidth
-        let x1 = geometry.datedMinX + CGFloat(u1) * geometry.datedWidth
-        let barW = max(2.0, x1 - x0 - 0.6)
-        let rect = CGRect(x: x0, y: midY - barH / 2, width: barW, height: barH)
-
-        var rangeDim: Double = 1.0
-        if let highlightedRange {
-          let overlaps = u1 >= highlightedRange.lowerBound && u0 <= highlightedRange.upperBound
-          rangeDim = overlaps ? 1.0 : 0.22
+        let x = geometry.datedMinX + CGFloat(axis.datedNormalizedPosition(for: midDate)) * geometry.datedWidth
+        let recordCount = pastWeekCounts[weekUnix] ?? 0
+        if let last = rawPoints.last, abs(x - last.x) < 1.8 {
+          if recordCount > last.recordCount {
+            rawPoints[rawPoints.count - 1] = CurvePoint(x: last.x, recordCount: recordCount)
+          }
+        } else {
+          rawPoints.append(CurvePoint(x: x, recordCount: recordCount))
         }
+        weekUnix += weekStep
+      }
+
+      // Include any historical weeks earlier than earliestAxisDate at normalizedPosition 0.
+      for (earlyWeek, recordCount) in pastWeekCounts where earlyWeek < firstWeekUnix {
+        if let first = rawPoints.first, recordCount > first.recordCount {
+          rawPoints[0] = CurvePoint(x: first.x, recordCount: recordCount)
+        }
+      }
+
+      if rawPoints.count >= 2 {
+        let heights: [CGFloat] = rawPoints.map { point in
+          guard point.recordCount > 0 else { return 0 }
+          let frac = ArchiveTimelineIntensityScale.heightFraction(
+            forRecordCount: point.recordCount,
+            rowMaximumRecordCount: pastRowMax
+          )
+          return max(1.5, CGFloat(frac) * plotHeight)
+        }
+
+        var areaPath = Path()
+        areaPath.move(to: CGPoint(x: rawPoints[0].x, y: baseY))
+        for index in 0..<rawPoints.count {
+          areaPath.addLine(to: CGPoint(x: rawPoints[index].x, y: baseY - heights[index]))
+        }
+        areaPath.addLine(to: CGPoint(x: rawPoints[rawPoints.count - 1].x, y: baseY))
+        areaPath.closeSubpath()
+
+        var ridgePath = Path()
+        var inActiveSegment = false
+        for index in 0..<rawPoints.count {
+          let h = heights[index]
+          let prevH = index > 0 ? heights[index - 1] : 0
+          let nextH = index + 1 < rawPoints.count ? heights[index + 1] : 0
+          if h > 0 || prevH > 0 || nextH > 0 {
+            let pt = CGPoint(x: rawPoints[index].x, y: baseY - h)
+            if !inActiveSegment {
+              ridgePath.move(to: pt)
+              inActiveSegment = true
+            } else {
+              ridgePath.addLine(to: pt)
+            }
+          } else {
+            inActiveSegment = false
+          }
+        }
+
+        let ridgeWidth: CGFloat = isSlimmed ? 0.9 : 1.2
+        if let highlightedRange {
+          // Dimmed full curve outside the active date filter, vibrant inside.
+          let dimFactor = 0.24 * scopeOpacityMultiplier
+          context.fill(areaPath, with: .color(accentColor.opacity(0.32 * dimFactor)))
+          context.stroke(
+            ridgePath,
+            with: .color(accentColor.opacity(0.92 * dimFactor)),
+            style: StrokeStyle(lineWidth: ridgeWidth, lineJoin: .round)
+          )
+
+          let selX0 = geometry.datedMinX + CGFloat(highlightedRange.lowerBound) * geometry.datedWidth
+          let selX1 = geometry.datedMinX + CGFloat(highlightedRange.upperBound) * geometry.datedWidth
+          let clipRect = CGRect(x: selX0, y: 0, width: max(2, selX1 - selX0), height: size.height)
+          var clipped = context
+          clipped.clip(to: Path(clipRect))
+          clipped.fill(areaPath, with: .color(accentColor.opacity(0.34 * scopeOpacityMultiplier)))
+          clipped.stroke(
+            ridgePath,
+            with: .color(accentColor.opacity(0.95 * scopeOpacityMultiplier)),
+            style: StrokeStyle(lineWidth: ridgeWidth, lineJoin: .round)
+          )
+        } else {
+          context.fill(areaPath, with: .color(accentColor.opacity(0.32 * scopeOpacityMultiplier)))
+          context.stroke(
+            ridgePath,
+            with: .color(accentColor.opacity(0.92 * scopeOpacityMultiplier)),
+            style: StrokeStyle(lineWidth: ridgeWidth, lineJoin: .round)
+          )
+        }
+      }
+    }
+
+    // Upcoming future weeks (e.g. scheduled Calendar events).
+    if !futureBuckets.isEmpty {
+      let futureMax = max(futureBuckets.map(\.recordCount).max() ?? 1, 1)
+      let dateFilterDim: Double = highlightedRange != nil ? 0.25 : 1.0
+      for bucket in futureBuckets {
+        let u0 = axis.futureNormalizedPosition(for: bucket.utcWeekStartTime)
+        let x0 = geometry.futureMinX + CGFloat(u0) * max(1, geometry.futureWidth - 4)
+        let frac = ArchiveTimelineIntensityScale.heightFraction(
+          forRecordCount: bucket.recordCount,
+          rowMaximumRecordCount: futureMax
+        )
+        let barH = max(3, CGFloat(frac) * plotHeight * 0.80)
+        let rect = CGRect(x: x0, y: baseY - barH, width: 2.5, height: barH)
         context.fill(
           Path(rect),
-          with: .color(accentColor.opacity(fillAlpha * scopeOpacityMultiplier * rangeDim))
+          with: .color(accentColor.opacity(0.70 * scopeOpacityMultiplier * dateFilterDim))
         )
       }
     }

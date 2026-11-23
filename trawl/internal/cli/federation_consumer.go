@@ -62,14 +62,14 @@ func (r *Runtime) canonicalStatus(trawlers []InstalledTrawler) *federationcontra
 	adapters := r.federationStatusTrawlers(trawlers)
 	response := federation.Status(r.ctx, adapters)
 	response.KeepSourceAppsRunningForAutomaticUpdates = r.keepSourceAppsRunningForAutomaticUpdates()
-	r.attachIndexedMonthlyHistoriesToStatus(r.ctx, response)
+	r.attachIndexedWeeklyHistoriesToStatus(r.ctx, response)
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeStatus(adapters, response)
 	}
 	return response
 }
 
-func (r *Runtime) attachIndexedMonthlyHistoriesToStatus(
+func (r *Runtime) attachIndexedWeeklyHistoriesToStatus(
 	ctx context.Context,
 	response *federationcontract.FederatedTrawlerStatusOperation,
 ) {
@@ -86,7 +86,7 @@ func (r *Runtime) attachIndexedMonthlyHistoriesToStatus(
 	}
 	defer func() { _ = indexStore.Close() }()
 
-	histories, err := unifiedindex.ReadAllTrawlerMonthlyHistories(ctx, indexStore.DB())
+	histories, err := unifiedindex.ReadAllTrawlerWeeklyHistories(ctx, indexStore.DB())
 	if err != nil || len(histories) == 0 {
 		return
 	}
@@ -95,12 +95,12 @@ func (r *Runtime) attachIndexedMonthlyHistoriesToStatus(
 			continue
 		}
 		archiveStatus := trawlerStatusResult.GetTrawlerStatusResponse().GetTrawlerArchiveStatus()
-		if archiveStatus == nil || archiveStatus.GetArchiveMonthlyHistory() != nil {
+		if archiveStatus == nil || archiveStatus.GetArchiveWeeklyHistory() != nil {
 			continue
 		}
 		trawlerID := trawlkit.RegisteredTrawlerIdentityText(trawlerStatusResult.GetRegisteredTrawler())
 		if history, ok := histories[trawlerID]; ok && history != nil {
-			archiveStatus.ArchiveMonthlyHistory = history
+			archiveStatus.ArchiveWeeklyHistory = history
 		}
 	}
 }

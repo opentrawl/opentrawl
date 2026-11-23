@@ -6,20 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
 
-type CurrentAppleLibraryPhotoMonthlyCount struct {
-	CalendarYear  uint32
-	CalendarMonth uint32
-	RecordCount   uint64
+type CurrentAppleLibraryPhotoWeeklyCount struct {
+	UTCWeekStartUnixSeconds int64
+	RecordCount             uint64
 }
 
-type CurrentAppleLibraryPhotoMonthlyHistory struct {
+type CurrentAppleLibraryPhotoWeeklyHistory struct {
 	OldestCaptureTimeUTC time.Time
-	MonthlyCounts        []CurrentAppleLibraryPhotoMonthlyCount
+	WeeklyCounts         []CurrentAppleLibraryPhotoWeeklyCount
 	UndatedPhotoCount    uint64
 }
 
@@ -47,10 +45,10 @@ select capture_time_utc from apple_library_photo where absent_from_apple_library
 	return parseArchiveTime(newestCaptureTimeUTC)
 }
 
-func (photosArchive *PhotosArchive) ReadCurrentAppleLibraryPhotoMonthlyHistory(
+func (photosArchive *PhotosArchive) ReadCurrentAppleLibraryPhotoWeeklyHistory(
 	ctx context.Context,
-) (CurrentAppleLibraryPhotoMonthlyHistory, error) {
-	var history CurrentAppleLibraryPhotoMonthlyHistory
+) (CurrentAppleLibraryPhotoWeeklyHistory, error) {
+	var history CurrentAppleLibraryPhotoWeeklyHistory
 
 	var oldestCaptureTimeUTC sql.NullString
 	if err := photosArchive.database.QueryRowContext(ctx, `
@@ -67,56 +65,47 @@ where absent_from_apple_library_since_time_utc is null
 		}
 	}
 
+	// Group current photos into Monday 00:00:00 UTC weeks.
 	rows, err := photosArchive.database.QueryContext(ctx, `
-select substr(capture_time_utc, 1, 7) as year_month, count(*)
+select
+  case
+    when length(capture_time_utc) >= 10
+     and date(substr(capture_time_utc, 1, 10), 'weekday 0', '-6 days') is not null
+    then cast(strftime('%s', date(substr(capture_time_utc, 1, 10), 'weekday 0', '-6 days')) as integer)
+    else null
+  end as utc_week_start_unix_seconds,
+  count(*)
 from apple_library_photo
 where absent_from_apple_library_since_time_utc is null
-group by year_month`)
+group by utc_week_start_unix_seconds`)
 	if err != nil {
-		return history, fmt.Errorf("read Apple library photo monthly counts: %w", err)
+		return history, fmt.Errorf("read Apple library photo weekly counts: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
-		var yearMonth string
+		var weekStartUnix sql.NullInt64
 		var count uint64
-		if scanErr := rows.Scan(&yearMonth, &count); scanErr != nil {
-			return history, fmt.Errorf("scan Apple library photo monthly count: %w", scanErr)
+		if scanErr := rows.Scan(&weekStartUnix, &count); scanErr != nil {
+			return history, fmt.Errorf("scan Apple library photo weekly count: %w", scanErr)
 		}
 		if count == 0 {
 			continue
 		}
-		year, month, ok := parseCalendarYearMonthPrefix(yearMonth)
-		if !ok {
+		if !weekStartUnix.Valid {
 			history.UndatedPhotoCount += count
 			continue
 		}
-		history.MonthlyCounts = append(history.MonthlyCounts, CurrentAppleLibraryPhotoMonthlyCount{
-			CalendarYear:  year,
-			CalendarMonth: month,
-			RecordCount:   count,
+		history.WeeklyCounts = append(history.WeeklyCounts, CurrentAppleLibraryPhotoWeeklyCount{
+			UTCWeekStartUnixSeconds: weekStartUnix.Int64,
+			RecordCount:             count,
 		})
 	}
 	if err := rows.Err(); err != nil {
 		return history, err
 	}
-	sort.Slice(history.MonthlyCounts, func(i, j int) bool {
-		if history.MonthlyCounts[i].CalendarYear != history.MonthlyCounts[j].CalendarYear {
-			return history.MonthlyCounts[i].CalendarYear < history.MonthlyCounts[j].CalendarYear
-		}
-		return history.MonthlyCounts[i].CalendarMonth < history.MonthlyCounts[j].CalendarMonth
+	sort.Slice(history.WeeklyCounts, func(i, j int) bool {
+		return history.WeeklyCounts[i].UTCWeekStartUnixSeconds < history.WeeklyCounts[j].UTCWeekStartUnixSeconds
 	})
 	return history, nil
-}
-
-func parseCalendarYearMonthPrefix(yearMonth string) (uint32, uint32, bool) {
-	if len(yearMonth) != 7 || yearMonth[4] != '-' {
-		return 0, 0, false
-	}
-	year, yearErr := strconv.Atoi(yearMonth[:4])
-	month, monthErr := strconv.Atoi(yearMonth[5:7])
-	if yearErr != nil || monthErr != nil || year <= 0 || month < 1 || month > 12 {
-		return 0, 0, false
-	}
-	return uint32(year), uint32(month), true
 }

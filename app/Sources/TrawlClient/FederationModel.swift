@@ -143,34 +143,36 @@ public enum ArchiveLiveSyncCredentialStatus: Sendable, Equatable {
   case notConnected
 }
 
-public struct ArchiveMonthlyRecordCount: Sendable, Equatable, Identifiable {
-  public let calendarYear: UInt32
-  public let calendarMonth: UInt32
+public struct ArchiveWeeklyRecordCount: Sendable, Equatable, Identifiable {
+  public let utcWeekStartUnixSeconds: Int64
   public let recordCount: UInt64
 
-  public var id: UInt32 {
-    calendarYear * 100 + calendarMonth
+  public var id: Int64 {
+    utcWeekStartUnixSeconds
   }
 
-  public init(calendarYear: UInt32, calendarMonth: UInt32, recordCount: UInt64) {
-    self.calendarYear = calendarYear
-    self.calendarMonth = calendarMonth
+  public var utcWeekStartTime: Date {
+    Date(timeIntervalSince1970: TimeInterval(utcWeekStartUnixSeconds))
+  }
+
+  public init(utcWeekStartUnixSeconds: Int64, recordCount: UInt64) {
+    self.utcWeekStartUnixSeconds = utcWeekStartUnixSeconds
     self.recordCount = recordCount
   }
 }
 
-public struct ArchiveMonthlyHistory: Sendable, Equatable {
+public struct ArchiveWeeklyHistory: Sendable, Equatable {
   public let oldestArchivedRecordTime: Date?
-  public let monthlyRecordCountsInChronologicalOrder: [ArchiveMonthlyRecordCount]
+  public let weeklyRecordCountsInChronologicalOrder: [ArchiveWeeklyRecordCount]
   public let undatedRecordCount: UInt64
 
   public init(
     oldestArchivedRecordTime: Date?,
-    monthlyRecordCountsInChronologicalOrder: [ArchiveMonthlyRecordCount],
+    weeklyRecordCountsInChronologicalOrder: [ArchiveWeeklyRecordCount],
     undatedRecordCount: UInt64
   ) {
     self.oldestArchivedRecordTime = oldestArchivedRecordTime
-    self.monthlyRecordCountsInChronologicalOrder = monthlyRecordCountsInChronologicalOrder
+    self.weeklyRecordCountsInChronologicalOrder = weeklyRecordCountsInChronologicalOrder
     self.undatedRecordCount = undatedRecordCount
   }
 }
@@ -184,7 +186,7 @@ public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   public let trawlerArchiveCanAnswerCurrentCommands: Bool
   public let sourceAppSyncLiveness: SourceAppSyncLiveness
   public let archiveLiveSyncCredentialStatus: ArchiveLiveSyncCredentialStatus
-  public let archiveMonthlyHistory: ArchiveMonthlyHistory?
+  public let archiveWeeklyHistory: ArchiveWeeklyHistory?
 
   public var id: RegisteredTrawlerIdentity {
     registeredTrawlerManifest.registeredTrawler
@@ -199,7 +201,7 @@ public struct TrawlerStatus: Sendable, Equatable, Identifiable {
     trawlerArchiveCanAnswerCurrentCommands: Bool,
     sourceAppSyncLiveness: SourceAppSyncLiveness,
     archiveLiveSyncCredentialStatus: ArchiveLiveSyncCredentialStatus,
-    archiveMonthlyHistory: ArchiveMonthlyHistory? = nil
+    archiveWeeklyHistory: ArchiveWeeklyHistory? = nil
   ) {
     self.registeredTrawlerManifest = registeredTrawlerManifest
     self.archiveContentCountsAfterLastSuccessfullyCompletedUpdate =
@@ -209,7 +211,7 @@ public struct TrawlerStatus: Sendable, Equatable, Identifiable {
     self.trawlerArchiveCanAnswerCurrentCommands = trawlerArchiveCanAnswerCurrentCommands
     self.sourceAppSyncLiveness = sourceAppSyncLiveness
     self.archiveLiveSyncCredentialStatus = archiveLiveSyncCredentialStatus
-    self.archiveMonthlyHistory = archiveMonthlyHistory
+    self.archiveWeeklyHistory = archiveWeeklyHistory
   }
 }
 

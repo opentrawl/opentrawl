@@ -37,7 +37,7 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
-	monthlyHistory, err := archive.ReadCurrentAppleLibraryPhotoMonthlyHistory(ctx)
+	weeklyHistory, err := archive.ReadCurrentAppleLibraryPhotoWeeklyHistory(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -49,24 +49,23 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if !newestCaptureTime.IsZero() {
 		archiveStatus.NewestArchivedRecordTime = timestamppb.New(newestCaptureTime)
 	}
-	if currentAppleLibraryPhotoCount > 0 || len(monthlyHistory.MonthlyCounts) > 0 || monthlyHistory.UndatedPhotoCount > 0 {
-		protoHistory := &status.ArchiveMonthlyHistory{
-			UndatedRecordCount: monthlyHistory.UndatedPhotoCount,
+	if currentAppleLibraryPhotoCount > 0 || len(weeklyHistory.WeeklyCounts) > 0 || weeklyHistory.UndatedPhotoCount > 0 {
+		protoHistory := &status.ArchiveWeeklyHistory{
+			UndatedRecordCount: weeklyHistory.UndatedPhotoCount,
 		}
-		if !monthlyHistory.OldestCaptureTimeUTC.IsZero() {
-			protoHistory.OldestArchivedRecordTime = timestamppb.New(monthlyHistory.OldestCaptureTimeUTC)
+		if !weeklyHistory.OldestCaptureTimeUTC.IsZero() {
+			protoHistory.OldestArchivedRecordTime = timestamppb.New(weeklyHistory.OldestCaptureTimeUTC)
 		}
-		for _, bucket := range monthlyHistory.MonthlyCounts {
-			protoHistory.MonthlyRecordCountsInChronologicalOrder = append(
-				protoHistory.MonthlyRecordCountsInChronologicalOrder,
-				&status.ArchiveMonthlyRecordCount{
-					CalendarYear:  bucket.CalendarYear,
-					CalendarMonth: bucket.CalendarMonth,
-					RecordCount:   bucket.RecordCount,
+		for _, bucket := range weeklyHistory.WeeklyCounts {
+			protoHistory.WeeklyRecordCountsInChronologicalOrder = append(
+				protoHistory.WeeklyRecordCountsInChronologicalOrder,
+				&status.ArchiveWeeklyRecordCount{
+					UtcWeekStartUnixSeconds: bucket.UTCWeekStartUnixSeconds,
+					RecordCount:             bucket.RecordCount,
 				},
 			)
 		}
-		archiveStatus.ArchiveMonthlyHistory = protoHistory
+		archiveStatus.ArchiveWeeklyHistory = protoHistory
 	}
 	lastAppleLibraryRead := lastRuns[photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY]
 	if lastAppleLibraryRead.LastRunStopReason == photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_NOTHING_PENDING {

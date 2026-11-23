@@ -229,16 +229,15 @@ extension Trawl_Federation_RegisteredTrawlerCatalogEntry {
   }
 }
 
-extension Trawl_Status_ArchiveMonthlyHistory {
-  fileprivate func decodedArchiveMonthlyHistory() -> ArchiveMonthlyHistory {
-    ArchiveMonthlyHistory(
+extension Trawl_Status_ArchiveWeeklyHistory {
+  fileprivate func decodedArchiveWeeklyHistory() -> ArchiveWeeklyHistory {
+    ArchiveWeeklyHistory(
       oldestArchivedRecordTime:
         hasOldestArchivedRecordTime ? oldestArchivedRecordTime.date : nil,
-      monthlyRecordCountsInChronologicalOrder:
-        monthlyRecordCountsInChronologicalOrder.map {
-          ArchiveMonthlyRecordCount(
-            calendarYear: $0.calendarYear,
-            calendarMonth: $0.calendarMonth,
+      weeklyRecordCountsInChronologicalOrder:
+        weeklyRecordCountsInChronologicalOrder.map {
+          ArchiveWeeklyRecordCount(
+            utcWeekStartUnixSeconds: $0.utcWeekStartUnixSeconds,
             recordCount: $0.recordCount)
         },
       undatedRecordCount: undatedRecordCount)
@@ -289,9 +288,9 @@ extension Trawl_Federation_FederatedTrawlerStatusOperation {
         archiveLiveSyncCredentialStatus:
           trawlerArchiveStatus.archiveLiveSyncCredentialStatus
           .decodedArchiveLiveSyncCredentialStatus(),
-        archiveMonthlyHistory:
-          trawlerArchiveStatus.hasArchiveMonthlyHistory
-          ? trawlerArchiveStatus.archiveMonthlyHistory.decodedArchiveMonthlyHistory() : nil)
+        archiveWeeklyHistory:
+          trawlerArchiveStatus.hasArchiveWeeklyHistory
+          ? trawlerArchiveStatus.archiveWeeklyHistory.decodedArchiveWeeklyHistory() : nil)
     }
     return FederatedTrawlerStatusOperation(
       trawlerStatuses: trawlerStatuses,

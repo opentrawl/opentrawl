@@ -16,34 +16,24 @@ public struct ArchiveTimelineAxisTick: Sendable, Equatable, Identifiable {
 }
 
 public enum ArchiveTimelineIntensityScale {
-  public static let legendReferenceCounts: [UInt64] = [10, 1_000, 10_000]
-  public static let referenceCeilingCount: Double = 10_000
+  public static let perRowPowerExponent: Double = 0.65
 
-  /// Shared squared-log intensity in [0, 1] used identically by every monthly
-  /// timeline bar and by the 10 / 1k / 10k legend. Empty months always return 0.
-  public static func normalizedStrength(forRecordCount count: UInt64) -> Double {
-    guard count > 0 else { return 0 }
-    let ratio = min(
-      1.0,
-      log10(Double(count) + 1.0) / log10(referenceCeilingCount + 1.0)
-    )
-    return ratio * ratio
-  }
-
-  public static func barHeightFraction(forRecordCount count: UInt64) -> Double {
-    guard count > 0 else { return 0 }
-    return 0.30 + 0.70 * normalizedStrength(forRecordCount: count)
-  }
-
-  public static func fillOpacity(forRecordCount count: UInt64) -> Double {
-    guard count > 0 else { return 0 }
-    return 0.26 + 0.68 * normalizedStrength(forRecordCount: count)
+  /// Per-row power-scaled height fraction in [0, 1] with a 0% floor so every
+  /// app uses its full vertical lane height to show bursts while quiet early
+  /// periods stay faintly legible. Empty buckets always return 0.
+  public static func heightFraction(
+    forRecordCount count: UInt64,
+    rowMaximumRecordCount rowMax: UInt64
+  ) -> Double {
+    guard count > 0, rowMax > 0 else { return 0 }
+    let ratio = min(1.0, Double(count) / Double(rowMax))
+    return pow(ratio, perRowPowerExponent)
   }
 }
 
-extension ArchiveMonthlyHistory {
+extension ArchiveWeeklyHistory {
   public var totalMeasuredRecordCount: UInt64 {
-    monthlyRecordCountsInChronologicalOrder.reduce(undatedRecordCount) { sum, bucket in
+    weeklyRecordCountsInChronologicalOrder.reduce(undatedRecordCount) { sum, bucket in
       sum &+ bucket.recordCount
     }
   }
@@ -91,8 +81,10 @@ public struct ArchiveTimelineTimeAxis: Sendable, Equatable {
     }
   }
 
+  public static let weekDurationSeconds: TimeInterval = 7 * 86_400
+
   public static func build(
-    from histories: [ArchiveMonthlyHistory],
+    from histories: [ArchiveWeeklyHistory],
     referenceDate: Date = Date()
   ) -> ArchiveTimelineTimeAxis {
     var utcCalendar = Calendar(identifier: .gregorian)
@@ -101,43 +93,47 @@ public struct ArchiveTimelineTimeAxis: Sendable, Equatable {
       utcCalendar.date(from: DateComponents(year: Self.primaryAxisMinimumYear, month: 1, day: 1))
       ?? Date(timeIntervalSince1970: 631_152_000)
 
-    var countsByMonth: [Date: UInt64] = [:]
+    var countsByWeek: [Date: UInt64] = [:]
     var latestFuture: Date?
     for history in histories {
-      for bucket in history.monthlyRecordCountsInChronologicalOrder {
-        guard bucket.recordCount > 0,
-          let monthStart = Self.utcMonthStart(
-            year: Int(bucket.calendarYear),
-            month: Int(bucket.calendarMonth)
-          )
-        else {
-          continue
-        }
-        if monthStart > referenceDate {
+      for bucket in history.weeklyRecordCountsInChronologicalOrder where bucket.recordCount > 0 {
+        let weekStart = bucket.utcWeekStartTime
+        if weekStart > referenceDate {
           if let currentLatest = latestFuture {
-            if monthStart > currentLatest { latestFuture = monthStart }
+            if weekStart > currentLatest { latestFuture = weekStart }
           } else {
-            latestFuture = monthStart
+            latestFuture = weekStart
           }
-        } else if monthStart >= axisFloor {
-          countsByMonth[monthStart, default: 0] &+= bucket.recordCount
+        } else if weekStart >= axisFloor {
+          countsByWeek[weekStart, default: 0] &+= bucket.recordCount
         }
       }
     }
 
-    let sortedPastMonths = countsByMonth.keys.sorted()
-    // Start the primary axis at the earliest month with real archive density
+    let sortedPastWeeks = countsByWeek.keys.sorted()
+    // Start the primary axis at the earliest week with real archive density
     // (>= 3 records) so isolated stray early timestamps do not leave a wide
     // blank margin on the left while still plotting at normalizedPosition 0.
-    let earliestDenseMonth =
-      sortedPastMonths.first(where: { (countsByMonth[$0] ?? 0) >= 3 })
-      ?? sortedPastMonths.first
+    let earliestDenseWeek =
+      sortedPastWeeks.first(where: { (countsByWeek[$0] ?? 0) >= 3 })
+      ?? sortedPastWeeks.first
 
     return ArchiveTimelineTimeAxis(
       referenceDate: referenceDate,
-      earliestDatedRecordTime: earliestDenseMonth,
+      earliestDatedRecordTime: earliestDenseWeek,
       latestFutureRecordTime: latestFuture
     )
+  }
+
+  /// Aligns any timestamp to its Monday 00:00:00 UTC week start (matching
+  /// SQLite's `date(..., 'weekday 0', '-6 days')`).
+  public static func utcWeekStartUnixSeconds(for date: Date) -> Int64 {
+    let unix = Int64(floor(date.timeIntervalSince1970))
+    let mondayEpochOffset: Int64 = 345_600 // 1970-01-05T00:00:00Z (Monday)
+    let weekSeconds: Int64 = 604_800
+    let shifted = unix - mondayEpochOffset
+    let remainder = ((shifted % weekSeconds) + weekSeconds) % weekSeconds
+    return (shifted - remainder) + mondayEpochOffset
   }
 
   public var datedSpanSeconds: TimeInterval {

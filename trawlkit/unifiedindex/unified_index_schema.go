@@ -124,12 +124,13 @@ CREATE TABLE IF NOT EXISTS indexed_archive_metadata (
 	value TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS indexed_trawler_monthly_counts (
-	trawler        TEXT NOT NULL,
-	calendar_year  INTEGER NOT NULL,
-	calendar_month INTEGER NOT NULL,
-	record_count   INTEGER NOT NULL,
-	PRIMARY KEY (trawler, calendar_year, calendar_month)
+DROP TABLE IF EXISTS indexed_trawler_monthly_counts;
+
+CREATE TABLE IF NOT EXISTS indexed_trawler_weekly_counts (
+	trawler                     TEXT NOT NULL,
+	utc_week_start_unix_seconds INTEGER NOT NULL,
+	record_count                INTEGER NOT NULL,
+	PRIMARY KEY (trawler, utc_week_start_unix_seconds)
 );
 
 CREATE TABLE IF NOT EXISTS indexed_trawler_history_summary (
@@ -156,8 +157,8 @@ func EnsureUnifiedIndexSchema(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, unifiedIndexSchemaSQL); err != nil {
 		return fmt.Errorf("ensure unified index schema: %w", err)
 	}
-	if err := backfillMissingTrawlerMonthlyHistories(ctx, db); err != nil {
-		return fmt.Errorf("backfill unified index monthly histories: %w", err)
+	if err := backfillMissingTrawlerWeeklyHistories(ctx, db); err != nil {
+		return fmt.Errorf("backfill unified index weekly histories: %w", err)
 	}
 	return nil
 }

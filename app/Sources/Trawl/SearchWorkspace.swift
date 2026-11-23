@@ -265,7 +265,7 @@ struct ArchiveTimelineWorkspaceView: View {
   }
 
   private var restingFooterHint: some View {
-    let measuredHistories = trawlerStatuses.compactMap(\.archiveMonthlyHistory)
+    let measuredHistories = trawlerStatuses.compactMap(\.archiveWeeklyHistory)
     let totalArchived = measuredHistories.reduce(UInt64(0)) { sum, history in
       sum &+ history.totalMeasuredRecordCount
     }
