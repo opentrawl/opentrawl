@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -48,13 +49,9 @@ func UseExistingPhotosArchive(ctx context.Context, openedArchiveStore *store.Sto
 }
 
 func formatArchiveTime(archiveTime time.Time) string {
-	return archiveTime.UTC().Format(time.RFC3339Nano)
+	return archivetime.FormatRFC3339NanoUTC(archiveTime)
 }
 
 func parseArchiveTime(archiveTimeText string) (time.Time, error) {
-	parsedTime, err := time.Parse(time.RFC3339Nano, archiveTimeText)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("read archive time %q: %w", archiveTimeText, err)
-	}
-	return parsedTime, nil
+	return archivetime.ParseRFC3339UTC(archiveTimeText)
 }

@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	searchcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 var (
@@ -75,32 +76,11 @@ func CleanIndexedPlainText(raw string, maxRunes int) string {
 // ExpandEastAsianBigrams appends CJK character bigrams when Han, Kana, or
 // Hangul runes are present so SQLite unicode61 tokenizes East Asian substrings.
 func ExpandEastAsianBigrams(text string) string {
-	var run []rune
-	var bigrams []string
-	flush := func() {
-		if len(run) >= 2 {
-			for i := 0; i < len(run)-1; i++ {
-				bigrams = append(bigrams, string(run[i:i+2]))
-			}
-		}
-		run = run[:0]
-	}
-	for _, r := range text {
-		if isEastAsianScriptRune(r) {
-			run = append(run, r)
-			continue
-		}
-		flush()
-	}
-	flush()
-	if len(bigrams) == 0 {
-		return text
-	}
-	return text + " " + strings.Join(bigrams, " ")
+	return store.AppendEastAsianCharacterPairsForFTS5(text)
 }
 
 func isEastAsianScriptRune(r rune) bool {
-	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r) || unicode.Is(unicode.Hangul, r)
+	return store.IsEastAsianScriptRune(r)
 }
 
 func TruncateRunes(s string, maxRunes int) string {

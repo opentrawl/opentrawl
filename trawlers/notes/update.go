@@ -12,10 +12,10 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notesdb"
-	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/projection"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
 	"google.golang.org/protobuf/proto"
@@ -108,7 +108,7 @@ func updateSnapshot(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRe
 		Attachments:         attachmentInserts,
 		TableData:           tableInserts(replayed.tableData, start),
 		UpdateState:         state,
-		LastSeenAt:          notestime.Format(start),
+		LastSeenAt:          archivetime.FormatFixedNanosecondRFC3339UTC(start),
 		RefreshNoteMetadata: refreshNoteMetadata,
 	})
 	if err != nil {
@@ -279,7 +279,7 @@ func bodyInsert(body notesdb.Body, title string, spec stateSpec, observed time.T
 		SourceDetail:     detail,
 		SourceSequence:   sequenceFromDescription(spec.description),
 		SourceModifiedAt: body.SourceModifiedAt,
-		ObservedAt:       notestime.Format(observed),
+		ObservedAt:       archivetime.FormatFixedNanosecondRFC3339UTC(observed),
 		Title:            title,
 	}
 }
@@ -334,7 +334,7 @@ func tableInserts(data []notesdb.TableData, observed time.Time) []archive.TableD
 		out = append(out, archive.TableDataInsert{
 			AttachmentUUID: td.AttachmentUUID,
 			ZData:          td.ZData,
-			ObservedAt:     notestime.Format(observed),
+			ObservedAt:     archivetime.FormatFixedNanosecondRFC3339UTC(observed),
 		})
 	}
 	return out
@@ -410,7 +410,7 @@ func skipWarnings(skipped []notesdb.Note) []string {
 
 func updateState(sourcePath, source, label string, walBytes, walCommits int, updatedAt time.Time) map[string]string {
 	return map[string]string{
-		"last_update_at":   notestime.Format(updatedAt),
+		"last_update_at":   archivetime.FormatFixedNanosecondRFC3339UTC(updatedAt),
 		"source":           source,
 		"source_label":     label,
 		"source_path_hint": archive.SourcePathHint(sourcePath),

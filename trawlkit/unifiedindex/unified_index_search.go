@@ -10,13 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	personcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	searchcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -152,7 +153,7 @@ func fetchRankedCandidates(
 			args = append(args, strings.TrimSpace(t))
 		}
 	}
-	flags.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix).
+	archivetime.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix).
 		AppendUnixSQLClauses("r.occurred_unix", &whereClauses, &args)
 	if clause, pArgs := buildPersonFilterSQLClause(q.PersonFilterTerms); clause != "" {
 		whereClauses = append(whereClauses, clause)
@@ -591,25 +592,7 @@ func associatedTimeForCandidate(c indexedRecordCandidate) *presentation.ArchiveR
 }
 
 func buildFTS5QueryExpression(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return ""
-	}
-	expanded := ExpandEastAsianBigrams(trimmed)
-	tokens := strings.Fields(expanded)
-	if len(tokens) == 0 {
-		return ""
-	}
-	quoted := make([]string, 0, len(tokens))
-	for _, tok := range tokens {
-		clean := strings.Trim(tok, `"'`)
-		clean = strings.ReplaceAll(clean, `"`, "")
-		if clean == "" {
-			continue
-		}
-		quoted = append(quoted, `"`+clean+`"`)
-	}
-	return strings.Join(quoted, " ")
+	return store.FTS5QueryFromExpandedFields(raw)
 }
 
 func containsString(items []string, target string) bool {

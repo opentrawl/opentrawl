@@ -13,7 +13,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 )
 
 const appleUnixOffset = 978307200
@@ -311,7 +311,7 @@ func AppleDateFloat(value float64) string {
 		whole++
 		nsec -= 1_000_000_000
 	}
-	return notestime.Format(time.Unix(int64(whole)+appleUnixOffset, nsec))
+	return archivetime.FormatFixedNanosecondRFC3339UTC(time.Unix(int64(whole)+appleUnixOffset, nsec))
 }
 
 func ChangedSince(prev, next map[string]string) map[string]bool {

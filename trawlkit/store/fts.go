@@ -142,6 +142,148 @@ func FTS5TokenQuery(value string) string {
 	return strings.Join(terms, " ")
 }
 
+// FTS5TokenQueryOrPhrase returns FTS5TokenQuery(value), falling back to a
+// single quoted phrase when non-empty user input contains no word tokens.
+func FTS5TokenQueryOrPhrase(value string) string {
+	if q := FTS5TokenQuery(value); q != "" {
+		return q
+	}
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	return FTS5Phrase(value)
+}
+
+// IsEastAsianScriptRune reports whether r belongs to Han, Hiragana, Katakana,
+// or Hangul scripts that do not separate words with spaces.
+func IsEastAsianScriptRune(r rune) bool {
+	return unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
+}
+
+// IsFTS5WordRune reports whether r is kept inside a tokenized FTS5 word.
+func IsFTS5WordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) || r == '_'
+}
+
+// AppendEastAsianCharacterPairsForFTS5 appends overlapping two-character
+// bigrams for any Han, Kana, or Hangul runs after the original text so SQLite
+// unicode61 matches East Asian substrings without altering the original text.
+func AppendEastAsianCharacterPairsForFTS5(text string) string {
+	var run []rune
+	var bigrams []string
+	flush := func() {
+		if len(run) >= 2 {
+			for i := 0; i < len(run)-1; i++ {
+				bigrams = append(bigrams, string(run[i:i+2]))
+			}
+		}
+		run = run[:0]
+	}
+	for _, r := range text {
+		if IsEastAsianScriptRune(r) {
+			run = append(run, r)
+			continue
+		}
+		flush()
+	}
+	flush()
+	if len(bigrams) == 0 {
+		return text
+	}
+	return text + " " + strings.Join(bigrams, " ")
+}
+
+// ReplaceEastAsianRunsWithCharacterPairsForFTS5 replaces each run of Han,
+// Kana, or Hangul characters with space-separated overlapping two-character
+// pieces so SQLite's word tokenizer indexes East Asian substrings.
+func ReplaceEastAsianRunsWithCharacterPairsForFTS5(text string) string {
+	var preparedText strings.Builder
+	var eastAsianRun []rune
+	finishEastAsianRun := func() {
+		if len(eastAsianRun) == 0 {
+			return
+		}
+		preparedText.WriteByte(' ')
+		if len(eastAsianRun) == 1 {
+			preparedText.WriteString(string(eastAsianRun))
+		}
+		for index := 0; index+1 < len(eastAsianRun); index++ {
+			if index > 0 {
+				preparedText.WriteByte(' ')
+			}
+			preparedText.WriteString(string(eastAsianRun[index : index+2]))
+		}
+		preparedText.WriteByte(' ')
+		eastAsianRun = eastAsianRun[:0]
+	}
+	for _, character := range text {
+		if IsEastAsianScriptRune(character) {
+			eastAsianRun = append(eastAsianRun, character)
+			continue
+		}
+		finishEastAsianRun()
+		preparedText.WriteRune(character)
+	}
+	finishEastAsianRun()
+	return strings.TrimSpace(preparedText.String())
+}
+
+// FTS5QueryFromWordTokens extracts word tokens from queryText, optionally
+// transforms each token (for example East Asian character-pair expansion), and
+// quotes every token for safe implicit-AND FTS5 matching.
+func FTS5QueryFromWordTokens(queryText string, transformToken func(string) string) string {
+	var tokens []string
+	var token strings.Builder
+	finishToken := func() {
+		if token.Len() == 0 {
+			return
+		}
+		word := token.String()
+		token.Reset()
+		if transformToken != nil {
+			word = transformToken(word)
+		}
+		word = strings.TrimSpace(word)
+		if word == "" {
+			return
+		}
+		tokens = append(tokens, FTS5Phrase(word))
+	}
+	for _, character := range queryText {
+		if IsFTS5WordRune(character) {
+			token.WriteRune(character)
+		} else {
+			finishToken()
+		}
+	}
+	finishToken()
+	return strings.Join(tokens, " ")
+}
+
+// FTS5QueryFromExpandedFields expands queryText with AppendEastAsianCharacterPairsForFTS5
+// and emits safe quoted whitespace-separated FTS5 terms.
+func FTS5QueryFromExpandedFields(queryText string) string {
+	trimmed := strings.TrimSpace(queryText)
+	if trimmed == "" {
+		return ""
+	}
+	expanded := AppendEastAsianCharacterPairsForFTS5(trimmed)
+	tokens := strings.Fields(expanded)
+	if len(tokens) == 0 {
+		return ""
+	}
+	quoted := make([]string, 0, len(tokens))
+	for _, tok := range tokens {
+		clean := strings.Trim(tok, `"'`)
+		clean = strings.ReplaceAll(clean, `"`, "")
+		if clean == "" {
+			continue
+		}
+		quoted = append(quoted, `"`+clean+`"`)
+	}
+	return strings.Join(quoted, " ")
+}
+
 // FTS5Snippet returns a plain text search fragment centred near a query match.
 // It uses no markers: the value is already a fragment, and callers can open
 // the result ref when they need the full item.

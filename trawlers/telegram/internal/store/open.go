@@ -46,25 +46,25 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 }
 
 func (s *Store) OpenMessageWindow(ctx context.Context, sourcePK int64, radius int) (MessageWindow, error) {
-	if radius < 0 {
-		radius = 0
-	}
 	target, err := s.messageBySourcePK(ctx, sourcePK)
 	if err != nil {
 		return MessageWindow{}, err
 	}
-	before, beforeTruncated, err := s.neighbourMessages(ctx, target, radius, true)
+	window, err := ckstore.ReadSurroundingMessageContextWindow(
+		ctx,
+		target,
+		radius,
+		func(ctx context.Context, limit int) ([]Message, error) {
+			return s.neighbourMessages(ctx, target, limit, true)
+		},
+		func(ctx context.Context, limit int) ([]Message, error) {
+			return s.neighbourMessages(ctx, target, limit, false)
+		},
+	)
 	if err != nil {
 		return MessageWindow{}, err
 	}
-	after, afterTruncated, err := s.neighbourMessages(ctx, target, radius, false)
-	if err != nil {
-		return MessageWindow{}, err
-	}
-	messages := make([]Message, 0, len(before)+1+len(after))
-	messages = append(messages, before...)
-	messages = append(messages, target)
-	messages = append(messages, after...)
+	messages := window.MessagesInChronologicalOrder()
 	if err := s.humanizeMessages(ctx, messages); err != nil {
 		return MessageWindow{}, err
 	}
@@ -92,8 +92,8 @@ where cast(id as text) = ?`, target.ChatJID).Scan(
 		Messages:     messages,
 		Participants: participants,
 		AccountScopedConversationIdentifierForConversationAcrossTelegramMigrations: accountScopedConversationIdentifierForConversationAcrossTelegramMigrations,
-		BeforeTruncated: beforeTruncated,
-		AfterTruncated:  afterTruncated,
+		BeforeTruncated: window.BeforeTruncated,
+		AfterTruncated:  window.AfterTruncated,
 	}, nil
 }
 
@@ -106,32 +106,23 @@ func (s *Store) messageBySourcePK(ctx context.Context, sourcePK int64) (Message,
 	return message, err
 }
 
-func (s *Store) neighbourMessages(ctx context.Context, target Message, radius int, before bool) ([]Message, bool, error) {
-	limit := radius + 1
-	comparator := ">"
-	order := "asc"
-	if before {
-		comparator = "<"
-		order = "desc"
-	}
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`select %s from messages where chat_jid = ? and (ts %s ? or (ts = ? and source_pk %s ?)) order by ts %s, source_pk %s limit ?`, telegramMessageColumnsReadForOpenedMessageContext, comparator, comparator, order, order),
-		target.ChatJID, unix(target.Timestamp), unix(target.Timestamp), target.SourcePK, limit)
+func (s *Store) neighbourMessages(ctx context.Context, target Message, limit int, before bool) ([]Message, error) {
+	predicate, orderBy := ckstore.SQLKeysetBeforeAfterClause("ts", "source_pk", before)
+	rows, err := s.db.QueryContext(
+		ctx,
+		fmt.Sprintf(
+			`select %s from messages where chat_jid = ? and %s order by %s limit ?`,
+			telegramMessageColumnsReadForOpenedMessageContext,
+			predicate,
+			orderBy,
+		),
+		target.ChatJID, unix(target.Timestamp), unix(target.Timestamp), target.SourcePK, limit,
+	)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	messages, err := scanOpenMessages(rows)
-	if err != nil {
-		return nil, false, err
-	}
-	truncated := len(messages) > radius
-	if truncated {
-		messages = messages[:radius]
-	}
-	if before {
-		reverseMessages(messages)
-	}
-	return messages, truncated, nil
+	return scanOpenMessages(rows)
 }
 
 func scanOpenMessages(rows *sql.Rows) ([]Message, error) {
@@ -159,12 +150,6 @@ func scanOpenMessage(scanner messageScanner) (Message, error) {
 	m.Starred = starred != 0
 	m.Pinned = pinned != 0
 	return m, nil
-}
-
-func reverseMessages(messages []Message) {
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
-		messages[i], messages[j] = messages[j], messages[i]
-	}
 }
 
 func (s *Store) groupParticipants(ctx context.Context, chatJID string) ([]string, error) {

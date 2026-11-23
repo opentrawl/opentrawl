@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
 	"github.com/opentrawl/opentrawl/trawlkit/unifiedindex"
 )
@@ -115,8 +116,11 @@ func (s *Store) loadNoteVersionShortRefs(ctx context.Context) ([]*indexcontract.
 }
 
 func parseNoteISOTime(raw string) (int64, bool) {
+	if unixSeconds, ok := archivetime.ParseRFC3339UnixSeconds(raw); ok {
+		return unixSeconds, true
+	}
 	trimmed := strings.TrimSpace(raw)
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
+	for _, layout := range []string{"2006-01-02 15:04:05", "2006-01-02"} {
 		if t, err := time.Parse(layout, trimmed); err == nil {
 			return t.Unix(), true
 		}

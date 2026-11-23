@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/projection"
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -323,12 +323,7 @@ func noteSearchMatches(title, body string) []SearchMatch {
 // contractTime parses an archive timestamp for ordering; unparseable values
 // sort last rather than failing a read.
 func contractTime(value string) time.Time {
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
-		if t, err := time.Parse(layout, strings.TrimSpace(value)); err == nil {
-			return t
-		}
-	}
-	return time.Time{}
+	return archivetime.ParseOptionalRFC3339UTC(value)
 }
 
 func searchWhere(ftsQuery string, after, before time.Time) (string, []any) {
@@ -337,14 +332,7 @@ func searchWhere(ftsQuery string, after, before time.Time) (string, []any) {
 		"coalesce(n.folder, '') <> '" + recentlyDeletedFolder + "'",
 	}
 	args := []any{ftsQuery}
-	if !after.IsZero() {
-		parts = append(parts, "n.modified_at >= ?")
-		args = append(args, notestime.Format(after))
-	}
-	if !before.IsZero() {
-		parts = append(parts, "n.modified_at <= ?")
-		args = append(args, notestime.Format(before))
-	}
+	archivetime.NewInclusiveTimeRange(after, before).AppendRFC3339UTCSQLClauses("n.modified_at", &parts, &args)
 	return "where " + strings.Join(parts, " and "), args
 }
 

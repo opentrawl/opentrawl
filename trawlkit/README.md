@@ -38,10 +38,18 @@ an `Any`, a type URL and byte payload, JSON or a generic map.
 
 ## Shared mechanics
 
-TrawlKit also provides trawler manifests and command help; globally routable
-links and short references; human rendering; status, search and archive-update execution;
-SQLite archive storage, read-only snapshots and archive locks; and shared run
-logging and supervised long-running commands.
+TrawlKit organizes provider-neutral mechanics by concern so every trawler, CLI command, and index layer imports one canonical implementation:
+
+- **`archivetime`** — RFC3339 / fixed-nanosecond UTC formatting and parsing, and `InclusiveTimeRange` inclusive date/time bounds (in-memory, Unix SQL, and chronological RFC3339 SQL).
+- **`flags`** — Shared CLI flag and user-entered date/time parsing (`--after`, `--before`, `--limit`).
+- **`store`** — SQLite archive storage hygiene, WAL management, archive locks, FTS5 tokenizing/quoting/East-Asian character-pair helpers, FTS5 marked snippets, and symmetric surrounding chat context windows (`ReadSurroundingMessageContextWindow`, `SQLKeysetBeforeAfterClause`).
+- **`cache`** — Safe read-only copies and snapshots of live application databases.
+- **`state`** & **`config`** — Durable sync cursor/state storage and state-root configuration paths.
+- **`shortref`** — Globally routable links and compact per-trawler short references.
+- **`unifiedindex`** & **`semantic`** — Cross-archive unified SQLite FTS5 index, materialized monthly history summaries, and hybrid semantic search.
+- **`whomatch`**, **`openrecord`**, **`mailparse`** — Person resolution matching, opened-record validation, and RFC5322 email decoding.
+- **`render`** & **`output`** — Single shared human/CLI output renderer.
+- **`control`**, **`log`**, **`secrets`**, **`prototransport`**, **`pluginruntime`**, **`pluginproxy`**, **`pluginsandbox`** — Manifests, structured logging, encrypted plugin secrets, protobuf framing, and sandboxed external plugin execution.
 
 See [`docs/contract.md`](../docs/contract.md) for the complete public control
 contract. See [`AGENTS.md`](AGENTS.md) for the TrawlKit ownership boundary.

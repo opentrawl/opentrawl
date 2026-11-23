@@ -1,4 +1,4 @@
-package flags
+package archivetime
 
 import "time"
 
@@ -75,7 +75,7 @@ func (r InclusiveTimeRange) AppendUnixSQLClauses(column string, where *[]string,
 	}
 }
 
-const fixedNanosecondUTCFormat = "2006-01-02T15:04:05.000000000"
+const fixedNanosecondUTCWithoutZoneFormat = "2006-01-02T15:04:05.000000000"
 const wholeSecondUTCFormat = "2006-01-02T15:04:05"
 
 func normalizedRFC3339UTCColumnExpression(column string) string {
@@ -97,13 +97,13 @@ func (r InclusiveTimeRange) AppendRFC3339UTCSQLClauses(
 		*where = append(*where, column+" >= ?")
 		*args = append(*args, afterUTC.Format(wholeSecondUTCFormat))
 		*where = append(*where, normalizedExpr+" >= ?")
-		*args = append(*args, afterUTC.Format(fixedNanosecondUTCFormat))
+		*args = append(*args, afterUTC.Format(fixedNanosecondUTCWithoutZoneFormat))
 	}
 	if !r.Before.IsZero() {
 		beforeUTC := r.Before.UTC()
 		*where = append(*where, column+" <= ?")
 		*args = append(*args, beforeUTC.Format(wholeSecondUTCFormat)+"Z")
 		*where = append(*where, normalizedExpr+" <= ?")
-		*args = append(*args, beforeUTC.Format(fixedNanosecondUTCFormat))
+		*args = append(*args, beforeUTC.Format(fixedNanosecondUTCWithoutZoneFormat))
 	}
 }

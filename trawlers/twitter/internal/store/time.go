@@ -1,20 +1,20 @@
 package store
 
-import "time"
+import (
+	"time"
+
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
+)
 
 const UnknownTimeRFC3339 = "0001-01-01T00:00:00Z"
 
 func formatUTC(t time.Time) string {
-	if t.IsZero() {
-		return UnknownTimeRFC3339
+	if formatted := archivetime.FormatRFC3339UTC(t); formatted != "" {
+		return formatted
 	}
-	return t.UTC().Format(time.RFC3339)
+	return UnknownTimeRFC3339
 }
 
 func parseStoredTime(value string) time.Time {
-	t, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		return time.Time{}
-	}
-	return t.UTC()
+	return archivetime.ParseOptionalRFC3339UTC(value)
 }

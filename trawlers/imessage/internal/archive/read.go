@@ -177,27 +177,24 @@ func (s *Store) OpenMessage(ctx context.Context, messageID string, contextLimit 
 	if err != nil {
 		return MessageContext{}, err
 	}
-	before, err := s.messageRows(ctx, openBeforeSQL, chatID, target.rawDate, target.rawDate, id, contextLimit+1)
+	window, err := ckstore.ReadSurroundingMessageContextWindow(
+		ctx,
+		target,
+		contextLimit,
+		func(ctx context.Context, limit int) ([]messageScanRow, error) {
+			return s.messageRows(ctx, openBeforeSQL, chatID, target.rawDate, target.rawDate, id, limit)
+		},
+		func(ctx context.Context, limit int) ([]messageScanRow, error) {
+			return s.messageRows(ctx, openAfterSQL, chatID, target.rawDate, target.rawDate, id, limit)
+		},
+	)
 	if err != nil {
 		return MessageContext{}, err
 	}
-	out.BeforeTruncated = len(before) > contextLimit
-	if out.BeforeTruncated {
-		before = before[:contextLimit]
-	}
-	for i, j := 0, len(before)-1; i < j; i, j = i+1, j-1 {
-		before[i], before[j] = before[j], before[i]
-	}
-	after, err := s.messageRows(ctx, openAfterSQL, chatID, target.rawDate, target.rawDate, id, contextLimit+1)
-	if err != nil {
-		return MessageContext{}, err
-	}
-	out.AfterTruncated = len(after) > contextLimit
-	if out.AfterTruncated {
-		after = after[:contextLimit]
-	}
-	out.Before = plainMessages(before)
-	out.After = plainMessages(after)
+	out.BeforeTruncated = window.BeforeTruncated
+	out.AfterTruncated = window.AfterTruncated
+	out.Before = plainMessages(window.Before)
+	out.After = plainMessages(window.After)
 	return out, nil
 }
 

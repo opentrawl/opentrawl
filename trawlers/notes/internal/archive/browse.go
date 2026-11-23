@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"time"
+
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 )
 
 // recentlyDeletedFolder is Apple's trash. A reader browsing their notes does not
@@ -141,13 +143,10 @@ func browseWhereInTimeRange(folder string, after, before time.Time) (string, []a
 		parts = append(parts, "n.folder = ?")
 		args = append(args, folder)
 	}
-	if !after.IsZero() {
-		parts = append(parts, "coalesce(nullif(n.modified_at, ''), n.created_at) >= ?")
-		args = append(args, after.UTC().Format(time.RFC3339Nano))
-	}
-	if !before.IsZero() {
-		parts = append(parts, "coalesce(nullif(n.modified_at, ''), n.created_at) <= ?")
-		args = append(args, before.UTC().Format(time.RFC3339Nano))
-	}
+	archivetime.NewInclusiveTimeRange(after, before).AppendRFC3339UTCSQLClauses(
+		"coalesce(nullif(n.modified_at, ''), n.created_at)",
+		&parts,
+		&args,
+	)
 	return "where " + strings.Join(parts, "\n  and "), args
 }

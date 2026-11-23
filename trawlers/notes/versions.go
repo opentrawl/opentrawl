@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
-	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	notecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/note"
@@ -41,7 +41,7 @@ func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.TrawlerCommandE
 		if err != nil {
 			return nil, usageError(render.DateOptionNeedsTime("at"))
 		}
-		requestedArchiveTime := notestime.Format(requestedTime)
+		requestedArchiveTime := archivetime.FormatFixedNanosecondRFC3339UTC(requestedTime)
 		for versionIndex, version := range versions {
 			if version.SourceModifiedAt != "" && version.SourceModifiedAt <= requestedArchiveTime {
 				return recoveredNoteVersionListResponse(

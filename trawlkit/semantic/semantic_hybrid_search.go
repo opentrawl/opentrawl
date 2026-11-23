@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	personcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
@@ -177,7 +177,7 @@ func SearchSemanticIndex(
 			indexDB,
 			scored,
 			queryTokens,
-			flags.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix),
+			archivetime.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix),
 		)
 	}
 
@@ -371,7 +371,7 @@ func buildSemanticFilterSQL(q SemanticSearchQuery) ([]string, []any) {
 			args = append(args, strings.ToLower(strings.TrimSpace(t)))
 		}
 	}
-	flags.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix).
+	archivetime.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix).
 		AppendUnixSQLClauses("occurred_unix", &where, &args)
 	if len(q.PersonFilterTerms) > 0 {
 		var parts []string
@@ -519,7 +519,7 @@ func resolveBestSessionMemberRecords(
 	indexDB *sql.DB,
 	chunks []scoredSemanticChunk,
 	queryTokens []string,
-	timeRange flags.InclusiveTimeRange,
+	timeRange archivetime.InclusiveTimeRange,
 ) {
 	if semDB == nil || indexDB == nil || len(chunks) == 0 {
 		return

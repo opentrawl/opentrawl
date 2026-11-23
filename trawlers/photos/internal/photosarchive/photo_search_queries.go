@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"unicode"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
-	"github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/archivetime"
 	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
@@ -43,7 +42,7 @@ highlight(apple_library_photo_search,5,char(57344),char(57345)),
 highlight(apple_library_photo_search,6,char(57344),char(57345))`
 	}
 	var timeClauses []string
-	flags.NewInclusiveTimeRange(query.After, query.Before).AppendRFC3339UTCSQLClauses(
+	archivetime.NewInclusiveTimeRange(query.After, query.Before).AppendRFC3339UTCSQLClauses(
 		"p.capture_time_utc",
 		&timeClauses,
 		&arguments,
@@ -120,24 +119,7 @@ highlight(apple_library_photo_search,6,char(57344),char(57345))`
 }
 
 func photoSearchTokenQuery(queryText string) string {
-	var tokens []string
-	var token strings.Builder
-	finishToken := func() {
-		if token.Len() == 0 {
-			return
-		}
-		tokens = append(tokens, store.FTS5Phrase(SearchTextWithEastAsianCharacterPairs(token.String())))
-		token.Reset()
-	}
-	for _, character := range queryText {
-		if isPhotoSearchWordCharacter(character) {
-			token.WriteRune(character)
-		} else {
-			finishToken()
-		}
-	}
-	finishToken()
-	return strings.Join(tokens, " ")
+	return store.FTS5QueryFromWordTokens(queryText, SearchTextWithEastAsianCharacterPairs)
 }
 
 func photoSearchPersonMatches(fact *photo.AppleLibraryPhotoFacts, filter trawlkit.SearchPersonFilter) bool {
@@ -300,5 +282,5 @@ func originalPhotoTextRuns(originalText string, indexedRuns []store.FTS5TextRun)
 }
 
 func isPhotoSearchWordCharacter(character rune) bool {
-	return unicode.IsLetter(character) || unicode.IsDigit(character) || unicode.IsMark(character) || character == '_'
+	return store.IsFTS5WordRune(character)
 }

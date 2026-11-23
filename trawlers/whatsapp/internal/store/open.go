@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func (s *Store) MessageByID(ctx context.Context, messageID string) (Message, error) {
@@ -36,37 +37,28 @@ type MessageWindow struct {
 }
 
 func (s *Store) MessageWindow(ctx context.Context, target Message, eachSide int) (MessageWindow, error) {
-	if eachSide < 0 {
-		eachSide = 0
-	}
-	before, err := s.messagesBefore(ctx, target, eachSide+1)
+	window, err := ckstore.ReadSurroundingMessageContextWindow(
+		ctx,
+		target,
+		eachSide,
+		func(ctx context.Context, limit int) ([]Message, error) {
+			return s.messagesBeforeNewestFirst(ctx, target, limit)
+		},
+		func(ctx context.Context, limit int) ([]Message, error) {
+			return s.messagesAfterOldestFirst(ctx, target, limit)
+		},
+	)
 	if err != nil {
 		return MessageWindow{}, err
 	}
-	beforeTruncated := len(before) > eachSide
-	if beforeTruncated {
-		before = before[len(before)-eachSide:]
-	}
-	after, err := s.messagesAfter(ctx, target, eachSide+1)
-	if err != nil {
-		return MessageWindow{}, err
-	}
-	afterTruncated := len(after) > eachSide
-	if afterTruncated {
-		after = after[:eachSide]
-	}
-	out := make([]Message, 0, len(before)+1+len(after))
-	out = append(out, before...)
-	out = append(out, target)
-	out = append(out, after...)
-	messages, err := s.withCanonicalWhatsAppMessageDisplayNames(ctx, out)
+	messages, err := s.withCanonicalWhatsAppMessageDisplayNames(ctx, window.MessagesInChronologicalOrder())
 	if err != nil {
 		return MessageWindow{}, err
 	}
 	return MessageWindow{
 		Messages:        messages,
-		BeforeTruncated: beforeTruncated,
-		AfterTruncated:  afterTruncated,
+		BeforeTruncated: window.BeforeTruncated,
+		AfterTruncated:  window.AfterTruncated,
 	}, nil
 }
 
@@ -210,20 +202,21 @@ where trim(participant_key) <> ''`, chatJID, chatJID, chatJID)
 	return conversationParticipantIdentities, nil
 }
 
-func (s *Store) messagesBefore(ctx context.Context, target Message, limit int) ([]Message, error) {
+func (s *Store) messagesBeforeNewestFirst(ctx context.Context, target Message, limit int) ([]Message, error) {
 	if limit == 0 {
 		return nil, nil
 	}
 	if target.Timestamp.IsZero() {
-		query := "select " + messageScanColumns + " from (select " + messageSelectColumns + " from messages where chat_jid = ? and source_pk < ? order by source_pk desc limit ?) order by source_pk asc"
+		query := "select " + messageSelectColumns + " from messages where chat_jid = ? and source_pk < ? order by source_pk desc limit ?"
 		return scanMessages(ctx, s.db, query, target.ChatJID, target.SourcePK, limit)
 	}
-	query := "select " + messageScanColumns + " from (select " + messageSelectColumns + " from messages where chat_jid = ? and (ts < ? or (ts = ? and source_pk < ?)) order by ts desc, source_pk desc limit ?) order by ts asc, source_pk asc"
+	predicate, orderBy := ckstore.SQLKeysetBeforeAfterClause("ts", "source_pk", true)
+	query := "select " + messageSelectColumns + " from messages where chat_jid = ? and " + predicate + " order by " + orderBy + " limit ?"
 	ts := unix(target.Timestamp)
 	return scanMessages(ctx, s.db, query, target.ChatJID, ts, ts, target.SourcePK, limit)
 }
 
-func (s *Store) messagesAfter(ctx context.Context, target Message, limit int) ([]Message, error) {
+func (s *Store) messagesAfterOldestFirst(ctx context.Context, target Message, limit int) ([]Message, error) {
 	if limit == 0 {
 		return nil, nil
 	}
@@ -231,7 +224,8 @@ func (s *Store) messagesAfter(ctx context.Context, target Message, limit int) ([
 		query := "select " + messageSelectColumns + " from messages where chat_jid = ? and source_pk > ? order by source_pk asc limit ?"
 		return scanMessages(ctx, s.db, query, target.ChatJID, target.SourcePK, limit)
 	}
-	query := "select " + messageSelectColumns + " from messages where chat_jid = ? and (ts > ? or (ts = ? and source_pk > ?)) order by ts asc, source_pk asc limit ?"
+	predicate, orderBy := ckstore.SQLKeysetBeforeAfterClause("ts", "source_pk", false)
+	query := "select " + messageSelectColumns + " from messages where chat_jid = ? and " + predicate + " order by " + orderBy + " limit ?"
 	ts := unix(target.Timestamp)
 	return scanMessages(ctx, s.db, query, target.ChatJID, ts, ts, target.SourcePK, limit)
 }

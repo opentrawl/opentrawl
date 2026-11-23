@@ -299,27 +299,27 @@ func (s *Store) OpenDirectMessageWindow(ctx context.Context, messageID string, r
 	}
 	targetCreatedAt := formatUTC(target.CreatedAt)
 
-	afterMsgs, afterTrunc, err := s.loadAdjacentDirectMessages(ctx, target.ConversationID, targetCreatedAt, target.ID, true, radius)
+	window, err := ckstore.ReadSurroundingMessageContextWindow(
+		ctx,
+		target,
+		radius,
+		func(ctx context.Context, limit int) ([]DirectMessage, error) {
+			return s.loadAdjacentDirectMessages(ctx, target.ConversationID, targetCreatedAt, target.ID, true, limit)
+		},
+		func(ctx context.Context, limit int) ([]DirectMessage, error) {
+			return s.loadAdjacentDirectMessages(ctx, target.ConversationID, targetCreatedAt, target.ID, false, limit)
+		},
+	)
 	if err != nil {
 		return DirectMessageOpenWindow{}, err
 	}
-	beforeMsgs, beforeTrunc, err := s.loadAdjacentDirectMessages(ctx, target.ConversationID, targetCreatedAt, target.ID, false, radius)
-	if err != nil {
-		return DirectMessageOpenWindow{}, err
-	}
-
-	// Combine newest-first: afterMsgs (newest->oldest), target, beforeMsgs (newest->oldest).
-	combined := make([]DirectMessage, 0, len(afterMsgs)+1+len(beforeMsgs))
-	combined = append(combined, afterMsgs...)
-	combined = append(combined, target)
-	combined = append(combined, beforeMsgs...)
 	return DirectMessageOpenWindow{
 		Target:          target,
 		Conversation:    conv,
 		Participants:    participants,
-		Messages:        combined,
-		BeforeTruncated: beforeTrunc,
-		AfterTruncated:  afterTrunc,
+		Messages:        window.MessagesNewestFirst(),
+		BeforeTruncated: window.BeforeTruncated,
+		AfterTruncated:  window.AfterTruncated,
 	}, nil
 }
 
@@ -365,45 +365,27 @@ func (s *Store) loadAdjacentDirectMessages(
 	conversationID string,
 	targetCreatedAt string,
 	targetID string,
-	newer bool,
+	earlier bool,
 	limit int,
-) ([]DirectMessage, bool, error) {
-	var query string
-	if newer {
-		query = `select ` + dmSelectColumns() + dmFromClause() + `
-where m.conversation_id = ? and (m.created_at > ? or (m.created_at = ? and m.id > ?))
-order by m.created_at asc, m.id asc limit ?`
-	} else {
-		query = `select ` + dmSelectColumns() + dmFromClause() + `
-where m.conversation_id = ? and (m.created_at < ? or (m.created_at = ? and m.id < ?))
-order by m.created_at desc, m.id desc limit ?`
-	}
-	rows, err := s.db.QueryContext(ctx, query, conversationID, targetCreatedAt, targetCreatedAt, targetID, limit+1)
+) ([]DirectMessage, error) {
+	predicate, orderBy := ckstore.SQLKeysetBeforeAfterClause("m.created_at", "m.id", earlier)
+	query := `select ` + dmSelectColumns() + dmFromClause() + `
+where m.conversation_id = ? and ` + predicate + `
+order by ` + orderBy + ` limit ?`
+	rows, err := s.db.QueryContext(ctx, query, conversationID, targetCreatedAt, targetCreatedAt, targetID, limit)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	var out []DirectMessage
 	for rows.Next() {
 		msg, err := scanDirectMessage(rows)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		out = append(out, msg)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, false, err
-	}
-	truncated := len(out) > limit
-	if truncated {
-		out = out[:limit]
-	}
-	if newer {
-		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-			out[i], out[j] = out[j], out[i]
-		}
-	}
-	return out, truncated, nil
+	return out, rows.Err()
 }
 
 func upsertDirectMessageConversations(ctx context.Context, tx *sql.Tx, convs []DirectMessageConversation) error {

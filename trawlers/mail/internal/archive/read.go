@@ -80,11 +80,7 @@ func (s *Store) SearchMessages(ctx context.Context, options MailSearchOptions) (
 	if searchText != "" {
 		fromClause = "from messages_fts join messages m on m.id = messages_fts.id"
 		clauses = append(clauses, "messages_fts match ?")
-		ftsQuery := ckstore.FTS5TokenQuery(searchText)
-		if ftsQuery == "" {
-			ftsQuery = ckstore.FTS5Phrase(searchText)
-		}
-		arguments = append(arguments, ftsQuery)
+		arguments = append(arguments, ckstore.FTS5TokenQueryOrPhrase(searchText))
 		matchColumns = ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 1) + ", " +
 			ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 2) + ", " +
 			ckstore.FTS5MarkedSearchResultSnippetSQLExpression("messages_fts", 3)
