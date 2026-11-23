@@ -136,12 +136,28 @@ footer {
 footer a { color: var(--black); text-decoration: none; border-bottom: 1px solid var(--hairline); }
 footer a:hover { color: var(--red); border-color: var(--red); }
 
+.mobile-nav {
+  display: none;
+  border-top: var(--hair);
+  padding: 8px clamp(16px, 3vw, 32px);
+  gap: 18px;
+  font-size: 13px;
+  color: var(--grey);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.mobile-nav a { text-decoration: none; flex: none; }
+.mobile-nav a.active, .mobile-nav a:hover { color: var(--black); font-weight: 700; }
+
 @media (max-width: 820px) {
   .pillars { grid-template-columns: 1fr; }
   .pillar { border-right: none; border-bottom: var(--hair); }
   .pillar:last-child { border-bottom: none; }
 }
-@media (max-width: 680px) { .nav, .btn-top.ghost { display: none; } }
+@media (max-width: 680px) {
+  .nav, .btn-top.ghost { display: none; }
+  .mobile-nav { display: flex; }
+}
 </style>
 </head>
 <body>
@@ -182,6 +198,12 @@ footer a:hover { color: var(--red); border-color: var(--red); }
       <a class="btn-top primary" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
     </div>
   </div>
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <a href="index.html">Home</a>
+    <a href="plugins.html">Plugins</a>
+    <a class="active" href="security.html">Privacy</a>
+    <a href="index.html#pricing">Pricing</a>
+  </nav>
 </header>
 
 <main class="wrap">
@@ -191,15 +213,15 @@ footer a:hover { color: var(--red); border-color: var(--red); }
   <div class="pillars">
     <div class="pillar">
       <strong>Local + local models</strong>
-      <p>Run OpenTrawl on your Mac alongside a local model (Ollama or MLX). Zero data leaves your home network — neither OpenTrawl nor any AI company sees a single byte.</p>
+      <p>Pair OpenTrawl on your Mac with a local coding agent running Ollama or MLX. Neither OpenTrawl nor any AI company sees your messages, emails, or notes.</p>
     </div>
     <div class="pillar">
-      <strong>End-to-end encrypted</strong>
+      <strong>End-to-end encrypted (planned)</strong>
       <p>On planned sync and cloud tiers, your archive is encrypted on your device before upload. Cloud storage holds only ciphertext it cannot open.</p>
     </div>
     <div class="pillar">
-      <strong>Hardware-locked memory</strong>
-      <p>When your phone or cloud agent searches your archive while your Mac sleeps, queries run inside hardware-encrypted confidential memory that requires your agent's live key — even OpenTrawl admins cannot read RAM or dump your vault.</p>
+      <strong>Hardware-locked memory (planned)</strong>
+      <p>When your phone or cloud agent searches your archive while your Mac sleeps, queries run inside hardware-locked memory that requires your agent's live key. Even OpenTrawl admins cannot read RAM or dump your archive.</p>
     </div>
   </div>
 
@@ -221,26 +243,26 @@ footer a:hover { color: var(--red); border-color: var(--red); }
           <td>Full local archive &amp; search</td>
           <td><span class="cant">Nothing uploaded</span></td>
           <td><span class="cant">Nothing uploaded</span></td>
-          <td>Zero cloud exposure with local models; or only what you open with cloud AI</td>
+          <td>No AI cloud exposure with local models; or only what you open with cloud AI</td>
         </tr>
         <tr>
-          <td class="mode">End-to-End Encrypted Sync ($7/mo)<span>Planned</span></td>
+          <td class="mode">Encrypted Sync ($7/mo)<span>Planned</span></td>
           <td>Full archive synced between Mac &amp; iPhone</td>
           <td><span class="cant">Cannot read</span><br>Keys never leave your devices</td>
           <td>Encrypted blobs only</td>
           <td>Only what you search &amp; open locally</td>
         </tr>
         <tr>
-          <td class="mode">End-to-End Encrypted Cloud ($19/mo)<span>Planned</span></td>
+          <td class="mode">Encrypted Cloud ($19/mo)<span>Planned</span></td>
           <td>Full archive + 24/7 remote search</td>
           <td><span class="cant">Cannot read</span><br>Hardware-locked memory; requires your agent's live key</td>
           <td>Encrypted blobs only</td>
           <td>Only the sources you grant that agent</td>
         </tr>
         <tr>
-          <td class="mode">Dedicated Hardware ($119/mo)<span>Planned</span></td>
+          <td class="mode">Encrypted Dedicated ($119/mo)<span>Planned</span></td>
           <td>Full archive + dedicated 24/7 server</td>
-          <td><span class="cant">Cannot read</span><br>Single-user hardware + manual version approval</td>
+          <td><span class="cant">Cannot read</span><br>Single-user hardware-locked memory + manual update approval</td>
           <td>Encrypted blobs only</td>
           <td>Only the sources you grant that agent</td>
         </tr>
@@ -248,18 +270,18 @@ footer a:hover { color: var(--red); border-color: var(--red); }
     </table>
   </div>
 
-  <h2>Verify what runs — locally and in the cloud</h2>
+  <h2>Verify what runs on your Mac and in the cloud</h2>
   <div class="callout">
-    <strong>On your Mac today:</strong> Open OpenTrawl and click <strong>Click to copy AI review prompt</strong> before granting Full Disk Access. It gives Claude or Codex the exact signed app bundle on your disk and its public GitHub commit so your AI can verify what the app reads and confirm there is no telemetry.
+    <strong>On your Mac today:</strong> Open OpenTrawl and use <strong>Click to copy AI review prompt</strong> before granting Full Disk Access. It gives Claude or Codex the signed app bundle on your disk and its public GitHub commit so your AI can check what the app reads and confirm there is no telemetry.
   </div>
   <div class="callout">
-    <strong>In our planned Encrypted Cloud:</strong> Every cloud server image will be built reproducibly from public GitHub code and published in a 72-hour public window before running enclaves accept it. You will be able to verify from your terminal that the server handling your queries matches the exact public source code — no silent updates and no secret backdoors.
+    <strong>In our planned Encrypted Cloud:</strong> Every server build will come straight from our public GitHub repo and be published 72 hours before it goes live. You will be able to check from your terminal that the server handling your queries matches the exact public source code.
   </div>
 
   <h2>Where the limits are</h2>
   <ul>
-    <li><strong>Cloud AI providers see what you send them.</strong> If you connect a cloud AI (Claude, ChatGPT, Codex), whatever conversations or emails that agent opens go to that AI provider under its privacy terms. Use a local model on your Mac for complete isolation, or grant cloud agents access only to specific sources.</li>
-    <li><strong>Storage servers still see basic metadata.</strong> Encrypted cloud backups hide your messages, notes, and source names, but storage servers can still see coarse padded file sizes and when you sync. Stay on Local if your threat model allows zero cloud contact.</li>
+    <li><strong>Cloud AI providers see what you send them.</strong> If you connect a cloud AI (Claude, ChatGPT, Codex), whatever conversations or emails that agent opens go to that AI provider under its privacy terms. Use a local model on your Mac if you want no AI company to see your data.</li>
+    <li><strong>Storage servers still see basic metadata.</strong> Encrypted cloud backups hide your messages, notes, and source names, but storage servers can still see coarse padded file sizes and when you sync. Stay on Local if you want zero cloud backups.</li>
     <li><strong>Your Mac or iPhone itself.</strong> If malware runs on an unlocked device, local files are exposed like any other app on that device.</li>
   </ul>
 

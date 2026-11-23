@@ -13,7 +13,7 @@ dist_id="$(aws cloudfront list-distributions \
   --output text)"
 
 aws s3 sync website/ "s3://$bucket" --delete \
-  --exclude copy.txt --exclude index.template.html --exclude privacy --exclude privacy.html
+  --exclude copy.txt --exclude index.template.html --exclude privacy
 aws s3 cp website/privacy.html "s3://$bucket/privacy" --content-type "text/html; charset=utf-8"
 aws cloudfront create-invalidation --distribution-id "$dist_id" --paths "/*" >/dev/null
 echo "deployed website/ to https://$bucket (invalidated $dist_id)"

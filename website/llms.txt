@@ -1,47 +1,44 @@
 # OpenTrawl
 
-> Spotlight for the Agentic OS. OpenTrawl is an open-source, local-first macOS app and CLI (`trawl`) that indexes 12 personal sources into private SQLite archives under `~/.opentrawl` so any AI agent can search a person's real history read-only via CLI or scoped MCP.
+> Spotlight for the Agentic OS. OpenTrawl is an open-source (MIT), local-first macOS app and CLI (`trawl`) that indexes 11 personal sources into private SQLite archives under `~/.opentrawl` so any AI agent can search a person's real history read-only from the terminal.
 
-OpenTrawl runs locally on the user's machine with no servers, no account, and no telemetry. Every source keeps its own SQLite archive alongside a unified full-text index (`index.db`) and an optional Apple Silicon local semantic index (`semantic.db`).
+OpenTrawl runs locally on the user's Mac with no OpenTrawl servers, no account, and no telemetry. Every source keeps its own SQLite archive alongside a unified full-text index (`index.db`) and an optional Apple Silicon local semantic index (`semantic.db`).
 
 - Mac app download: https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg
 - Bundled CLI path on macOS: `/Applications/OpenTrawl.app/Contents/Helpers/trawl`
-- Discover cold: run `trawl`, `trawl --help`, or `trawl skill` (prints the bundled canonical `SKILL.md`)
+- Discover cold: run `trawl` or `trawl --help`
 - Exit codes: `0` complete, `1` failed, `2` bad usage, `3` partial result with usable stdout
 
 ## Documentation
 
-- [Full LLM Reference](https://opentrawl.sh/llms-full.txt): Complete self-contained CLI, MCP, architecture, 12-source, and plugin reference
-- [README](https://github.com/opentrawl/opentrawl/blob/main/README.md): Product overview, onboarding prompt, and 12 built-in sources
-- [Canonical Agent Skill](https://raw.githubusercontent.com/opentrawl/opentrawl/main/trawl/internal/cli/skill/SKILL.md): Concise rules, MCP tools, and CLI commands for agents (also printed by `trawl skill`)
-- [Plugin Authoring Skill](https://raw.githubusercontent.com/opentrawl/opentrawl/main/skills/build-trawl-plugin/SKILL.md): Build and sandbox-install standalone external plugins with `trawl plugin install`
+- [Full LLM Reference](https://opentrawl.sh/llms-full.txt): Complete CLI, architecture, 11-source, and plugin reference for the current release
+- [Apps & Plugins](https://opentrawl.sh/plugins.html): Built-in sources, standalone plugins, and the plugin authoring prompt
+- [Privacy & Encryption](https://opentrawl.sh/security.html): Local privacy boundary today and planned end-to-end encrypted sync and cloud tiers
+- [Plugin Authoring Skill](https://raw.githubusercontent.com/opentrawl/opentrawl/main/skills/build-trawl-plugin/SKILL.md): Build and install standalone external plugins with `trawl plugin install`
 - [Vision](https://github.com/opentrawl/opentrawl/blob/main/docs/vision.md): Product direction, Bitter Lesson substrate principles, and privacy levels
 - [Trawler Control Contract](https://github.com/opentrawl/opentrawl/blob/main/docs/contract.md): Protobuf boundary, typed records, links, and output rules
 
-## 12 Built-in Sources
+## 11 Built-in Sources (v0.1.21)
 
 - `imessage`: Apple Messages conversations and messages
 - `whatsapp`: WhatsApp Desktop chats, groups, messages, and media details
-- `telegram`: Telegram for macOS chats and messages, or direct QR login without Full Disk Access (`trawl telegram connect`)
+- `telegram`: Telegram for macOS chats and messages
 - `mail`: Apple Mail and iCloud Mail accounts
 - `gmail`: Gmail mailbox via direct read-only Google OAuth (`trawl gmail connect`)
 - `notes`: Apple Notes folders, notes, attachments, and recovered versions
 - `contacts`: Apple Contacts and cross-source people resolution
 - `calendar`: Apple Calendar events, calendars, and attendees
 - `photos`: Apple Photos dates, places, albums, cameras, people tags, and favourites
-- `health`: Apple Health exports (`export.zip` / `export.xml`), HealthFit `.fit` workouts, sleep, vitals, and incremental HealthKit batches (`trawl health import PATH`)
 - `money`: Bank accounts, balances, and transactions
 - `twitter`: X posts, bookmarks, likes, mentions, and direct messages
 
-## Quick CLI & MCP Surface
+## Quick CLI Surface (v0.1.21)
 
 - Core read-only CLI: `trawl status`, `trawl search`, `trawl open LINK`, `trawl around TARGET`, `trawl who NAME`, `trawl conversations`, `trawl messages --conversation=LINK`
-- Source & power commands: `trawl health workouts|sleep|metrics|summary`, `trawl semantic status|enable|build|disable`, `trawl plugin list|install|remove`, `trawl index status|rebuild`, `trawl skill`
-- Scoped read-only MCP: `trawl mcp` (stdio default, `--http` Streamable HTTP), `trawl connect` (auto-detects Claude Code, Claude Desktop, Codex, Cursor, executor.sh, OpenClaw, Hermes, and T3 Code), `trawl token create|list|revoke`
-- MCP tools: `trawl_status`, `trawl_search`, `trawl_open`, `trawl_around`, `trawl_who`
+- Source & power commands: `trawl update`, `trawl semantic status|enable|build|disable`, `trawl plugin list|install|remove`, `trawl index status|rebuild`
 
 ## Optional
 
-- [Privacy Policy](https://opentrawl.sh/privacy): Local-first storage and downstream AI boundary
+- [Gmail Privacy Policy](https://opentrawl.sh/privacy): Local-first storage and downstream AI boundary
 - [Source Code (MIT)](https://github.com/opentrawl/opentrawl): Go CLI, crawlers, protobuf contracts, and SwiftUI Mac app
-- [Agent Keyring](https://agent-keyring.jjpcodes.com/): Companion tool for human-approved agent sign-ins using Apple Passwords
+- [Agent Keyring](https://keyring.opentrawl.sh/): Companion tool for human-approved agent sign-ins using Apple Passwords

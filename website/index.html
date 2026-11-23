@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>OpenTrawl: Spotlight for the Agentic OS</title>
-<meta name="description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first, open source, and end-to-end encrypted.">
+<meta name="description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first and open source today, with end-to-end encrypted sync and cloud tiers planned.">
 <link rel="canonical" href="https://opentrawl.sh/">
 <link rel="alternate" type="text/plain" href="llms.txt" title="LLMs.txt">
 
@@ -18,7 +18,7 @@
 <meta property="og:site_name" content="OpenTrawl">
 <meta property="og:url" content="https://opentrawl.sh/">
 <meta property="og:title" content="OpenTrawl: Spotlight for the Agentic OS">
-<meta property="og:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first, open source, and end-to-end encrypted.">
+<meta property="og:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first and open source today, with end-to-end encrypted sync and cloud tiers planned.">
 <meta property="og:image" content="https://opentrawl.sh/card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -26,7 +26,7 @@
 <meta name="twitter:site" content="@opentrawl">
 <meta name="twitter:creator" content="@jjpcodes">
 <meta name="twitter:title" content="OpenTrawl: Spotlight for the Agentic OS">
-<meta name="twitter:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first, open source, and end-to-end encrypted.">
+<meta name="twitter:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first and open source today, with end-to-end encrypted sync and cloud tiers planned.">
 <meta name="twitter:image" content="https://opentrawl.sh/card.png">
 <meta name="twitter:image:alt" content="OpenTrawl: Spotlight for the Agentic OS. Local AI search for all your apps.">
 <style>
@@ -284,6 +284,9 @@ code {
 .icon-tip:hover::after,
 .icon-tip:focus-visible::after {
   display: block;
+}
+@media (max-width: 680px), (hover: none) {
+  .icon-tip::after { display: none !important; }
 }
 .icon-meta {
   margin-top: 10px;
@@ -778,9 +781,24 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 .byline { width: 100%; margin-top: 4px; }
 
 /* --- responsive -------------------------------------------- */
+.mobile-nav {
+  display: none;
+  border-top: var(--hair);
+  padding: 8px clamp(16px, 3vw, 32px);
+  gap: 18px;
+  font-size: 13px;
+  color: var(--grey);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.mobile-nav a { text-decoration: none; flex: none; }
+.mobile-nav a:hover { color: var(--black); }
+
 @media (max-width: 1080px) {
   .nav { display: none; }
-  .hero { grid-template-columns: minmax(0, 1fr); min-height: auto; padding: 32px 0 20px; gap: 28px; }
+  .mobile-nav { display: flex; }
+  :root { --nav-h: 92px; }
+  .hero { grid-template-columns: minmax(0, 1fr); min-height: auto; padding: 28px 0 20px; gap: 28px; }
   .agent-window { height: 470px; max-width: 100%; }
   .wiki-grid, .waitlist-grid { grid-template-columns: minmax(0, 1fr); }
   .tier-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -791,9 +809,10 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 
 @media (max-width: 680px) {
   .topbar { height: 50px; }
-  :root { --nav-h: 50px; }
+  :root { --nav-h: 86px; }
   .topbar .btn { font-size: 12px; padding: 5px 12px; white-space: nowrap; }
   .topbar .btn-secondary { display: none; }
+  .term-output { font-size: 10px; line-height: 1.5; }
   .ask-grid, .privacy-grid, .tier-grid { grid-template-columns: minmax(0, 1fr); }
   .ask-card { border-right: none; border-bottom: var(--hair); }
   .ask-card:last-child { border-bottom: none; }
@@ -840,7 +859,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <a href="#examples">Examples</a>
       <a href="#wiki">Personal Wiki</a>
       <a href="plugins.html">Plugins</a>
-      <a href="security.html">Privacy</a>
+      <a href="#privacy">Privacy</a>
       <a href="#pricing">Pricing</a>
     </nav>
 
@@ -849,6 +868,13 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
     </div>
   </div>
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <a href="#examples">Examples</a>
+    <a href="#wiki">Personal Wiki</a>
+    <a href="plugins.html">Plugins</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#pricing">Pricing</a>
+  </nav>
 </header>
 
 <main class="wrap">
@@ -870,20 +896,20 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 
       <div class="icon-strip">
         <div class="icon-row" aria-label="Built-in Mac sources">
-          <span class="icon-tip" tabindex="0" data-tip="iMessage — chats and group threads"><img class="app-icon" src="icons/imessage.png" width="32" height="32" alt="iMessage"></span>
-          <span class="icon-tip" tabindex="0" data-tip="WhatsApp — Desktop messages and groups"><img class="app-icon" src="icons/whatsapp.png" width="32" height="32" alt="WhatsApp"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Telegram — full chat history"><img class="app-icon" src="icons/telegram.png" width="32" height="32" alt="Telegram"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Apple Mail — iCloud and local mailboxes"><img class="app-icon square" src="icons/mail.png" width="32" height="32" alt="Apple Mail"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Gmail — direct read-only Google sync"><img class="app-icon square" src="icons/gmail.png" width="32" height="32" alt="Gmail"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Apple Notes — notes, folders, and past versions"><img class="app-icon" src="icons/notes.png" width="32" height="32" alt="Notes"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Contacts — people matched across apps"><img class="app-icon" src="icons/contacts.png" width="32" height="32" alt="Contacts"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Calendar — events, attendees, and trips"><img class="app-icon" src="icons/calendar.png" width="32" height="32" alt="Calendar"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Apple Photos — dates, places, people, albums"><img class="app-icon" src="icons/photos.png" width="32" height="32" alt="Photos"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Money — bank accounts, balances, transactions"><img class="app-icon square" src="icons/money.svg" width="32" height="32" alt="Money"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Twitter (X) — posts, bookmarks, likes, DMs"><img class="app-icon square" src="icons/twitter.png" width="32" height="32" alt="Twitter"></span>
+          <span class="icon-tip" tabindex="0" data-tip="iMessage: chats and group threads"><img class="app-icon" src="icons/imessage.png" width="32" height="32" alt="iMessage"></span>
+          <span class="icon-tip" tabindex="0" data-tip="WhatsApp: Desktop messages and groups"><img class="app-icon" src="icons/whatsapp.png" width="32" height="32" alt="WhatsApp"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Telegram: full chat history"><img class="app-icon" src="icons/telegram.png" width="32" height="32" alt="Telegram"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Mail: iCloud and local mailboxes"><img class="app-icon square" src="icons/mail.png" width="32" height="32" alt="Apple Mail"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Gmail: direct read-only Google sync"><img class="app-icon square" src="icons/gmail.png" width="32" height="32" alt="Gmail"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Notes: notes, folders, and past versions"><img class="app-icon" src="icons/notes.png" width="32" height="32" alt="Notes"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Contacts: people matched across apps"><img class="app-icon" src="icons/contacts.png" width="32" height="32" alt="Contacts"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Calendar: events, attendees, and trips"><img class="app-icon" src="icons/calendar.png" width="32" height="32" alt="Calendar"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Photos: dates, places, people, albums"><img class="app-icon" src="icons/photos.png" width="32" height="32" alt="Photos"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Money: bank accounts, balances, transactions"><img class="app-icon square" src="icons/money.svg" width="32" height="32" alt="Money"></span>
+          <span class="icon-tip" tabindex="0" data-tip="X: posts, bookmarks, likes, and DMs"><img class="app-icon square" src="icons/twitter.png" width="32" height="32" alt="X"></span>
         </div>
         <div class="icon-meta">
-          <span>11 apps built in today, plus plugins for more. Hover any icon to see what it archives.</span>
+          <span>11 apps built in today, plus plugins for more.</span>
           <a class="inline-link" href="plugins.html">Browse all apps &amp; plugins →</a>
         </div>
       </div>
@@ -897,12 +923,12 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           </div>
           <div class="beat-tabs" role="tablist" aria-label="Demo steps">
             <button class="beat-tab active" type="button" data-beat="0">1. search</button>
-            <button class="beat-tab" type="button" data-beat="1">2. around</button>
-            <button class="beat-tab" type="button" data-beat="2">3. open</button>
+            <button class="beat-tab" type="button" data-beat="1">2. open</button>
+            <button class="beat-tab" type="button" data-beat="2">3. calendar</button>
             <button class="beat-tab" type="button" data-beat="3">4. answer</button>
           </div>
         </div>
-        <div class="aw-question"><span>YOU</span>"Pull up everything for the Brighton trip with Ford: dates, chats, and what I bought."</div>
+        <div class="aw-question"><span>YOU</span>"Pull up everything for the Brighton trip with Ford: dates, chats, and notes."</div>
         <div class="aw-body" id="termBody">
           <p class="term-comment" id="termComment">&nbsp;</p>
           <p class="term-command" id="termCommand">❯&nbsp;</p>
@@ -922,8 +948,8 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <div class="ask-grid">
       <div class="ask-card">"Did I actually pay that invoice from last month, and which bank account did it come from?"<span>Money &amp; Gmail receipts linked together</span></div>
       <div class="ask-card">"Pull up every message, email, calendar event, and receipt from my trip to Brighton."<span>Messages, email, calendar &amp; receipts in one timeline</span></div>
-      <div class="ask-card">"What restaurant did Sam recommend on WhatsApp or Telegram earlier this year?"<span>WhatsApp · Telegram · iMessage</span></div>
-      <div class="ask-card">"Find that note or X bookmark about travel insurance. I cannot remember the exact words."<span>Local topic search on Apple Silicon · Notes &amp; X bookmarks</span></div>
+      <div class="ask-card">"What restaurant did Sam recommend earlier this year? I think it was in a chat somewhere."<span>WhatsApp · Telegram · iMessage</span></div>
+      <div class="ask-card">"Find whatever I saved about travel insurance. I cannot remember the exact words."<span>Local topic search on Apple Silicon · Notes &amp; X bookmarks</span></div>
     </div>
   </section>
 
@@ -931,7 +957,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   <section class="section" id="connect">
     <div class="section-head">
       <h2>Connect your AI in one step</h2>
-      <p class="section-lead">Download the Mac app, let it build your local archive, then paste this one prompt into Claude Code, Codex, OpenClaw, Hermes, Cursor, T3 Code, or a local model on your Mac.</p>
+      <p class="section-lead">Download the Mac app, let it build your local archive, then paste this one prompt into Claude Code, Codex, OpenClaw, Hermes, Cursor, T3 Code, or any local coding agent on your Mac.</p>
     </div>
 
     <div class="single-prompt">
@@ -940,8 +966,8 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           <span>One-shot setup prompt</span>
           <button class="copy-btn" type="button" data-copy-target="connectPromptText">Copy prompt</button>
         </div>
-        <div class="card-text" id="connectPromptText">Use my local OpenTrawl archive at <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>. Start by running it with no arguments and with <code>--help</code>, then run a small read-only search and open one result to show me how it works. Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl permanently (for example by adding a short note to my <code>AGENTS.md</code> or setting up a skill). Do not run <code>update</code>, install plugins, or change any files unless I ask.</div>
-        <div class="card-foot">Works today with any agent that can run commands, including local models via Ollama or MLX.</div>
+        <div class="card-text" id="connectPromptText">Use my local OpenTrawl archive at <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>. Start by running it with no arguments and with <code>--help</code>, then run a small read-only search and open one result to show me how it works. Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl permanently (for example by adding a short note to my <code>AGENTS.md</code>). Do not run <code>update</code>, install plugins, or change any files unless I ask.</div>
+        <div class="card-foot">Works today with any agent that runs terminal commands, including agents powered by local models (Ollama or MLX).</div>
       </div>
     </div>
 
@@ -956,8 +982,8 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   <!-- DAY-1 PERSONAL WIKI -->
   <section class="section" id="wiki">
     <div class="section-head">
-      <h2>Build a personal wiki from your whole history in one shot</h2>
-      <p class="section-lead">Most AI memory waits months to learn who you are and traps that memory inside one company's chat app. OpenTrawl already has years of your messages, email, notes, calendar, and receipts on your Mac. Run this once to generate a clean, linked Markdown wiki your agents can read on Day 1.</p>
+      <h2>Build a personal wiki from your history in one shot</h2>
+      <p class="section-lead">Most AI memory waits months to learn who you are and traps that memory inside one company's chat app. OpenTrawl already has years of your messages, email, notes, and calendar on your Mac. Run this once to generate a Markdown wiki your agents can read on Day 1.</p>
     </div>
 
     <div class="wiki-grid">
@@ -966,8 +992,8 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           <span>One-shot personal wiki prompt</span>
           <button class="copy-btn" type="button" data-copy-target="wikiPromptText">Copy prompt</button>
         </div>
-        <div class="card-text" id="wikiPromptText">Using my local OpenTrawl archive at <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>, inspect the last 12 months across messages, email, notes, calendar, and money. Build a Markdown personal wiki in <code>~/wiki/</code> organised into <code>people/</code>, <code>projects/</code>, <code>home/</code>, <code>finances/</code>, <code>trips/</code>, and <code>open-matters.md</code>. Cite every fact with its exact <code>trawl open</code> link so I can verify anything in one click.</div>
-        <div class="card-foot">Re-run weekly to fold new messages, emails, and receipts into the same Markdown files.</div>
+        <div class="card-text" id="wikiPromptText">Using my local OpenTrawl archive at <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>, inspect my history across messages, email, notes, and calendar (starting with the last 12 months). Build a Markdown personal wiki in <code>~/wiki/</code> organised into <code>people/</code>, <code>projects/</code>, <code>home/</code>, <code>finances/</code>, <code>trips/</code>, and <code>open-matters.md</code>. Cite every fact with its exact <code>trawl open</code> command so I can verify anything directly.</div>
+        <div class="card-foot">Re-run weekly to fold new messages, emails, and notes into the same Markdown files.</div>
       </div>
 
       <div class="wiki-sheet">
@@ -985,8 +1011,6 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
             <div>│&nbsp;&nbsp;&nbsp;└── trillian.md</div>
             <div>├── trips/</div>
             <div class="active">│&nbsp;&nbsp;&nbsp;└── brighton.md</div>
-            <div>├── finances/</div>
-            <div>│&nbsp;&nbsp;&nbsp;└── magrathea-orders.md</div>
             <div>└── home/</div>
             <div>&nbsp;&nbsp;&nbsp;&nbsp;└── towel-locations.md</div>
           </div>
@@ -994,19 +1018,19 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
             <h3># brighton.md</h3>
             <ul class="wiki-facts">
               <li>
-                <strong>Dates:</strong> 22–23 Aug with Ford Prefect and Zaphod; Albion v Aston Villa on 23 Aug.<br>
+                <strong>Dates:</strong> 22 to 23 Aug with Ford Prefect and Zaphod.<br>
                 <span class="wiki-cite">trawl open calendar:d8h66</span>
               </li>
               <li>
-                <strong>Gear &amp; spend:</strong> 2× expedition linen towels, €42.00 from Everyday Account (Magrathea Outfitting).<br>
-                <span class="wiki-cite">trawl open money:42091</span>
+                <strong>Match ticket:</strong> Albion v Aston Villa, Sunday 23 Aug 15:00 to 17:00.<br>
+                <span class="wiki-cite">trawl open calendar:265zp</span>
               </li>
               <li>
-                <strong>Where they are:</strong> Spare in hallway cupboard, green in backpack, backup in glovebox.<br>
+                <strong>Towel locations:</strong> Kept in your Apple Notes checklist.<br>
                 <span class="wiki-cite">trawl open notes:msvku</span>
               </li>
               <li>
-                <strong>Last chat:</strong> Ford asked everyone to grab their towels and meet at the pub.<br>
+                <strong>Pub thread:</strong> Ford asked everyone to grab their towels and meet at the pub.<br>
                 <span class="wiki-cite">trawl open telegram:33zny</span>
               </li>
             </ul>
@@ -1021,7 +1045,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   <section class="section" id="privacy">
     <div class="section-head">
       <h2>Privacy is a human right</h2>
-      <p class="section-lead">Your messages, finances, health, and photos belong to you. OpenTrawl is built in the EU 🇪🇺, open source under MIT, and engineered so we can never read your data — on your Mac today, and in our planned encrypted cloud tiers.</p>
+      <p class="section-lead">Your messages, finances, and photos belong to you. OpenTrawl is built in the EU 🇪🇺, open source under MIT, and engineered so we can never read your data: local on your Mac today, and end-to-end encrypted in our planned sync and cloud tiers.</p>
     </div>
 
     <div class="privacy-grid">
@@ -1030,12 +1054,12 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
         <p>Your archives are plain local files in <code>~/.opentrawl</code>. No OpenTrawl servers, no account, no analytics, and no tracking.</p>
       </div>
       <div class="privacy-item">
-        <h3>Run with local models for zero cloud contact</h3>
-        <p>Point a local model on Apple Silicon (Ollama or MLX) at OpenTrawl and neither OpenTrawl nor any AI company ever sees a single message, email, or note.</p>
+        <h3>Run with local models so no AI company sees your data</h3>
+        <p>Point a local coding agent running Ollama or MLX on Apple Silicon at OpenTrawl and neither OpenTrawl nor any AI company sees your messages, emails, or notes.</p>
       </div>
       <div class="privacy-item">
-        <h3>End-to-end encrypted by default</h3>
-        <p>On our planned sync and cloud tiers, your archive is encrypted on your device before upload. Cloud search runs inside hardware-locked confidential memory that requires your live key, so even OpenTrawl cannot see your data.</p>
+        <h3>End-to-end encrypted sync &amp; cloud (planned)</h3>
+        <p>On our planned sync and cloud tiers, your archive is encrypted on your device before upload. Cloud search runs inside hardware-locked memory that requires your live key, so even OpenTrawl cannot read your data.</p>
       </div>
       <div class="privacy-item">
         <h3>Read-only, never sends or edits</h3>
@@ -1046,9 +1070,9 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <div class="fda-box">
       <div class="fda-box-copy">
         <h3>Have your AI check that it does what it says it does</h3>
-        <p>Reading Apple apps like Messages, Notes, and Mail requires macOS Full Disk Access. You should never trust a privacy claim on faith: open the Mac app and click <b>Click to copy AI review prompt</b> to let Claude or Codex inspect the exact app bundle on your disk against our public GitHub source before you turn it on.</p>
+        <p>Reading Apple apps like Messages, Notes, and Mail requires macOS Full Disk Access. Don't take our word for it: open the Mac app and use <b>Click to copy AI review prompt</b> so Claude or Codex can inspect the app bundle on your Mac against our public GitHub source before you turn it on.</p>
       </div>
-      <a class="inline-link" href="security.html">How encryption and hardware-locked cloud memory work →</a>
+      <a class="inline-link" href="security.html">How encryption and hardware-locked memory work →</a>
     </div>
   </section>
 
@@ -1077,7 +1101,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <article class="tier">
         <div>
           <span class="tier-status">Planned</span>
-          <h3 class="tier-name">End-to-End Encrypted Sync</h3>
+          <h3 class="tier-name">Encrypted Sync</h3>
           <div class="tier-price"><span class="tier-amount">$7</span><span class="tier-period">/ mo</span></div>
           <ul class="tier-list">
             <li>50 GB end-to-end encrypted backup</li>
@@ -1091,7 +1115,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <article class="tier">
         <div>
           <span class="tier-status">Planned</span>
-          <h3 class="tier-name">End-to-End Encrypted Cloud</h3>
+          <h3 class="tier-name">Encrypted Cloud</h3>
           <div class="tier-price"><span class="tier-amount">$19</span><span class="tier-period">/ mo</span></div>
           <ul class="tier-list">
             <li>Everything in Encrypted Sync</li>
@@ -1105,33 +1129,33 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <article class="tier">
         <div>
           <span class="tier-status">Planned</span>
-          <h3 class="tier-name">Dedicated Hardware</h3>
+          <h3 class="tier-name">Encrypted Dedicated</h3>
           <div class="tier-price"><span class="tier-amount">$119</span><span class="tier-period">/ mo</span></div>
           <ul class="tier-list">
-            <li>Dedicated single-user confidential hardware</li>
+            <li>Dedicated single-user hardware-locked memory</li>
             <li>250 GB end-to-end encrypted storage</li>
             <li>Manual approval before any server update</li>
           </ul>
         </div>
-        <a class="btn-secondary" href="#waitlist" data-pick-tier="Dedicated ($119/mo)">Join waitlist</a>
+        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Dedicated ($119/mo)">Join waitlist</a>
       </article>
     </div>
 
     <div class="teams-bar">
       <div class="teams-copy">
-        <strong>Teams</strong>
+        <strong>Encrypted Teams</strong>
         <span class="teams-status">Planned · $39 / seat / month (3-seat minimum)</span>
         <p>Private personal archives plus a shared end-to-end encrypted team archive, per-agent access controls, and dedicated team hardware.</p>
       </div>
-      <a class="btn-secondary" href="#waitlist" data-pick-tier="Teams ($39/seat)">Join waitlist</a>
+      <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Teams ($39/seat)">Join waitlist</a>
     </div>
 
     <!-- Waitlist form mirrored from Agent Keyring (/api/waitlist) -->
     <div class="waitlist-card" id="waitlist">
       <div class="waitlist-grid">
         <div class="waitlist-copy">
-          <h3>Get notified when iPhone sync and Encrypted Cloud open</h3>
-          <p>Leave your email and pick what you want first. No newsletter, no spam — one email when your tier opens.</p>
+          <h3>Get notified when Encrypted Sync and Encrypted Cloud open</h3>
+          <p>Leave your email and pick what you want first. No newsletter, no spam: one email when your tier opens.</p>
         </div>
 
         <form id="waitlist-form" data-endpoint="/api/waitlist" novalidate>
@@ -1142,11 +1166,10 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           </div>
           <span class="checks-label">What do you want first?</span>
           <div class="check-row">
-            <label class="check-pill"><input type="checkbox" name="devices" value="iPhone Companion" checked> iPhone</label>
             <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Sync ($7/mo)"> Encrypted Sync ($7)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)" checked> Encrypted Cloud ($19)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Dedicated ($119/mo)"> Dedicated ($119)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Teams ($39/seat)"> Teams</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)"> Encrypted Cloud ($19)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Dedicated ($119/mo)"> Encrypted Dedicated ($119)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Teams ($39/seat)"> Encrypted Teams</label>
           </div>
           <div class="inline-note" id="waitlist-status" aria-live="polite"></div>
         </form>
@@ -1160,7 +1183,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <a href="plugins.html">Plugins</a>
     <a href="security.html">Privacy &amp; encryption</a>
     <a href="privacy.html">Gmail privacy</a>
-    <a href="https://agent-keyring.jjpcodes.com/">Agent Keyring</a>
+    <a href="https://keyring.opentrawl.sh/">Agent Keyring</a>
     <a href="llms.txt">llms.txt</a>
     <div class="byline"><span>Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in Rotterdam 🇪🇺 🇳🇱</span></div>
   </footer>
@@ -1170,7 +1193,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 <script>
 (() => {
   // 1. Hero cycling word
-  const words = "iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Money., Twitter.".split(", ");
+  const words = "iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Money., X.".split(", ");
   let wordIdx = 0;
   const slot = document.getElementById("cycle");
   const wordEl = document.getElementById("cycleWord");
@@ -1215,12 +1238,12 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     });
   });
 
-  // 3. Pricing CTA pre-selects waitlist option
+  // 3. Pricing CTA pre-selects only the clicked waitlist option
   document.querySelectorAll("[data-pick-tier]").forEach(link => {
     link.addEventListener("click", () => {
       const wanted = link.dataset.pickTier;
       document.querySelectorAll('#waitlist-form input[name="devices"]').forEach(cb => {
-        if (cb.value === wanted) cb.checked = true;
+        cb.checked = cb.value === wanted;
       });
     });
   });

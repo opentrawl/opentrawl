@@ -54,7 +54,7 @@ function startStaticServer() {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
       const reqPath = decodeURIComponent((req.url || '/').split('?')[0]);
-      const rel = reqPath === '/' ? 'index.html' : reqPath.replace(/^\/+/, '');
+      const rel = reqPath === '/' ? 'index.html' : reqPath === '/privacy' ? 'privacy.html' : reqPath.replace(/^\/+/, '');
       const full = path.resolve(WEBSITE_DIR, rel);
       if (!full.startsWith(WEBSITE_DIR) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
         res.writeHead(404);
@@ -227,10 +227,16 @@ async function main() {
   let cdp = null;
 
   try {
-    // 1. HTTP 200 on every published endpoint
-    for (const p of ['/', '/plugins.html', '/security.html', '/privacy.html', '/llms.txt']) {
+    // 1. HTTP 200 on every published endpoint (matching scripts/deploy-website)
+    for (const p of ['/', '/plugins.html', '/security.html', '/privacy', '/privacy.html', '/llms.txt', '/llms-full.txt']) {
       const r = await fetch(baseUrl + p);
       if (r.status !== 200) failures.push(`${p}: HTTP ${r.status}`);
+    }
+
+    // 1b. No em-dashes in rendered copy/docs
+    for (const f of ['index.html', 'plugins.html', 'security.html', 'demo-session.txt', 'llms.txt', 'llms-full.txt']) {
+      const txt = fs.readFileSync(path.join(WEBSITE_DIR, f), 'utf8');
+      if (txt.includes('\u2014')) failures.push(`${f}: contains em-dash (—)`);
     }
 
     chrome = await launchChrome(chromeBin);
@@ -249,11 +255,12 @@ async function main() {
       }
     });
 
-    // 2. Overflow + broken images across viewports & pages
+    // 2. Overflow, broken images, and visible navigation across viewports & pages
     const viewports = [
       [1800, 1000],
       [1440, 900],
       [1280, 720],
+      [1024, 768],
       [390, 844],
     ];
     for (const p of ['/', '/plugins.html', '/security.html']) {
@@ -265,11 +272,17 @@ async function main() {
           const brokenImgs = Array.from(document.querySelectorAll('img'))
             .filter((i) => !i.complete || i.naturalWidth === 0)
             .map((i) => i.getAttribute('src'));
+          const visibleNavLinks = Array.from(document.querySelectorAll('.nav a, .mobile-nav a'))
+            .filter((a) => {
+              const r = a.getBoundingClientRect();
+              return r.width > 0 && r.height > 0;
+            }).length;
           return {
             overflowX: doc.scrollWidth > doc.clientWidth,
             scrollW: doc.scrollWidth,
             clientW: doc.clientWidth,
             brokenImgs,
+            visibleNavLinks,
           };
         });
         if (m.overflowX) {
@@ -278,10 +291,32 @@ async function main() {
         if (m.brokenImgs.length > 0) {
           failures.push(`${p} @${w}x${h}: broken images ${JSON.stringify(m.brokenImgs)}`);
         }
+        if (m.visibleNavLinks < 3) {
+          failures.push(`${p} @${w}x${h}: navigation hidden (${m.visibleNavLinks} visible nav links)`);
+        }
         if (screenshotDir && (w === 1440 || w === 390)) {
           const slug = p === '/' ? 'home' : p.replace(/^\//, '').replace(/\.html$/, '');
           await cdp.screenshot(path.join(screenshotDir, `${slug}-${w}x${h}.png`));
         }
+      }
+    }
+
+    // 2b. Focusing every hero icon tooltip at 390px and 1440px must not widen the page
+    for (const [w, h] of [[1440, 900], [390, 844]]) {
+      await cdp.setViewport(w, h);
+      await cdp.goto(baseUrl + '/');
+      const tipOver = await cdp.evaluate(() => {
+        const bad = [];
+        for (const el of document.querySelectorAll('.icon-tip')) {
+          el.focus();
+          if (document.documentElement.scrollWidth > document.documentElement.clientWidth) {
+            bad.push(`${el.dataset.tip} (${document.documentElement.scrollWidth}>${document.documentElement.clientWidth})`);
+          }
+        }
+        return bad;
+      });
+      if (tipOver.length > 0) {
+        failures.push(`/ @${w}x${h}: icon tooltip widens page: ${tipOver.join(', ')}`);
       }
     }
 
@@ -325,19 +360,29 @@ async function main() {
       }
     }
 
-    // 5. Waitlist form validation & honest preview-mode message
+    // 5. Waitlist defaults, single-tier pre-select, validation & honest preview-mode message
     const wl = await cdp.evaluate(() => {
       const form = document.getElementById('waitlist-form');
       const email = document.getElementById('waitlist-email');
       const status = document.getElementById('waitlist-status');
+      const defaultChecked = form.querySelectorAll('input[name="devices"]:checked').length;
+      const dedBtn = document.querySelector('[data-pick-tier="Encrypted Dedicated ($119/mo)"]');
+      if (dedBtn) dedBtn.click();
+      const picked = Array.from(form.querySelectorAll('input[name="devices"]:checked')).map((c) => c.value);
       email.value = 'not-an-email';
       form.dispatchEvent(new Event('submit', { cancelable: true }));
       const invalidMsg = status.textContent;
       email.value = 'test@example.com';
       form.dispatchEvent(new Event('submit', { cancelable: true }));
       const previewMsg = status.textContent;
-      return { invalidMsg, previewMsg };
+      return { defaultChecked, picked, invalidMsg, previewMsg };
     });
+    if (wl.defaultChecked !== 0) {
+      failures.push(`waitlist should start with 0 tiers checked, got ${wl.defaultChecked}`);
+    }
+    if (wl.picked.length !== 1 || wl.picked[0] !== 'Encrypted Dedicated ($119/mo)') {
+      failures.push(`waitlist tier picker expected only Encrypted Dedicated, got ${JSON.stringify(wl.picked)}`);
+    }
     if (!wl.invalidMsg || !wl.invalidMsg.toLowerCase().includes('type your email')) {
       failures.push(`waitlist invalid email check unexpected: ${JSON.stringify(wl.invalidMsg)}`);
     }
@@ -345,10 +390,10 @@ async function main() {
       failures.push(`waitlist preview-mode notice unexpected: ${JSON.stringify(wl.previewMsg)}`);
     }
 
-    // 6. /plugins.html filters (19 / 13 / 6) and zero clipped commands
+    // 6. /plugins.html filters (12 / 7 / 19) and complete Beeper command
     await cdp.setViewport(1440, 900);
     await cdp.goto(baseUrl + '/plugins.html');
-    for (const [flt, expected] of [['now', 13], ['soon', 6], ['all', 19]]) {
+    for (const [flt, expected] of [['now', 12], ['soon', 7], ['all', 19]]) {
       const visible = await cdp.evaluate(`() => {
         document.querySelector('[data-filter="${flt}"]').click();
         return document.querySelectorAll('.plugin-card:not(.hidden)').length;
@@ -357,13 +402,12 @@ async function main() {
         failures.push(`/plugins.html filter=${flt}: expected ${expected} cards, got ${visible}`);
       }
     }
-    const clippedCmds = await cdp.evaluate(() =>
-      Array.from(document.querySelectorAll('.pc-cmd-wrap'))
-        .filter((el) => el.scrollWidth > el.clientWidth + 1)
-        .map((el) => el.textContent.trim().slice(0, 40)),
-    );
-    if (clippedCmds.length > 0) {
-      failures.push(`/plugins.html: clipped plugin commands ${JSON.stringify(clippedCmds)}`);
+    const beeperCmd = await cdp.evaluate(() => {
+      const el = document.getElementById('beeperInstallCmd');
+      return el ? el.textContent : '';
+    });
+    if (!beeperCmd.includes('--allow-write-secret beeper_access_token')) {
+      failures.push('/plugins.html: Beeper command missing --allow-write-secret beeper_access_token');
     }
     if (screenshotDir) {
       await cdp.evaluate(() => {

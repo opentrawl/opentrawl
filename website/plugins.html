@@ -200,9 +200,33 @@ code {
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
+  white-space: pre;
+  overflow-x: auto;
 }
+.pc-cmd-bar {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #171b24;
+  color: rgba(255, 255, 255, 0.72);
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.pc-cmd-bar + .pc-cmd-wrap { margin-top: 0; }
+.pc-cmd-copy {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--white);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.pc-cmd-copy:hover { background: var(--white); color: var(--black); }
+.pc-cmd-copy.copied { background: var(--green); border-color: var(--green); color: var(--white); }
 
 .build-section {
   margin-top: 56px;
@@ -266,8 +290,22 @@ footer {
 footer a { color: var(--black); text-decoration: none; border-bottom: 1px solid var(--hairline); }
 footer a:hover { color: var(--red); border-color: var(--red); }
 
+.mobile-nav {
+  display: none;
+  border-top: var(--hair);
+  padding: 8px clamp(16px, 3vw, 32px);
+  gap: 18px;
+  font-size: 13px;
+  color: var(--grey);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.mobile-nav a { text-decoration: none; flex: none; }
+.mobile-nav a.active, .mobile-nav a:hover { color: var(--black); font-weight: 700; }
+
 @media (max-width: 1040px) {
   .nav { display: none; }
+  .mobile-nav { display: flex; }
   .security-strip { grid-template-columns: 1fr; }
   .sec-cell { border-right: none; border-bottom: var(--hair); }
   .sec-cell:last-child { border-bottom: none; }
@@ -323,12 +361,18 @@ footer a:hover { color: var(--red); border-color: var(--red); }
       <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
     </div>
   </div>
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <a href="index.html">Home</a>
+    <a class="active" href="plugins.html">Plugins</a>
+    <a href="security.html">Privacy</a>
+    <a href="index.html#pricing">Pricing</a>
+  </nav>
 </header>
 
 <main class="wrap">
   <section class="head">
     <h1>Apps &amp; Plugins</h1>
-    <p>Search 11 apps right out of the box, add standalone plugins for more, or let your coding agent build one for any app or export you use.</p>
+    <p>Search 11 built-in apps today, add standalone plugins for more, or let your coding agent build one for any app or export you use.</p>
   </section>
 
   <section class="security-strip" aria-label="External plugin security model">
@@ -349,8 +393,8 @@ footer a:hover { color: var(--red); border-color: var(--red); }
   <div class="filter-bar">
     <div class="filters" role="tablist" aria-label="Filter apps and plugins">
       <button class="filter-btn active" type="button" data-filter="all">All (19)</button>
-      <button class="filter-btn" type="button" data-filter="now">Available now (13)</button>
-      <button class="filter-btn" type="button" data-filter="soon">Coming soon (6)</button>
+      <button class="filter-btn" type="button" data-filter="now">Available now (12)</button>
+      <button class="filter-btn" type="button" data-filter="soon">Coming soon (7)</button>
     </div>
     <a class="btn-secondary" href="#build">Build a plugin with your AI ↓</a>
   </div>
@@ -470,7 +514,7 @@ footer a:hover { color: var(--red); border-color: var(--red); }
     <article class="plugin-card" data-cat="now">
       <div>
         <div class="pc-top">
-          <div class="pc-id"><img class="pc-icon square" src="icons/twitter.png" width="34" height="34" alt="Twitter"><span class="pc-name">Twitter (X)</span></div>
+          <div class="pc-id"><img class="pc-icon square" src="icons/twitter.png" width="34" height="34" alt="X"><span class="pc-name">X</span></div>
           <span class="badge now">Available now</span>
         </div>
         <p class="pc-desc">Your posts, bookmarks, likes, mentions, and direct messages.</p>
@@ -487,23 +531,26 @@ footer a:hover { color: var(--red); border-color: var(--red); }
         <p class="pc-desc">Archives Instagram, LinkedIn, WeChat, Slack, Discord, and Messenger via Beeper Desktop's local read-only API.</p>
       </div>
       <div>
-        <div class="pc-perm"><strong>External plugin (MIT in <code>plugins/trawl-beeper</code>)</strong>Local loopback <code>127.0.0.1:23373</code> + Keychain token · no Full Disk Access</div>
-        <div class="pc-cmd-wrap">trawl plugin install ./trawl-beeper --allow-self-hosted 127.0.0.1:23373=127.0.0.1/32 --allow-read-secret beeper_access_token</div>
+        <div class="pc-perm"><strong>External plugin (MIT in <code>plugins/trawl-beeper</code>)</strong>Build with Go, then install. Local loopback <code>127.0.0.1:23373</code> + Keychain token · no Full Disk Access</div>
+        <div class="pc-cmd-bar"><span>Install after building ./trawl-beeper</span><button class="pc-cmd-copy" type="button" data-copy-cmd="beeperInstallCmd">Copy</button></div>
+        <pre class="pc-cmd-wrap" id="beeperInstallCmd">trawl plugin install ./trawl-beeper \
+  --allow-self-hosted 127.0.0.1:23373=127.0.0.1/32 \
+  --allow-read-secret beeper_access_token \
+  --allow-write-secret beeper_access_token</pre>
       </div>
     </article>
 
-    <article class="plugin-card" data-cat="now">
+    <!-- COMING SOON (7) -->
+    <article class="plugin-card" data-cat="soon">
       <div>
         <div class="pc-top">
           <div class="pc-id"><img class="pc-icon square" src="icons/signal.png" width="34" height="34" alt="Signal"><span class="pc-name">Signal</span></div>
-          <span class="badge now">Available now</span>
+          <span class="badge soon">Coming soon</span>
         </div>
         <p class="pc-desc">Standalone Signal plugin linking as a companion device so Signal chats join unified search.</p>
       </div>
-      <div class="pc-perm"><strong>External plugin (standalone AGPL)</strong>Connects only to <code>chat.signal.org:443</code> + isolated archive folder</div>
+      <div class="pc-perm"><strong>Planned access</strong>Connects only to <code>chat.signal.org:443</code> + isolated archive folder</div>
     </article>
-
-    <!-- COMING SOON (6) -->
     <article class="plugin-card" data-cat="soon">
       <div>
         <div class="pc-top">
@@ -603,6 +650,20 @@ footer a:hover { color: var(--red); border-color: var(--red); }
       const cat = btn.dataset.filter;
       btns.forEach(b => b.classList.toggle("active", b === btn));
       cards.forEach(c => c.classList.toggle("hidden", cat !== "all" && c.dataset.cat !== cat));
+    });
+  });
+
+  document.querySelectorAll("[data-copy-cmd]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const el = document.getElementById(btn.dataset.copyCmd);
+      if (!el) return;
+      const orig = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(el.textContent.trim());
+        btn.textContent = "Copied";
+        btn.classList.add("copied");
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove("copied"); }, 1500);
+      } catch {}
     });
   });
 

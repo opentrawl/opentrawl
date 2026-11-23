@@ -285,6 +285,9 @@ code {
 .icon-tip:focus-visible::after {
   display: block;
 }
+@media (max-width: 680px), (hover: none) {
+  .icon-tip::after { display: none !important; }
+}
 .icon-meta {
   margin-top: 10px;
   font-size: 13px;
@@ -778,9 +781,24 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 .byline { width: 100%; margin-top: 4px; }
 
 /* --- responsive -------------------------------------------- */
+.mobile-nav {
+  display: none;
+  border-top: var(--hair);
+  padding: 8px clamp(16px, 3vw, 32px);
+  gap: 18px;
+  font-size: 13px;
+  color: var(--grey);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.mobile-nav a { text-decoration: none; flex: none; }
+.mobile-nav a:hover { color: var(--black); }
+
 @media (max-width: 1080px) {
   .nav { display: none; }
-  .hero { grid-template-columns: minmax(0, 1fr); min-height: auto; padding: 32px 0 20px; gap: 28px; }
+  .mobile-nav { display: flex; }
+  :root { --nav-h: 92px; }
+  .hero { grid-template-columns: minmax(0, 1fr); min-height: auto; padding: 28px 0 20px; gap: 28px; }
   .agent-window { height: 470px; max-width: 100%; }
   .wiki-grid, .waitlist-grid { grid-template-columns: minmax(0, 1fr); }
   .tier-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -791,9 +809,10 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 
 @media (max-width: 680px) {
   .topbar { height: 50px; }
-  :root { --nav-h: 50px; }
+  :root { --nav-h: 86px; }
   .topbar .btn { font-size: 12px; padding: 5px 12px; white-space: nowrap; }
   .topbar .btn-secondary { display: none; }
+  .term-output { font-size: 10px; line-height: 1.5; }
   .ask-grid, .privacy-grid, .tier-grid { grid-template-columns: minmax(0, 1fr); }
   .ask-card { border-right: none; border-bottom: var(--hair); }
   .ask-card:last-child { border-bottom: none; }
@@ -840,7 +859,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <a href="#examples">{{nav.examples}}</a>
       <a href="#wiki">{{nav.wiki}}</a>
       <a href="plugins.html">{{nav.plugins}}</a>
-      <a href="security.html">{{nav.security}}</a>
+      <a href="#privacy">{{nav.security}}</a>
       <a href="#pricing">{{nav.pricing}}</a>
     </nav>
 
@@ -849,6 +868,13 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">{{button.download}}</a>
     </div>
   </div>
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <a href="#examples">{{nav.examples}}</a>
+    <a href="#wiki">{{nav.wiki}}</a>
+    <a href="plugins.html">{{nav.plugins}}</a>
+    <a href="#privacy">{{nav.security}}</a>
+    <a href="#pricing">{{nav.pricing}}</a>
+  </nav>
 </header>
 
 <main class="wrap">
@@ -870,17 +896,17 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 
       <div class="icon-strip">
         <div class="icon-row" aria-label="Built-in Mac sources">
-          <span class="icon-tip" tabindex="0" data-tip="iMessage — chats and group threads"><img class="app-icon" src="icons/imessage.png" width="32" height="32" alt="iMessage"></span>
-          <span class="icon-tip" tabindex="0" data-tip="WhatsApp — Desktop messages and groups"><img class="app-icon" src="icons/whatsapp.png" width="32" height="32" alt="WhatsApp"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Telegram — full chat history"><img class="app-icon" src="icons/telegram.png" width="32" height="32" alt="Telegram"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Apple Mail — iCloud and local mailboxes"><img class="app-icon square" src="icons/mail.png" width="32" height="32" alt="Apple Mail"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Gmail — direct read-only Google sync"><img class="app-icon square" src="icons/gmail.png" width="32" height="32" alt="Gmail"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Apple Notes — notes, folders, and past versions"><img class="app-icon" src="icons/notes.png" width="32" height="32" alt="Notes"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Contacts — people matched across apps"><img class="app-icon" src="icons/contacts.png" width="32" height="32" alt="Contacts"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Calendar — events, attendees, and trips"><img class="app-icon" src="icons/calendar.png" width="32" height="32" alt="Calendar"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Apple Photos — dates, places, people, albums"><img class="app-icon" src="icons/photos.png" width="32" height="32" alt="Photos"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Money — bank accounts, balances, transactions"><img class="app-icon square" src="icons/money.svg" width="32" height="32" alt="Money"></span>
-          <span class="icon-tip" tabindex="0" data-tip="Twitter (X) — posts, bookmarks, likes, DMs"><img class="app-icon square" src="icons/twitter.png" width="32" height="32" alt="Twitter"></span>
+          <span class="icon-tip" tabindex="0" data-tip="iMessage: chats and group threads"><img class="app-icon" src="icons/imessage.png" width="32" height="32" alt="iMessage"></span>
+          <span class="icon-tip" tabindex="0" data-tip="WhatsApp: Desktop messages and groups"><img class="app-icon" src="icons/whatsapp.png" width="32" height="32" alt="WhatsApp"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Telegram: full chat history"><img class="app-icon" src="icons/telegram.png" width="32" height="32" alt="Telegram"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Mail: iCloud and local mailboxes"><img class="app-icon square" src="icons/mail.png" width="32" height="32" alt="Apple Mail"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Gmail: direct read-only Google sync"><img class="app-icon square" src="icons/gmail.png" width="32" height="32" alt="Gmail"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Notes: notes, folders, and past versions"><img class="app-icon" src="icons/notes.png" width="32" height="32" alt="Notes"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Contacts: people matched across apps"><img class="app-icon" src="icons/contacts.png" width="32" height="32" alt="Contacts"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Calendar: events, attendees, and trips"><img class="app-icon" src="icons/calendar.png" width="32" height="32" alt="Calendar"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Photos: dates, places, people, albums"><img class="app-icon" src="icons/photos.png" width="32" height="32" alt="Photos"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Money: bank accounts, balances, transactions"><img class="app-icon square" src="icons/money.svg" width="32" height="32" alt="Money"></span>
+          <span class="icon-tip" tabindex="0" data-tip="X: posts, bookmarks, likes, and DMs"><img class="app-icon square" src="icons/twitter.png" width="32" height="32" alt="X"></span>
         </div>
         <div class="icon-meta">
           <span>{{hero.sources.note}}</span>
@@ -897,8 +923,8 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           </div>
           <div class="beat-tabs" role="tablist" aria-label="Demo steps">
             <button class="beat-tab active" type="button" data-beat="0">1. search</button>
-            <button class="beat-tab" type="button" data-beat="1">2. around</button>
-            <button class="beat-tab" type="button" data-beat="2">3. open</button>
+            <button class="beat-tab" type="button" data-beat="1">2. open</button>
+            <button class="beat-tab" type="button" data-beat="2">3. calendar</button>
             <button class="beat-tab" type="button" data-beat="3">4. answer</button>
           </div>
         </div>
@@ -985,8 +1011,6 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
             <div>│&nbsp;&nbsp;&nbsp;└── trillian.md</div>
             <div>├── trips/</div>
             <div class="active">│&nbsp;&nbsp;&nbsp;└── brighton.md</div>
-            <div>├── finances/</div>
-            <div>│&nbsp;&nbsp;&nbsp;└── magrathea-orders.md</div>
             <div>└── home/</div>
             <div>&nbsp;&nbsp;&nbsp;&nbsp;└── towel-locations.md</div>
           </div>
@@ -994,19 +1018,19 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
             <h3># brighton.md</h3>
             <ul class="wiki-facts">
               <li>
-                <strong>Dates:</strong> 22–23 Aug with Ford Prefect and Zaphod; Albion v Aston Villa on 23 Aug.<br>
+                <strong>Dates:</strong> 22 to 23 Aug with Ford Prefect and Zaphod.<br>
                 <span class="wiki-cite">trawl open calendar:d8h66</span>
               </li>
               <li>
-                <strong>Gear &amp; spend:</strong> 2× expedition linen towels, €42.00 from Everyday Account (Magrathea Outfitting).<br>
-                <span class="wiki-cite">trawl open money:42091</span>
+                <strong>Match ticket:</strong> Albion v Aston Villa, Sunday 23 Aug 15:00 to 17:00.<br>
+                <span class="wiki-cite">trawl open calendar:265zp</span>
               </li>
               <li>
-                <strong>Where they are:</strong> Spare in hallway cupboard, green in backpack, backup in glovebox.<br>
+                <strong>Towel locations:</strong> Kept in your Apple Notes checklist.<br>
                 <span class="wiki-cite">trawl open notes:msvku</span>
               </li>
               <li>
-                <strong>Last chat:</strong> Ford asked everyone to grab their towels and meet at the pub.<br>
+                <strong>Pub thread:</strong> Ford asked everyone to grab their towels and meet at the pub.<br>
                 <span class="wiki-cite">trawl open telegram:33zny</span>
               </li>
             </ul>
@@ -1108,12 +1132,12 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           <h3 class="tier-name">{{pricing.t3.name}}</h3>
           <div class="tier-price"><span class="tier-amount">$119</span><span class="tier-period">/ mo</span></div>
           <ul class="tier-list">
-            <li>Dedicated single-user confidential hardware</li>
+            <li>Dedicated single-user hardware-locked memory</li>
             <li>250 GB end-to-end encrypted storage</li>
             <li>Manual approval before any server update</li>
           </ul>
         </div>
-        <a class="btn-secondary" href="#waitlist" data-pick-tier="Dedicated ($119/mo)">Join waitlist</a>
+        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Dedicated ($119/mo)">Join waitlist</a>
       </article>
     </div>
 
@@ -1123,7 +1147,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
         <span class="teams-status">{{pricing.t4.status}}</span>
         <p>{{pricing.t4.desc}}</p>
       </div>
-      <a class="btn-secondary" href="#waitlist" data-pick-tier="Teams ($39/seat)">Join waitlist</a>
+      <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Teams ($39/seat)">Join waitlist</a>
     </div>
 
     <!-- Waitlist form mirrored from Agent Keyring (/api/waitlist) -->
@@ -1142,11 +1166,10 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           </div>
           <span class="checks-label">What do you want first?</span>
           <div class="check-row">
-            <label class="check-pill"><input type="checkbox" name="devices" value="iPhone Companion" checked> iPhone</label>
             <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Sync ($7/mo)"> Encrypted Sync ($7)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)" checked> Encrypted Cloud ($19)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Dedicated ($119/mo)"> Dedicated ($119)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Teams ($39/seat)"> Teams</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)"> Encrypted Cloud ($19)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Dedicated ($119/mo)"> Encrypted Dedicated ($119)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Teams ($39/seat)"> Encrypted Teams</label>
           </div>
           <div class="inline-note" id="waitlist-status" aria-live="polite"></div>
         </form>
@@ -1160,7 +1183,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <a href="plugins.html">Plugins</a>
     <a href="security.html">Privacy &amp; encryption</a>
     <a href="privacy.html">Gmail privacy</a>
-    <a href="https://agent-keyring.jjpcodes.com/">Agent Keyring</a>
+    <a href="https://keyring.opentrawl.sh/">Agent Keyring</a>
     <a href="llms.txt">llms.txt</a>
     <div class="byline"><span>{{footer.byline}}</span></div>
   </footer>
@@ -1215,12 +1238,12 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     });
   });
 
-  // 3. Pricing CTA pre-selects waitlist option
+  // 3. Pricing CTA pre-selects only the clicked waitlist option
   document.querySelectorAll("[data-pick-tier]").forEach(link => {
     link.addEventListener("click", () => {
       const wanted = link.dataset.pickTier;
       document.querySelectorAll('#waitlist-form input[name="devices"]').forEach(cb => {
-        if (cb.value === wanted) cb.checked = true;
+        cb.checked = cb.value === wanted;
       });
     });
   });
