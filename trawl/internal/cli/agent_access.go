@@ -31,6 +31,7 @@ type agentAccessTokenRecord struct {
 	AllSourcesAllowed          bool                       `json:"all_sources_allowed"`
 	AllowedSources             []string                   `json:"allowed_sources"`
 	CreatedTime                time.Time                  `json:"created_time"`
+	ExpiresTime                *time.Time                 `json:"expires_time,omitempty"`
 	RevokedTime                *time.Time                 `json:"revoked_time,omitempty"`
 }
 
@@ -129,6 +130,14 @@ func parseAllowedSourcesList(allowedSourcesText string) (bool, []string) {
 }
 
 func createAgentAccessToken(stateRoot, agentName, allowedSourcesText string, now time.Time) (agentAccessTokenRecord, string, error) {
+	return createScopedAgentAccessToken(stateRoot, agentName, allowedSourcesText, now, nil)
+}
+
+func createScopedAgentAccessToken(
+	stateRoot, agentName, allowedSourcesText string,
+	now time.Time,
+	expiresTime *time.Time,
+) (agentAccessTokenRecord, string, error) {
 	agentAccessTokenStoreMutex.Lock()
 	defer agentAccessTokenStoreMutex.Unlock()
 	tokens, err := loadAgentAccessTokens(stateRoot)
@@ -145,6 +154,11 @@ func createAgentAccessToken(stateRoot, agentName, allowedSourcesText string, now
 		return agentAccessTokenRecord{}, "", err
 	}
 	allSources, sources := parseAllowedSourcesList(allowedSourcesText)
+	var expiresUTC *time.Time
+	if expiresTime != nil {
+		utc := expiresTime.UTC()
+		expiresUTC = &utc
+	}
 	record := agentAccessTokenRecord{
 		AgentAccessTokenIdentifier: AgentAccessTokenIdentifier("tok_" + hex.EncodeToString(identifierBytes)),
 		AgentName:                  strings.TrimSpace(agentName),
@@ -152,11 +166,66 @@ func createAgentAccessToken(stateRoot, agentName, allowedSourcesText string, now
 		AllSourcesAllowed:          allSources,
 		AllowedSources:             sources,
 		CreatedTime:                now.UTC(),
+		ExpiresTime:                expiresUTC,
 	}
 	if err := saveAgentAccessTokens(stateRoot, append(tokens, record)); err != nil {
 		return agentAccessTokenRecord{}, "", err
 	}
 	return record, bearerToken, nil
+}
+
+// isAgentAccessTokenIdentifierActive reports whether the named token exists and
+// has not been revoked (regardless of short-lived access token expiry, so
+// refresh tokens can check whether the owner revoked the grant).
+func isAgentAccessTokenIdentifierActive(stateRoot string, tokenIdentifier AgentAccessTokenIdentifier) (bool, error) {
+	tokens, err := loadAgentAccessTokens(stateRoot)
+	if err != nil {
+		return false, err
+	}
+	for _, token := range tokens {
+		if token.AgentAccessTokenIdentifier == tokenIdentifier {
+			return token.RevokedTime == nil, nil
+		}
+	}
+	return false, nil
+}
+
+// replaceActiveAgentAccessTokenSecret rotates the bearer token hash and expiry
+// for an existing active grant (used by OAuth refresh token rotation so
+// trawl token list stays one row per connected cloud agent).
+func replaceActiveAgentAccessTokenSecret(
+	stateRoot string,
+	tokenIdentifier AgentAccessTokenIdentifier,
+	now time.Time,
+	expiresTime time.Time,
+) (agentAccessTokenRecord, string, error) {
+	agentAccessTokenStoreMutex.Lock()
+	defer agentAccessTokenStoreMutex.Unlock()
+	tokens, err := loadAgentAccessTokens(stateRoot)
+	if err != nil {
+		return agentAccessTokenRecord{}, "", err
+	}
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return agentAccessTokenRecord{}, "", err
+	}
+	bearerToken := agentAccessBearerTokenPrefix + base64.RawURLEncoding.EncodeToString(secret)
+	expiresUTC := expiresTime.UTC()
+	for index := range tokens {
+		if tokens[index].AgentAccessTokenIdentifier != tokenIdentifier {
+			continue
+		}
+		if tokens[index].RevokedTime != nil {
+			return agentAccessTokenRecord{}, "", errAgentAccessTokenNotRecognised
+		}
+		tokens[index].BearerTokenSHA256 = bearerTokenSHA256Hex(bearerToken)
+		tokens[index].ExpiresTime = &expiresUTC
+		if err := saveAgentAccessTokens(stateRoot, tokens); err != nil {
+			return agentAccessTokenRecord{}, "", err
+		}
+		return tokens[index], bearerToken, nil
+	}
+	return agentAccessTokenRecord{}, "", errAgentAccessTokenNotRecognised
 }
 
 // revokeAgentAccessToken revokes one token by identifier and reports whether it
@@ -196,8 +265,12 @@ func findActiveAgentAccessToken(stateRoot, bearerToken string) (agentAccessToken
 		return agentAccessTokenRecord{}, err
 	}
 	wanted := []byte(bearerTokenSHA256Hex(bearerToken))
+	now := time.Now().UTC()
 	for _, token := range tokens {
 		if subtle.ConstantTimeCompare([]byte(token.BearerTokenSHA256), wanted) == 1 && token.RevokedTime == nil {
+			if token.ExpiresTime != nil && !now.Before(*token.ExpiresTime) {
+				return agentAccessTokenRecord{}, errAgentAccessTokenNotRecognised
+			}
 			return token, nil
 		}
 	}

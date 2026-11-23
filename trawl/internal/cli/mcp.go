@@ -10,18 +10,32 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-// McpCmd serves the read-only OpenTrawl MCP tools over stdio (default) or
-// Streamable HTTP (--http).
+// McpCmd serves the read-only OpenTrawl MCP tools over stdio (default),
+// local/Tailscale Streamable HTTP (--http), or the blind SNI-passthrough
+// internet relay (--relay) with Mac-side CertMagic TLS and built-in OAuth 2.1.
 type McpCmd struct {
-	Sources string `name:"sources" placeholder:"TRAWLERS" help:"Sources the agent may read in stdio mode, separated by commas; ignored when OPENTRAWL_ACCESS_TOKEN names a token"`
-	HTTP    bool   `name:"http" help:"Serve Streamable HTTP MCP instead of stdio"`
-	Listen  string `name:"listen" default:"127.0.0.1:7391" placeholder:"HOST:PORT" help:"Address to listen on with --http; use 0.0.0.0:7391 to serve your tailnet"`
+	Sources       string        `name:"sources" placeholder:"TRAWLERS" help:"Sources the agent may read in stdio mode, separated by commas; ignored when OPENTRAWL_ACCESS_TOKEN names a token"`
+	HTTP          bool          `name:"http" help:"Serve Streamable HTTP MCP and remote archive endpoints instead of stdio"`
+	Tailscale     bool          `name:"tailscale" help:"Bind --http exclusively to this machine's Tailscale WireGuard IP (never Wi-Fi or LAN)"`
+	Listen        string        `name:"listen" default:"127.0.0.1:7391" placeholder:"HOST:PORT" help:"Loopback or Tailscale IP address to listen on with --http"`
+	TLSCert       string        `name:"tls-cert" placeholder:"FILE" help:"PEM TLS certificate file for HTTPS with --http (pair with --tls-key)"`
+	TLSKey        string        `name:"tls-key" placeholder:"FILE" help:"PEM TLS private key file for HTTPS with --http (pair with --tls-cert)"`
+	Relay         bool          `name:"relay" help:"Expose HTTPS MCP over OpenTrawl's blind SNI-passthrough relay with Mac-side TLS and OAuth 2.1"`
+	Pair          bool          `name:"pair" help:"Open a one-time OAuth pairing window on startup and print the pairing code"`
+	PairWindow    time.Duration `name:"pair-window" default:"5m" help:"How long the one-time OAuth pairing window stays open"`
+	RelayServer   string        `name:"relay-server" default:"relay.mcp.opentrawl.sh:7000" placeholder:"HOST:PORT" help:"Relay frps control address for --relay"`
+	RelayDomain   string        `name:"relay-domain" default:"mcp.opentrawl.sh" placeholder:"DOMAIN" help:"Base relay domain for --relay"`
+	ACMECA        string        `name:"acme-ca" hidden:"" help:"Override ACME directory URL for testing --relay"`
+	ACMECARoots   string        `name:"acme-ca-roots" hidden:"" help:"PEM root CA bundle for --acme-ca"`
+	RelayPlainTCP bool          `name:"relay-no-control-tls" hidden:"" help:"Disable TLS on frpc control channel (local testing only)"`
 }
 
 const (
@@ -222,7 +236,8 @@ func mcpResponseIdentifier(id json.RawMessage) json.RawMessage {
 type mcpScopeResolver func() (agentSourceScope, error)
 
 // handleMCPMessage answers one JSON-RPC message. It returns nil for a
-// notification, which gets no response.
+// notification, which gets no response. Both session-era (initialize first)
+// and stateless-era (direct tools/list and tools/call) MCP clients work.
 func (service *agentArchiveService) handleMCPMessage(ctx context.Context, resolveScope mcpScopeResolver, encodedMessage []byte) *mcpJSONRPCResponse {
 	var request mcpJSONRPCRequest
 	if err := json.Unmarshal(encodedMessage, &request); err != nil {
@@ -330,6 +345,9 @@ func (service *agentArchiveService) mcpToolCommand(toolName string, arguments mc
 }
 
 func (c *McpCmd) Run(r *Runtime) error {
+	if c.Relay {
+		return c.runRelay(r)
+	}
 	if c.HTTP {
 		return c.runHTTP(r)
 	}
@@ -361,14 +379,103 @@ func (c *McpCmd) runStdio(r *Runtime) error {
 	return serveMCPOverLines(r.ctx, service, resolveScope, os.Stdin, r.machineReadableProtocolOutputStream)
 }
 
-func (c *McpCmd) runHTTP(r *Runtime) error {
+func (c *McpCmd) runRelay(r *Runtime) error {
 	service := newAgentArchiveService(r.ctx, r.stateRoot)
-	listener, err := net.Listen("tcp", c.Listen)
+	sourceNames := discoveredSourceNames(service)
+	oauthServer := newRemoteMCPOAuthServer(r.stateRoot, "", sourceNames)
+	var pairingCode string
+	var pairingExpires time.Time
+	if c.Pair {
+		code, expiresAt, err := oauthServer.OpenPairingWindow(c.PairWindow)
+		if err != nil {
+			return render.AgentAccessOperationFailed("Cannot open pairing window: " + err.Error())
+		}
+		pairingCode = code
+		pairingExpires = expiresAt
+	}
+	handler := &agentMCPHTTPHandler{service: service, oauth: oauthServer}
+
+	tunnelCtx, stopSignals := signal.NotifyContext(r.ctx, os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
+	tunnel, err := startRemoteMCPRelayTunnel(tunnelCtx, remoteMCPRelayLaunchOptions{
+		StateRoot:             r.stateRoot,
+		RelayServerAddress:    c.RelayServer,
+		RelayBaseDomain:       c.RelayDomain,
+		ACMEDirectoryURL:      c.ACMECA,
+		ACMETrustedRootsPEM:   c.ACMECARoots,
+		DisableRelayClientTLS: c.RelayPlainTCP,
+	}, handler)
 	if err != nil {
-		return render.AgentAccessOperationFailed("Cannot listen on " + c.Listen + ": " + err.Error())
+		return render.AgentAccessOperationFailed("Cannot start remote MCP relay: " + err.Error())
+	}
+	defer tunnel.Close()
+
+	oauthServer.fixedPublicOrigin = tunnel.PublicOrigin
+	facts := []render.FieldValueRow{
+		{FieldLabel: "MCP", FieldValue: tunnel.PublicOrigin + "/mcp"},
+		{FieldLabel: "TLS", FieldValue: "terminated on this Mac (CertMagic TLS-ALPN-01)"},
+		{FieldLabel: "sources", FieldValue: strings.Join(sourceNames, ", ")},
+	}
+	if pairingCode != "" {
+		facts = append(facts, render.FieldValueRow{
+			FieldLabel: "pair code",
+			FieldValue: pairingCode + " (expires " + pairingExpires.Local().Format("15:04:05 -07:00") + ")",
+		})
+	} else {
+		facts = append(facts, render.FieldValueRow{
+			FieldLabel: "pairing",
+			FieldValue: "closed (pass --pair to connect a new OAuth agent)",
+		})
+	}
+	if err := r.output.WriteAgentMCPServerListening(render.AgentMCPServerListeningPresentation{
+		AgentMCPServerListeningSentence: "OpenTrawl remote MCP server is live over HTTPS. TLS ends on this Mac; every request requires OAuth 2.1 or a scoped bearer token.",
+		AgentMCPServerFacts:             facts,
+		NextTrawlCommands:               [][]string{{"token", "list"}},
+	}); err != nil {
+		return err
+	}
+
+	<-tunnelCtx.Done()
+	return nil
+}
+
+func (c *McpCmd) runHTTP(r *Runtime) error {
+	tlsCertPath := strings.TrimSpace(c.TLSCert)
+	tlsKeyPath := strings.TrimSpace(c.TLSKey)
+	if (tlsCertPath == "") != (tlsKeyPath == "") {
+		return render.AgentAccessCommandIsWrong("pass both --tls-cert and --tls-key to serve HTTPS")
+	}
+	useTLS := tlsCertPath != ""
+
+	service := newAgentArchiveService(r.ctx, r.stateRoot)
+	listenAddress := strings.TrimSpace(c.Listen)
+	if c.Tailscale {
+		if service.tailscaleIPv4Address == "" {
+			return render.AgentAccessOperationFailed("Tailscale is not running on this machine; start Tailscale or omit --tailscale to listen on 127.0.0.1")
+		}
+		_, port, err := net.SplitHostPort(listenAddress)
+		if err != nil || port == "" {
+			port = "7391"
+		}
+		listenAddress = net.JoinHostPort(service.tailscaleIPv4Address, port)
+	}
+	if !useTLS {
+		if err := validatePlainHTTPListenAddress(listenAddress); err != nil {
+			return render.AgentAccessCommandIsWrong(err.Error())
+		}
+	}
+
+	listener, err := net.Listen("tcp", listenAddress)
+	if err != nil {
+		return render.AgentAccessOperationFailed("Cannot listen on " + listenAddress + ": " + err.Error())
 	}
 	defer func() { _ = listener.Close() }()
 
+	scheme := "http"
+	if useTLS {
+		scheme = "https"
+	}
 	listenIP, port, _ := net.SplitHostPort(listener.Addr().String())
 	advertisedHost := listenIP
 	if parsedIP := net.ParseIP(listenIP); parsedIP == nil || !parsedIP.IsLoopback() {
@@ -378,21 +485,36 @@ func (c *McpCmd) runHTTP(r *Runtime) error {
 			advertisedHost = hostName
 		}
 	}
-	mcpEndpointURL := "http://" + net.JoinHostPort(advertisedHost, port) + "/mcp"
+	remoteArchiveBaseURL := scheme + "://" + net.JoinHostPort(advertisedHost, port)
+	mcpEndpointURL := remoteArchiveBaseURL + "/mcp"
 
-	sourceNames := make([]string, 0, len(service.installedTrawlersDiscoveredAtServerStart))
-	for _, trawler := range service.installedTrawlersDiscoveredAtServerStart {
-		if trawler.TrawlerDiscoveryError == nil {
-			sourceNames = append(sourceNames, installedTrawlerIdentityText(trawler))
+	sourceNames := discoveredSourceNames(service)
+	oauthServer := newRemoteMCPOAuthServer(r.stateRoot, remoteArchiveBaseURL, sourceNames)
+	var pairingCode string
+	var pairingExpires time.Time
+	if c.Pair {
+		code, expiresAt, err := oauthServer.OpenPairingWindow(c.PairWindow)
+		if err != nil {
+			return render.AgentAccessOperationFailed("Cannot open pairing window: " + err.Error())
 		}
+		pairingCode = code
+		pairingExpires = expiresAt
 	}
+
 	facts := []render.FieldValueRow{
-		{FieldLabel: "listening", FieldValue: "http://" + listener.Addr().String()},
+		{FieldLabel: "listening", FieldValue: scheme + "://" + listener.Addr().String()},
 		{FieldLabel: "MCP", FieldValue: mcpEndpointURL},
+		{FieldLabel: "remote archive", FieldValue: remoteArchiveBaseURL},
 		{FieldLabel: "sources", FieldValue: strings.Join(sourceNames, ", ")},
 	}
+	if pairingCode != "" {
+		facts = append(facts, render.FieldValueRow{
+			FieldLabel: "pair code",
+			FieldValue: pairingCode + " (expires " + pairingExpires.Local().Format("15:04:05 -07:00") + ")",
+		})
+	}
 	if err := r.output.WriteAgentMCPServerListening(render.AgentMCPServerListeningPresentation{
-		AgentMCPServerListeningSentence: "OpenTrawl MCP server is listening over HTTP. Every request needs a scoped bearer token.",
+		AgentMCPServerListeningSentence: "OpenTrawl HTTP server is listening for MCP and remote archive clients. Every request needs OAuth 2.1 or a scoped bearer token.",
 		AgentMCPServerFacts:             facts,
 		NextTrawlCommands:               [][]string{{"connect", "--transport", "http"}},
 	}); err != nil {
@@ -400,17 +522,56 @@ func (c *McpCmd) runHTTP(r *Runtime) error {
 	}
 
 	httpServer := &http.Server{
-		Handler:           &agentMCPHTTPHandler{service: service},
+		Handler:           &agentMCPHTTPHandler{service: service, oauth: oauthServer},
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return render.AgentAccessOperationFailed("MCP HTTP server stopped: " + err.Error())
+	var serveErr error
+	if useTLS {
+		serveErr = httpServer.ServeTLS(listener, tlsCertPath, tlsKeyPath)
+	} else {
+		serveErr = httpServer.Serve(listener)
+	}
+	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		return render.AgentAccessOperationFailed("MCP HTTP server stopped: " + serveErr.Error())
 	}
 	return nil
 }
 
+func discoveredSourceNames(service *agentArchiveService) []string {
+	sourceNames := make([]string, 0, len(service.installedTrawlersDiscoveredAtServerStart))
+	for _, trawler := range service.installedTrawlersDiscoveredAtServerStart {
+		if trawler.TrawlerDiscoveryError == nil {
+			sourceNames = append(sourceNames, installedTrawlerIdentityText(trawler))
+		}
+	}
+	return sourceNames
+}
+
+// validatePlainHTTPListenAddress ensures unencrypted HTTP only binds to
+// loopback or a Tailscale WireGuard address (100.64.0.0/10), never 0.0.0.0 or
+// an unencrypted Wi-Fi/LAN interface.
+func validatePlainHTTPListenAddress(listenAddress string) error {
+	host, _, err := net.SplitHostPort(listenAddress)
+	if err != nil {
+		return errors.New("listen address must be HOST:PORT, such as 127.0.0.1:7391")
+	}
+	trimmed := strings.TrimSpace(host)
+	if strings.EqualFold(trimmed, "localhost") {
+		return nil
+	}
+	parsedIP := net.ParseIP(trimmed)
+	if parsedIP != nil && parsedIP.IsLoopback() {
+		return nil
+	}
+	if isTailscaleCGNATIPv4String(trimmed) {
+		return nil
+	}
+	return errors.New("refusing to serve unencrypted HTTP on " + listenAddress + "; pass --tailscale to bind only to your Tailscale WireGuard IP, listen on 127.0.0.1, pass --tls-cert and --tls-key, or use --relay")
+}
+
 type agentMCPHTTPHandler struct {
 	service *agentArchiveService
+	oauth   *remoteMCPOAuthServer
 }
 
 func (handler *agentMCPHTTPHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -418,39 +579,78 @@ func (handler *agentMCPHTTPHandler) ServeHTTP(response http.ResponseWriter, requ
 		writeMCPJSONBytes(response, http.StatusOK, mustMarshalMCPJSON(mcpHealthzResponse{Status: "ok"}))
 		return
 	}
-	if request.URL.Path != "/mcp" {
-		writeMCPHTTPError(response, http.StatusNotFound, "no such endpoint; use POST /mcp")
+	if handler.oauth != nil && handler.oauth.isOAuthPath(request.URL.Path) {
+		handler.oauth.ServeHTTP(response, request)
 		return
 	}
-	if request.Method != http.MethodPost {
-		response.Header().Set("Allow", http.MethodPost)
-		writeMCPHTTPError(response, http.StatusMethodNotAllowed, "MCP over HTTP takes POST; this server does not open server-sent event streams")
-		return
+	switch request.URL.Path {
+	case "/mcp":
+		if request.Method == http.MethodDelete {
+			if _, ok := handler.authenticateRequest(response, request); !ok {
+				return
+			}
+			response.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if request.Method != http.MethodPost {
+			response.Header().Set("Allow", "POST, DELETE")
+			writeMCPHTTPError(response, http.StatusMethodNotAllowed, "MCP over HTTP takes POST; this server does not open server-sent event streams")
+			return
+		}
+		scope, ok := handler.authenticateRequest(response, request)
+		if !ok {
+			return
+		}
+		if protocolVersion := strings.TrimSpace(request.Header.Get("MCP-Protocol-Version")); protocolVersion != "" {
+			response.Header().Set("MCP-Protocol-Version", protocolVersion)
+		}
+		body, err := io.ReadAll(io.LimitReader(request.Body, mcpMaximumHTTPBodyByteCount))
+		if err != nil {
+			writeMCPHTTPError(response, http.StatusBadRequest, err.Error())
+			return
+		}
+		mcpResponse := handler.service.handleMCPMessage(request.Context(), func() (agentSourceScope, error) {
+			return scope, nil
+		}, body)
+		if mcpResponse == nil {
+			response.WriteHeader(http.StatusAccepted)
+			return
+		}
+		writeMCPJSONBytes(response, http.StatusOK, mustMarshalMCPJSON(mcpResponse))
+	case remoteAppStatusPath, remoteAppSearchPath, remoteAppOpenPath:
+		scope, ok := handler.authenticateRequest(response, request)
+		if !ok {
+			return
+		}
+		handler.handleRemoteAppRequest(response, request, scope)
+	default:
+		writeMCPHTTPError(response, http.StatusNotFound, "no such endpoint; use POST /mcp or GET /app/status, /app/search, /app/open")
+	}
+}
+
+func (handler *agentMCPHTTPHandler) authenticateRequest(
+	response http.ResponseWriter,
+	request *http.Request,
+) (agentSourceScope, bool) {
+	writeUnauthorized := func(message string) (agentSourceScope, bool) {
+		if handler.oauth != nil {
+			response.Header().Set(
+				"WWW-Authenticate",
+				`Bearer resource_metadata="`+handler.oauth.protectedResourceMetadataURL(request)+`", scope="`+remoteMCPOAuthReadScope+`"`,
+			)
+		}
+		writeMCPHTTPError(response, http.StatusUnauthorized, message)
+		return agentSourceScope{}, false
 	}
 	bearerToken, hasBearer := strings.CutPrefix(request.Header.Get("Authorization"), "Bearer ")
 	if !hasBearer {
-		writeMCPHTTPError(response, http.StatusUnauthorized, "send Authorization: Bearer <token>; create one with trawl token create")
-		return
+		return writeUnauthorized("send Authorization: Bearer <token> or sign in with OAuth 2.1")
 	}
 	token, err := findActiveAgentAccessToken(handler.service.stateRoot, bearerToken)
 	if err != nil {
-		writeMCPHTTPError(response, http.StatusUnauthorized, err.Error())
-		return
+		return writeUnauthorized(err.Error())
 	}
-	body, err := io.ReadAll(io.LimitReader(request.Body, mcpMaximumHTTPBodyByteCount))
-	if err != nil {
-		writeMCPHTTPError(response, http.StatusBadRequest, err.Error())
-		return
-	}
-	scope := token.agentSourceScope()
-	mcpResponse := handler.service.handleMCPMessage(request.Context(), func() (agentSourceScope, error) {
-		return scope, nil
-	}, body)
-	if mcpResponse == nil {
-		response.WriteHeader(http.StatusAccepted)
-		return
-	}
-	writeMCPJSONBytes(response, http.StatusOK, mustMarshalMCPJSON(mcpResponse))
+	return token.agentSourceScope(), true
 }
 
 func writeMCPHTTPError(response http.ResponseWriter, statusCode int, message string) {

@@ -112,13 +112,17 @@ func (c *ConnectCmd) Run(r *Runtime) error {
 	if c.Transport == "stdio" {
 		facts = append(facts, render.FieldValueRow{FieldLabel: "command", FieldValue: trawlExecutable + " mcp"})
 	} else {
-		listenAddress := "127.0.0.1:" + strconv.Itoa(c.Port)
+		startCommand := "trawl mcp --http --listen 127.0.0.1:" + strconv.Itoa(c.Port)
 		if hostSource == "Tailscale MagicDNS" {
-			listenAddress = "0.0.0.0:" + strconv.Itoa(c.Port)
+			if c.Port == 7391 {
+				startCommand = "trawl mcp --http --tailscale"
+			} else {
+				startCommand = "trawl mcp --http --tailscale --listen 127.0.0.1:" + strconv.Itoa(c.Port)
+			}
 		}
 		facts = append(facts,
 			render.FieldValueRow{FieldLabel: "server", FieldValue: serverURL + " (" + hostSource + ")"},
-			render.FieldValueRow{FieldLabel: "start it", FieldValue: "trawl mcp --http --listen " + listenAddress},
+			render.FieldValueRow{FieldLabel: "start it", FieldValue: startCommand},
 		)
 	}
 	facts = append(facts, render.FieldValueRow{FieldLabel: "skill", FieldValue: canonicalSkillStatusFact(skillPath)})
