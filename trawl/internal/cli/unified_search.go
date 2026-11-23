@@ -2,13 +2,16 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"strings"
+	"sync"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	"github.com/opentrawl/opentrawl/trawlkit/semantic"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/unifiedindex"
 )
 
@@ -64,9 +67,66 @@ func (r *Runtime) ensureUnifiedIndexBootstrappedForTrawlers(
 	return nil
 }
 
+// openUnifiedIndexForTrawlers opens <stateRoot>/index.db once, verifies in one
+// query that every selected exporter trawler already has a cursor, and lazily
+// bootstraps only missing trawlers before reopening read-only.
+func (r *Runtime) openUnifiedIndexForTrawlers(
+	ctx context.Context,
+	stateRoot string,
+	trawlers []InstalledTrawler,
+) (*store.Store, error) {
+	indexStore, err := unifiedindex.OpenUnifiedIndexReadOnly(ctx, stateRoot, false)
+	if err != nil {
+		return nil, err
+	}
+	indexed := make(map[string]bool, len(trawlers))
+	if indexStore != nil {
+		indexed = readIndexedTrawlerSet(ctx, indexStore.DB())
+	}
+	var missing []InstalledTrawler
+	for _, t := range trawlers {
+		if !trawlerExportsArchiveIndexChanges(t) {
+			continue
+		}
+		if !indexed[installedTrawlerIdentityText(t)] {
+			missing = append(missing, t)
+		}
+	}
+	if len(missing) == 0 && indexStore != nil {
+		return indexStore, nil
+	}
+	if indexStore != nil {
+		_ = indexStore.Close()
+	}
+	for _, t := range missing {
+		id := installedTrawlerIdentityText(t)
+		if _, syncErr := trawlkit.SyncTrawlerArchiveIndex(ctx, stateRoot, t.Trawler, false); syncErr != nil {
+			r.logInfo("unified_index_bootstrap_failed", "trawler="+logQuote(id)+" error="+logQuote(syncErr.Error()))
+		}
+	}
+	return unifiedindex.OpenUnifiedIndexReadOnly(ctx, stateRoot, false)
+}
+
+func readIndexedTrawlerSet(ctx context.Context, db *sql.DB) map[string]bool {
+	out := make(map[string]bool, 16)
+	rows, err := db.QueryContext(ctx, `select trawler from indexed_trawler_state where indexed_at_utc <> ''`)
+	if err != nil {
+		return out
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var trawler string
+		if err := rows.Scan(&trawler); err == nil && trawler != "" {
+			out[trawler] = true
+		}
+	}
+	return out
+}
+
 // runUnifiedAndFederatedSearch queries core index.db for all trawlers that
-// implement ArchiveIndexChangeExporter and runs normal federated Search RPCs
-// for any remaining trawlers (such as Photos), returning one merged canonical
+// implement ArchiveIndexChangeExporter, runs local hybrid semantic search in
+// parallel, and concurrently executes normal federated Search RPCs for any
+// remaining trawlers (such as Photos), returning one merged canonical
 // FederatedTrawlerSearchOperation used by both `trawl search` and `__app search`.
 func (r *Runtime) runUnifiedAndFederatedSearch(
 	ctx context.Context,
@@ -86,7 +146,10 @@ func (r *Runtime) runUnifiedAndFederatedSearch(
 		}
 	}
 
-	var fallbackResp *federationcontract.FederatedTrawlerSearchOperation
+	var (
+		fallbackWG   sync.WaitGroup
+		fallbackResp *federationcontract.FederatedTrawlerSearchOperation
+	)
 	if len(fallbackTrawlers) > 0 {
 		adapters := r.federationSearchTrawlers(fallbackTrawlers)
 		if resolvedPersonDisplayName != "" || len(resolvedPersonFacts) > 0 {
@@ -96,10 +159,15 @@ func (r *Runtime) runUnifiedAndFederatedSearch(
 				resolvedPersonFacts,
 			)
 		}
-		fallbackResp = federation.Search(ctx, adapters, crawlQuery, uint32(limit))
+		fallbackWG.Add(1)
+		go func() {
+			defer fallbackWG.Done()
+			fallbackResp = federation.Search(ctx, adapters, crawlQuery, uint32(limit))
+		}()
 	}
 
 	if len(exporterTrawlers) == 0 {
+		fallbackWG.Wait()
 		if fallbackResp != nil {
 			return fallbackResp
 		}
@@ -108,13 +176,14 @@ func (r *Runtime) runUnifiedAndFederatedSearch(
 		}
 	}
 
-	_ = r.ensureUnifiedIndexBootstrappedForTrawlers(ctx, exporterTrawlers)
 	stateRoot, err := trawlkit.ResolveStateRoot(r.stateRoot)
 	if err != nil {
+		fallbackWG.Wait()
 		return r.fallbackSearchAllTrawlers(ctx, selectedTrawlers, crawlQuery, limit, resolvedPersonDisplayName, resolvedPersonFacts)
 	}
-	indexStore, err := unifiedindex.OpenUnifiedIndexReadOnly(ctx, stateRoot, false)
+	indexStore, err := r.openUnifiedIndexForTrawlers(ctx, stateRoot, exporterTrawlers)
 	if err != nil || indexStore == nil {
+		fallbackWG.Wait()
 		return r.fallbackSearchAllTrawlers(ctx, selectedTrawlers, crawlQuery, limit, resolvedPersonDisplayName, resolvedPersonFacts)
 	}
 	defer func() { _ = indexStore.Close() }()
@@ -139,14 +208,19 @@ func (r *Runtime) runUnifiedAndFederatedSearch(
 		uq.BeforeUnix = &v
 	}
 
-	unifiedOut, err := unifiedindex.SearchUnifiedIndex(ctx, indexStore.DB(), uq)
-	if err != nil {
-		return r.fallbackSearchAllTrawlers(ctx, selectedTrawlers, crawlQuery, limit, resolvedPersonDisplayName, resolvedPersonFacts)
-	}
+	var (
+		searchWG   sync.WaitGroup
+		unifiedOut unifiedindex.UnifiedSearchOutput
+		unifiedErr error
+		semHits    []semantic.SemanticSearchHit
+		semErr     error
+	)
 
 	if strings.TrimSpace(uq.QueryText) != "" {
-		if semReady, semCheckErr := semantic.IsSemanticSearchEnabledAndReady(ctx, stateRoot); semCheckErr == nil && semReady {
-			semHits, semErr := semantic.SearchSemanticIndex(ctx, stateRoot, indexStore.DB(), semantic.SemanticSearchQuery{
+		searchWG.Add(1)
+		go func() {
+			defer searchWG.Done()
+			semHits, semErr = semantic.SearchSemanticIndex(ctx, stateRoot, indexStore.DB(), semantic.SemanticSearchQuery{
 				QueryText:         uq.QueryText,
 				Trawlers:          uq.Trawlers,
 				PersonFilterTerms: uq.PersonFilterTerms,
@@ -154,16 +228,25 @@ func (r *Runtime) runUnifiedAndFederatedSearch(
 				BeforeUnix:        uq.BeforeUnix,
 				Limit:             limit,
 			})
-			if semErr == nil && len(semHits) > 0 {
-				fused := semantic.FuseLexicalAndSemanticSearchMatches(unifiedOut.Matches, semHits, limit)
-				unifiedOut.Matches = fused
-				if uint64(len(fused)) > unifiedOut.TotalRawMatches {
-					unifiedOut.TotalRawMatches = uint64(len(fused))
-				}
-			} else if semErr != nil {
-				r.logInfo("semantic_search_fallback_to_lexical", "error="+logQuote(semErr.Error()))
-			}
+		}()
+	}
+
+	unifiedOut, unifiedErr = unifiedindex.SearchUnifiedIndex(ctx, indexStore.DB(), uq)
+	searchWG.Wait()
+	fallbackWG.Wait()
+
+	if unifiedErr != nil {
+		return r.fallbackSearchAllTrawlers(ctx, selectedTrawlers, crawlQuery, limit, resolvedPersonDisplayName, resolvedPersonFacts)
+	}
+
+	if semErr == nil && len(semHits) > 0 {
+		fused := semantic.FuseLexicalAndSemanticSearchMatches(unifiedOut.Matches, semHits, limit)
+		unifiedOut.Matches = fused
+		if uint64(len(fused)) > unifiedOut.TotalRawMatches {
+			unifiedOut.TotalRawMatches = uint64(len(fused))
 		}
+	} else if semErr != nil {
+		r.logInfo("semantic_search_fallback_to_lexical", "error="+logQuote(semErr.Error()))
 	}
 
 	return mergeUnifiedAndFallbackSearchOperations(

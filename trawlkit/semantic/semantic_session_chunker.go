@@ -214,6 +214,7 @@ func BuildOrUpdateSemanticIndex(
 		return SemanticBuildReport{}, err
 	}
 	_ = semStore.Close()
+	_ = RebuildSemanticVectorCache(ctx, stateRoot)
 
 	status, err := ReadSemanticIndexStatus(ctx, stateRoot)
 	if err != nil {

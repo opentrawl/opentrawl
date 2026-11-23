@@ -224,11 +224,14 @@ func IsSemanticSearchEnabledAndReady(ctx context.Context, stateRoot string) (boo
 	if enabled != "1" {
 		return false, nil
 	}
-	var count int64
-	if err := st.DB().QueryRowContext(ctx, `select count(*) from semantic_chunks`).Scan(&count); err != nil {
+	var hasChunk int
+	if err := st.DB().QueryRowContext(ctx, `select 1 from semantic_chunks limit 1`).Scan(&hasChunk); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
 		return false, err
 	}
-	return count > 0, nil
+	return true, nil
 }
 
 // SetSemanticSearchEnabled updates the enabled flag inside semantic.db.
@@ -253,7 +256,8 @@ func SetSemanticSearchEnabled(ctx context.Context, stateRoot string, enabled boo
 	return err
 }
 
-// DeleteSemanticDatabase removes disposable semantic.db and its WAL/SHM sidecars.
+// DeleteSemanticDatabase removes disposable semantic.db, its WAL/SHM sidecars,
+// and its derived semantic.vec cache.
 func DeleteSemanticDatabase(stateRoot string) error {
 	base := ResolveSemanticDatabasePath(stateRoot)
 	for _, suffix := range []string{"", "-wal", "-shm"} {
@@ -262,7 +266,7 @@ func DeleteSemanticDatabase(stateRoot string) error {
 			return fmt.Errorf("remove %s: %w", target, err)
 		}
 	}
-	return nil
+	return removeSemanticVectorCacheFiles(stateRoot)
 }
 
 func readSemanticMetadataMap(ctx context.Context, db *sql.DB) (map[string]string, error) {

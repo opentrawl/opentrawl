@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	searchcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 )
@@ -259,6 +260,11 @@ func BuildHighlightedMatchFragments(text string, queryTokens []string, maxRunes 
 		}}
 	}
 	lower := strings.ToLower(excerpt)
+	if len(lower) != len(excerpt) {
+		return []*searchcontract.SearchMatchTextFragment{{
+			SearchMatchTextFragmentContent: excerpt,
+		}}
+	}
 	var fragments []*searchcontract.SearchMatchTextFragment
 	cursor := 0
 	for cursor < len(excerpt) {
@@ -268,9 +274,8 @@ func BuildHighlightedMatchFragments(text string, queryTokens []string, maxRunes 
 			if tok == "" {
 				continue
 			}
-			idx := strings.Index(lower[cursor:], tok)
-			if idx >= 0 {
-				absPos := cursor + idx
+			absPos := findNextSearchTokenMatch(lower, cursor, tok)
+			if absPos >= 0 {
 				if bestPos == -1 || absPos < bestPos || (absPos == bestPos && len(tok) > bestLen) {
 					bestPos = absPos
 					bestLen = len(tok)
@@ -305,9 +310,11 @@ func extractExcerptAroundTokens(text string, queryTokens []string, maxRunes int)
 	}
 	lower := strings.ToLower(text)
 	firstByteIdx := -1
-	for _, tok := range queryTokens {
-		if idx := strings.Index(lower, tok); idx >= 0 && (firstByteIdx == -1 || idx < firstByteIdx) {
-			firstByteIdx = idx
+	if len(lower) == len(text) {
+		for _, tok := range queryTokens {
+			if idx := findNextSearchTokenMatch(lower, 0, tok); idx >= 0 && (firstByteIdx == -1 || idx < firstByteIdx) {
+				firstByteIdx = idx
+			}
 		}
 	}
 	if firstByteIdx <= 0 {
@@ -325,4 +332,57 @@ func extractExcerptAroundTokens(text string, queryTokens []string, maxRunes int)
 		suffix = "…"
 	}
 	return prefix + string(runes[start:end]) + suffix
+}
+
+func findNextSearchTokenMatch(lower string, startOffset int, token string) int {
+	if token == "" || startOffset >= len(lower) {
+		return -1
+	}
+	containsEastAsian := false
+	tokenRunes := 0
+	for _, r := range token {
+		tokenRunes++
+		if isEastAsianScriptRune(r) {
+			containsEastAsian = true
+		}
+	}
+	if containsEastAsian {
+		if rel := strings.Index(lower[startOffset:], token); rel >= 0 {
+			return startOffset + rel
+		}
+		return -1
+	}
+	requireWordEnd := tokenRunes <= 3
+	searchFrom := startOffset
+	for searchFrom < len(lower) {
+		rel := strings.Index(lower[searchFrom:], token)
+		if rel < 0 {
+			return -1
+		}
+		pos := searchFrom + rel
+		end := pos + len(token)
+		startOK := pos == 0
+		if !startOK {
+			prevRune, _ := utf8.DecodeLastRuneInString(lower[:pos])
+			startOK = !isWordHighlightRune(prevRune)
+		}
+		endOK := !requireWordEnd || end == len(lower)
+		if !endOK {
+			nextRune, _ := utf8.DecodeRuneInString(lower[end:])
+			endOK = !isWordHighlightRune(nextRune)
+		}
+		if startOK && endOK {
+			return pos
+		}
+		_, step := utf8.DecodeRuneInString(lower[pos:])
+		if step <= 0 {
+			step = 1
+		}
+		searchFrom = pos + step
+	}
+	return -1
+}
+
+func isWordHighlightRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
 }

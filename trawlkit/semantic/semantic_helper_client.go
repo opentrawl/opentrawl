@@ -135,14 +135,11 @@ func (c *SemanticHelperClient) EmbedTexts(
 	if len(texts) == 0 {
 		return nil, 0, nil
 	}
-	if err := c.ensureHelperRunning(ctx); err != nil {
-		return nil, 0, err
-	}
 	timeout := 30 * time.Second
 	if len(texts) > 32 {
 		timeout = 5 * time.Minute
 	}
-	resp, err := c.sendRequestWithoutStart(ctx, &semanticpb.SemanticEmbedderRequest{
+	req := &semanticpb.SemanticEmbedderRequest{
 		RequestPayload: &semanticpb.SemanticEmbedderRequest_EmbedTexts{
 			EmbedTexts: &semanticpb.SemanticEmbedderEmbedTextsRequest{
 				LocalModelDirectoryPath:    modelDir,
@@ -153,7 +150,16 @@ func (c *SemanticHelperClient) EmbedTexts(
 				InputRepresentsSearchQuery: isQuery,
 			},
 		},
-	}, timeout)
+	}
+	// Fast path: dial and embed directly in one socket round-trip when the helper
+	// is already running; only probe/spawn if the direct call fails.
+	resp, err := c.sendRequestWithoutStart(ctx, req, timeout)
+	if err != nil && ctx.Err() == nil {
+		if startErr := c.ensureHelperRunning(ctx); startErr != nil {
+			return nil, 0, startErr
+		}
+		resp, err = c.sendRequestWithoutStart(ctx, req, timeout)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -223,7 +229,7 @@ func (c *SemanticHelperClient) ensureHelperRunning(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(15 * time.Millisecond):
 		}
 	}
 	return errors.New("timed out waiting for native semantic helper socket")
