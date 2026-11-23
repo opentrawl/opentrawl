@@ -32,27 +32,30 @@ import (
 )
 
 // ExternalPluginTrawlerConfig defines the immutable configuration for one
-// host-side standalone plugin trawler adapter.
+// host-side sandboxed plugin trawler adapter.
 type ExternalPluginTrawlerConfig struct {
-	PluginIdentifier    string
-	ExecutablePath      string
-	ExecutableSHA256    string
-	IsBundledFirstParty bool
-	Manifest            *plugincontract.PluginManifestResponse
-	TrustRecord         *plugincontract.PluginTrustRecord
-	SecretStore         secrets.PluginSecretStore
+	PluginIdentifier string
+	ExecutablePath   string
+	ExecutableArgs   []string
+	ExecutableSHA256 string
+	DiscoveryOrigin  PluginDiscoveryOrigin
+	Manifest         *plugincontract.PluginManifestResponse
+	TrustRecord      *plugincontract.PluginTrustRecord
+	SecretStore      secrets.PluginSecretStore
 }
 
-// ExternalPluginTrawler adapts one standalone plugin executable to the core
+// ExternalPluginTrawler adapts one sandboxed plugin worker (either a bundled
+// multi-call worker or a standalone external executable) to the core
 // trawlkit.Trawler and trawlkit.ExternalPluginExecutor interfaces.
 type ExternalPluginTrawler struct {
-	pluginIdentifier    string
-	executablePath      string
-	executableSHA256    string
-	isBundledFirstParty bool
-	manifest            *plugincontract.PluginManifestResponse
-	trustRecord         *plugincontract.PluginTrustRecord
-	secretStore         secrets.PluginSecretStore
+	pluginIdentifier string
+	executablePath   string
+	executableArgs   []string
+	executableSHA256 string
+	discoveryOrigin  PluginDiscoveryOrigin
+	manifest         *plugincontract.PluginManifestResponse
+	trustRecord      *plugincontract.PluginTrustRecord
+	secretStore      secrets.PluginSecretStore
 }
 
 type externalPluginIndexExportingTrawler struct {
@@ -68,18 +71,19 @@ var (
 )
 
 // NewExternalPluginTrawler creates the host-side trawler adapter for a
-// standalone plugin. If the plugin declared ArchiveIndexChangeExport support,
+// sandboxed plugin. If the plugin declared ArchiveIndexChangeExport support,
 // the returned trawler also satisfies trawlkit.ArchiveIndexChangeExporter so
 // unified search and `trawl index rebuild` include it automatically.
 func NewExternalPluginTrawler(cfg ExternalPluginTrawlerConfig) trawlkit.Trawler {
 	base := &ExternalPluginTrawler{
-		pluginIdentifier:    cfg.PluginIdentifier,
-		executablePath:      cfg.ExecutablePath,
-		executableSHA256:    cfg.ExecutableSHA256,
-		isBundledFirstParty: cfg.IsBundledFirstParty,
-		manifest:            proto.Clone(cfg.Manifest).(*plugincontract.PluginManifestResponse),
-		trustRecord:         cloneTrustRecord(cfg.TrustRecord),
-		secretStore:         cfg.SecretStore,
+		pluginIdentifier: cfg.PluginIdentifier,
+		executablePath:   cfg.ExecutablePath,
+		executableArgs:   append([]string(nil), cfg.ExecutableArgs...),
+		executableSHA256: cfg.ExecutableSHA256,
+		discoveryOrigin:  cfg.DiscoveryOrigin,
+		manifest:         proto.Clone(cfg.Manifest).(*plugincontract.PluginManifestResponse),
+		trustRecord:      cloneTrustRecord(cfg.TrustRecord),
+		secretStore:      cfg.SecretStore,
 	}
 	if base.manifest.GetDeclaredCapabilities().GetSupportsArchiveIndexChangeExport() {
 		return &externalPluginIndexExportingTrawler{ExternalPluginTrawler: base}
@@ -775,6 +779,7 @@ func (p *ExternalPluginTrawler) invokeReadOnlyOperation(
 	}
 	return invokeSandboxedPlugin(ctx, pluginInvocationExecutionOptions{
 		ExecutablePath: p.executablePath,
+		ExecutableArgs: p.executableArgs,
 		SandboxPolicy: pluginsandbox.PluginSandboxPolicy{
 			ReadOnlyDirectoryPaths: readOnlyDirs,
 		},
@@ -816,12 +821,13 @@ func (p *ExternalPluginTrawler) invokeMutatingOperationWithExtraReadPaths(
 	req.IsInternalAppRequest = trawlkit.IsInternalAppRequest(ctx)
 
 	var deniedWriteFiles []string
-	if !p.isBundledFirstParty || len(p.manifest.GetDeclaredCapabilities().GetDeclaredConfigReadPathFields()) > 0 {
+	if !p.discoveryOrigin.TrustsDeclaredCapabilities() || len(p.manifest.GetDeclaredCapabilities().GetDeclaredConfigReadPathFields()) > 0 {
 		deniedWriteFiles = []string{string(paths.TrawlerConfigurationPath)}
 	}
 
 	return invokeSandboxedPlugin(ctx, pluginInvocationExecutionOptions{
 		ExecutablePath: p.executablePath,
+		ExecutableArgs: p.executableArgs,
 		SandboxPolicy: pluginsandbox.PluginSandboxPolicy{
 			WritableDirectoryPaths: []string{paths.TrawlerArchiveDirectoryPath},
 			ReadOnlyDirectoryPaths: readOnlyDirs,
@@ -841,7 +847,7 @@ func (p *ExternalPluginTrawler) invokeMutatingOperationWithExtraReadPaths(
 func (p *ExternalPluginTrawler) effectiveNetworkPolicy() ([]string, []pluginproxy.SelfHostedNetworkHostExemption, error) {
 	var publicHosts []string
 	var selfHosted []pluginproxy.SelfHostedNetworkHostExemption
-	if p.isBundledFirstParty {
+	if p.discoveryOrigin.TrustsDeclaredCapabilities() {
 		publicHosts = append(publicHosts, p.manifest.GetDeclaredCapabilities().GetDeclaredNetworkHosts()...)
 	}
 	if p.trustRecord != nil {
@@ -856,7 +862,7 @@ func (p *ExternalPluginTrawler) effectiveNetworkPolicy() ([]string, []pluginprox
 }
 
 func (p *ExternalPluginTrawler) effectiveMutatingReadPaths(configPath string) (files []string, dirs []string) {
-	if p.isBundledFirstParty {
+	if p.discoveryOrigin.TrustsDeclaredCapabilities() {
 		declared := p.manifest.GetDeclaredCapabilities()
 		declaredFiles, declaredDirs := resolveExistingBundledReadPaths(declared.GetDeclaredReadPaths())
 		files = append(files, declaredFiles...)
@@ -883,7 +889,7 @@ func (p *ExternalPluginTrawler) effectiveMutatingReadPaths(configPath string) (f
 
 func (p *ExternalPluginTrawler) effectiveSecretBroker() (*secrets.PluginSecretBroker, error) {
 	var readKeys, writeKeys []string
-	if p.isBundledFirstParty {
+	if p.discoveryOrigin.TrustsDeclaredCapabilities() {
 		readKeys = append(readKeys, p.manifest.GetDeclaredCapabilities().GetDeclaredReadSecretKeys()...)
 		writeKeys = append(writeKeys, p.manifest.GetDeclaredCapabilities().GetDeclaredWriteSecretKeys()...)
 	}
@@ -899,7 +905,7 @@ func (p *ExternalPluginTrawler) effectiveSecretBroker() (*secrets.PluginSecretBr
 
 func (p *ExternalPluginTrawler) effectiveAuthOrigins() []string {
 	var origins []string
-	if p.isBundledFirstParty {
+	if p.discoveryOrigin.TrustsDeclaredCapabilities() {
 		origins = append(origins, p.manifest.GetDeclaredCapabilities().GetDeclaredAuthOrigins()...)
 	}
 	if p.trustRecord != nil {

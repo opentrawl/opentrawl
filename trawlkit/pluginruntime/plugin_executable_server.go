@@ -29,6 +29,14 @@ func ServePluginExecutable(trawler trawlkit.Trawler) int {
 	return ServePluginStreams(context.Background(), trawler, os.Stdin, stdout)
 }
 
+// ServeBundledPluginWorkerError writes a terminal plugin error frame to stdout
+// when multi-call worker dispatch receives invalid or unknown plugin arguments.
+func ServeBundledPluginWorkerError(err error) int {
+	stdout, _ := output.ProcessOutputStreams()
+	writer := &serializedPluginFrameWriter{w: stdout}
+	return writeTerminalPluginError(writer, err)
+}
+
 // ServePluginStreams runs one plugin invocation against explicit stdin/stdout
 // streams and returns the canonical OpenTrawl process exit code.
 func ServePluginStreams(

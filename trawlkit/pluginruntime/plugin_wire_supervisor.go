@@ -40,6 +40,7 @@ const (
 
 type pluginInvocationExecutionOptions struct {
 	ExecutablePath         string
+	ExecutableArgs         []string
 	SandboxPolicy          pluginsandbox.PluginSandboxPolicy
 	Request                *plugincontract.PluginInvocationRequest
 	HardDeadline           time.Duration
@@ -146,7 +147,7 @@ func invokeSandboxedPlugin(
 		return pluginInvocationOutcome{}, fmt.Errorf("encode plugin invocation request: %w", err)
 	}
 
-	cmd, err := pluginsandbox.CommandContext(ctx, policy)
+	cmd, err := pluginsandbox.CommandContext(ctx, policy, opts.ExecutableArgs...)
 	if err != nil {
 		return pluginInvocationOutcome{}, fmt.Errorf("prepare sandboxed plugin command: %w", err)
 	}

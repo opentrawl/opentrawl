@@ -34,6 +34,9 @@ while IFS= read -r go_mod; do
       continue
     fi
     name="$(basename "$target_dir")"
+    if [[ "$name" == "trawl-clib" ]]; then
+      continue
+    fi
     target_count=$((target_count + 1))
   done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
 done < <(git ls-files -- 'go.mod' '*/go.mod' | sort)
@@ -57,6 +60,9 @@ while IFS= read -r go_mod; do
       continue
     fi
     name="$(basename "$target_dir")"
+    if [[ "$name" == "trawl-clib" ]]; then
+      continue
+    fi
     output="$bin_dir/$name"
     module_path="${module_dir#./}"
 

@@ -12,10 +12,15 @@ import (
 	contacts "github.com/opentrawl/opentrawl/trawlers/contacts"
 	imessage "github.com/opentrawl/opentrawl/trawlers/imessage"
 	mail "github.com/opentrawl/opentrawl/trawlers/mail"
+	money "github.com/opentrawl/opentrawl/trawlers/money"
+	notes "github.com/opentrawl/opentrawl/trawlers/notes"
 	photos "github.com/opentrawl/opentrawl/trawlers/photos"
+	telegram "github.com/opentrawl/opentrawl/trawlers/telegram"
+	whatsapp "github.com/opentrawl/opentrawl/trawlers/whatsapp"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/pluginruntime"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	twitter "github.com/opentrawl/opentrawl/twitter"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -55,6 +60,18 @@ var trawlerFactories = []trawlerRegistration{
 	{factory: func() trawlkit.Trawler { return gmail.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return calendar.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return photos.New() }, beta: true, fallbackBranding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos", "com.apple.mobileslideshow"), fallbackSourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
+}
+
+// bundledMultiCallPlugins lists first-party plugins compiled into the single
+// multi-call trawl binary. Each plugin still runs out-of-process inside the
+// exact same Seatbelt sandbox, capability policy, secret broker, and loopback
+// HTTP allowlist proxy as standalone external plugins.
+var bundledMultiCallPlugins = []pluginruntime.BundledMultiCallPluginRegistration{
+	{PluginIdentifier: "money", Factory: func() trawlkit.Trawler { return money.New() }},
+	{PluginIdentifier: "notes", Factory: func() trawlkit.Trawler { return notes.New() }},
+	{PluginIdentifier: "telegram", Factory: func() trawlkit.Trawler { return telegram.New() }},
+	{PluginIdentifier: "twitter", Factory: func() trawlkit.Trawler { return twitter.New() }},
+	{PluginIdentifier: "whatsapp", Factory: func() trawlkit.Trawler { return whatsapp.New() }},
 }
 
 func macAppBranding(symbolName, accentColor, bundleIdentifier, artworkBundleIdentifier string) *federation.TrawlerBranding {
@@ -128,8 +145,23 @@ func buildRegisteredTrawlerManifestSnapshotForContext(
 			RegisteredTrawlerIsEnabled:    registeredTrawlerManifestEntry.registeredTrawlerIsEnabled,
 		})
 	}
+	appendBundledMultiCallPluginsToSnapshot(stateRoot, seenRegisteredTrawlerIdentities, &snapshot)
 	appendDiscoveredExternalPluginsToSnapshot(ctx, stateRoot, seenRegisteredTrawlerIdentities, &snapshot)
 	return snapshot
+}
+
+func appendBundledMultiCallPluginsToSnapshot(
+	stateRoot string,
+	seenIdentities map[string]struct{},
+	snapshot *registeredTrawlerManifestSnapshot,
+) {
+	bundled := pluginruntime.LoadBundledMultiCallPlugins(stateRoot, bundledMultiCallPlugins, false)
+	for _, plugin := range bundled {
+		if id := strings.TrimSpace(plugin.PluginIdentifier); id != "" {
+			seenIdentities[id] = struct{}{}
+		}
+	}
+	appendDiscoveredPluginsToSnapshot(bundled, snapshot)
 }
 
 func appendDiscoveredExternalPluginsToSnapshot(
@@ -139,6 +171,13 @@ func appendDiscoveredExternalPluginsToSnapshot(
 	snapshot *registeredTrawlerManifestSnapshot,
 ) {
 	discovered := pluginruntime.DiscoverExternalPlugins(ctx, stateRoot, builtInIdentities)
+	appendDiscoveredPluginsToSnapshot(discovered, snapshot)
+}
+
+func appendDiscoveredPluginsToSnapshot(
+	discovered []pluginruntime.DiscoveredExternalPlugin,
+	snapshot *registeredTrawlerManifestSnapshot,
+) {
 	for _, plugin := range discovered {
 		manifest := plugin.Manifest.GetRegisteredTrawlerManifest()
 		discoveryErr := plugin.DiscoveryError
@@ -273,4 +312,21 @@ func cloneTrawlerBranding(branding *federation.TrawlerBranding) *federation.Traw
 
 func ExecuteTrawlerWire(args []string) int {
 	return trawlkit.ExecuteTrawlerWireChild(args[1:], registeredTrawlers())
+}
+
+// ExecuteBundledPluginWorker runs one bundled first-party plugin as a sandboxed
+// protobuf worker process invoked via trawlkit.HiddenBundledPluginWorkerSubcommand.
+func ExecuteBundledPluginWorker(args []string) int {
+	if len(args) != 1 {
+		return pluginruntime.ServeBundledPluginWorkerError(
+			fmt.Errorf("bundled plugin worker requires one plugin identifier, got %d arguments", len(args)),
+		)
+	}
+	pluginID := strings.TrimSpace(args[0])
+	for _, registration := range bundledMultiCallPlugins {
+		if registration.PluginIdentifier == pluginID {
+			return pluginruntime.ServePluginExecutable(registration.Factory())
+		}
+	}
+	return pluginruntime.ServeBundledPluginWorkerError(fmt.Errorf("unknown bundled plugin %q", pluginID))
 }

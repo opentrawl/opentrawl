@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -32,6 +33,8 @@ func RenderSeatbeltProfile(policy PluginSandboxPolicy) (string, error) {
 		return "", fmt.Errorf("canonicalize plugin executable path: %w", err)
 	}
 
+	linksNixStore, relativeLibraryPaths := inspectExecutableDynamicLibraries(executablePath)
+
 	var b strings.Builder
 	b.WriteString("(version 1)\n")
 	b.WriteString("(deny default)\n")
@@ -46,6 +49,11 @@ func RenderSeatbeltProfile(policy PluginSandboxPolicy) (string, error) {
 	b.WriteString("  (literal ")
 	b.WriteString(seatbeltQuotedString(executablePath))
 	b.WriteString(")\n")
+	for _, libraryPath := range relativeLibraryPaths {
+		b.WriteString("  (literal ")
+		b.WriteString(seatbeltQuotedString(libraryPath))
+		b.WriteString(")\n")
+	}
 	b.WriteString("  (subpath \"/usr/lib\")\n")
 	b.WriteString("  (subpath \"/System/Library\")\n")
 	b.WriteString("  (literal \"/dev/null\")\n")
@@ -56,10 +64,19 @@ func RenderSeatbeltProfile(policy PluginSandboxPolicy) (string, error) {
 	b.WriteString("  (subpath \"/usr/share/zoneinfo\")\n")
 	b.WriteString("  (subpath \"/usr/share/icu\")\n")
 	b.WriteString("  (subpath \"/private/etc/ssl\")\n")
-	if executableLinksNixStoreLibraries(executablePath) {
+	if linksNixStore {
 		b.WriteString("  (subpath \"/nix/store\")\n")
 	}
 	b.WriteString(")\n")
+	if len(relativeLibraryPaths) > 0 {
+		b.WriteString("(allow file-map-executable\n")
+		for _, libraryPath := range relativeLibraryPaths {
+			b.WriteString("  (literal ")
+			b.WriteString(seatbeltQuotedString(libraryPath))
+			b.WriteString(")\n")
+		}
+		b.WriteString(")\n")
+	}
 	b.WriteString("(allow file-write-data (literal \"/dev/null\"))\n")
 
 	if err := appendReadOnlyPathRules(&b, policy.ReadOnlyDirectoryPaths, policy.ReadOnlyFilePaths); err != nil {
@@ -181,22 +198,117 @@ func canonicalSandboxPath(rawPath string, mustExist bool) (string, error) {
 	return filepath.Join(resolvedParent, base), nil
 }
 
-func executableLinksNixStoreLibraries(executablePath string) bool {
-	machoFile, err := macho.Open(executablePath)
-	if err != nil {
-		return false
+func inspectExecutableDynamicLibraries(executablePath string) (linksNixStore bool, relativeLibraryPaths []string) {
+	machoFiles, cleanup := openMachOArchitectures(executablePath)
+	if len(machoFiles) == 0 {
+		return false, nil
 	}
-	defer func() { _ = machoFile.Close() }()
-	libraries, err := machoFile.ImportedLibraries()
-	if err != nil {
-		return false
+	defer cleanup()
+
+	executableDir := filepath.Dir(executablePath)
+	seenLibraries := make(map[string]struct{})
+	addResolvedLibrary := func(candidate string) {
+		canonical, err := canonicalSandboxPath(candidate, true)
+		if err != nil {
+			return
+		}
+		if absCandidate, absErr := filepath.Abs(candidate); absErr == nil {
+			seenLibraries[absCandidate] = struct{}{}
+		}
+		seenLibraries[canonical] = struct{}{}
 	}
-	for _, library := range libraries {
-		if strings.HasPrefix(library, "/nix/store/") {
-			return true
+
+	for _, machoFile := range machoFiles {
+		rpaths := collectMachORpaths(machoFile, executableDir)
+		libraries, err := machoFile.ImportedLibraries()
+		if err != nil {
+			continue
+		}
+		for _, library := range libraries {
+			if strings.HasPrefix(library, "/nix/store/") {
+				linksNixStore = true
+				continue
+			}
+			for _, candidate := range resolveRelativeMachOLibraryCandidates(library, executableDir, rpaths) {
+				addResolvedLibrary(candidate)
+			}
 		}
 	}
-	return false
+	if len(seenLibraries) == 0 {
+		return linksNixStore, nil
+	}
+	relativeLibraryPaths = make([]string, 0, len(seenLibraries))
+	for path := range seenLibraries {
+		relativeLibraryPaths = append(relativeLibraryPaths, path)
+	}
+	sort.Strings(relativeLibraryPaths)
+	return linksNixStore, relativeLibraryPaths
+}
+
+func openMachOArchitectures(executablePath string) ([]*macho.File, func()) {
+	if machoFile, err := macho.Open(executablePath); err == nil {
+		return []*macho.File{machoFile}, func() { _ = machoFile.Close() }
+	}
+	fatFile, err := macho.OpenFat(executablePath)
+	if err != nil {
+		return nil, func() {}
+	}
+	files := make([]*macho.File, 0, len(fatFile.Arches))
+	for _, arch := range fatFile.Arches {
+		if arch.File != nil {
+			files = append(files, arch.File)
+		}
+	}
+	return files, func() { _ = fatFile.Close() }
+}
+
+func collectMachORpaths(machoFile *macho.File, executableDir string) []string {
+	var rpaths []string
+	for _, load := range machoFile.Loads {
+		rpath, ok := load.(*macho.Rpath)
+		if !ok || strings.TrimSpace(rpath.Path) == "" {
+			continue
+		}
+		expanded := expandMachOExecutableToken(rpath.Path, executableDir)
+		if expanded != "" {
+			rpaths = append(rpaths, expanded)
+		}
+	}
+	return rpaths
+}
+
+func resolveRelativeMachOLibraryCandidates(library string, executableDir string, rpaths []string) []string {
+	if strings.HasPrefix(library, "@executable_path/") || strings.HasPrefix(library, "@loader_path/") {
+		if expanded := expandMachOExecutableToken(library, executableDir); expanded != "" {
+			return []string{expanded}
+		}
+		return nil
+	}
+	if !strings.HasPrefix(library, "@rpath/") {
+		return nil
+	}
+	suffix := strings.TrimPrefix(library, "@rpath/")
+	candidates := make([]string, 0, len(rpaths))
+	for _, rpath := range rpaths {
+		candidates = append(candidates, filepath.Join(rpath, suffix))
+	}
+	return candidates
+}
+
+func expandMachOExecutableToken(rawPath string, executableDir string) string {
+	trimmed := strings.TrimSpace(rawPath)
+	switch {
+	case trimmed == "@executable_path" || trimmed == "@loader_path":
+		return executableDir
+	case strings.HasPrefix(trimmed, "@executable_path/"):
+		return filepath.Join(executableDir, strings.TrimPrefix(trimmed, "@executable_path/"))
+	case strings.HasPrefix(trimmed, "@loader_path/"):
+		return filepath.Join(executableDir, strings.TrimPrefix(trimmed, "@loader_path/"))
+	case filepath.IsAbs(trimmed):
+		return trimmed
+	default:
+		return ""
+	}
 }
 
 func seatbeltQuotedString(text string) string {

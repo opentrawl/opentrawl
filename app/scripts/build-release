@@ -151,7 +151,7 @@ key_bytes="$(printf '%s' "$sparkle_public_key" | openssl base64 -d -A 2>/dev/nul
   exit 1
 }
 
-mkdir -p "$contents/MacOS" "$contents/Helpers/plugins" "$contents/Frameworks" "$contents/Resources"
+mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
 
 app_entitlements=()
 if [[ -n "$provisioning_profile" ]]; then
@@ -214,15 +214,6 @@ swift_bin="$(host_swift build \
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
 ln -s ../MacOS/Trawl "$contents/Helpers/trawl"
 
-echo "Building bundled standalone trawler plugins"
-MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
-  CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=$deployment_target" \
-  CGO_LDFLAGS="${CGO_LDFLAGS:-} -mmacosx-version-min=$deployment_target" \
-  "$repo_root/scripts/build-bundled-plugins" \
-  --output-dir "$contents/Helpers/plugins" \
-  --arch arm64 \
-  --trimpath
-
 echo "Building native Apple Silicon semantic embedding helper"
 "$repo_root/scripts/build-semantic-helper" \
   --output-dir "$contents/Helpers" \
@@ -266,10 +257,6 @@ rewrite_and_check_libraries() {
 }
 rewrite_and_check_libraries "$contents/MacOS/Trawl"
 rewrite_and_check_libraries "$contents/Helpers/trawl-embed"
-while IFS= read -r plugin_binary; do
-  chmod +x "$plugin_binary"
-  rewrite_and_check_libraries "$plugin_binary"
-done < <(find "$contents/Helpers/plugins" -mindepth 1 -maxdepth 1 -type f -name 'trawl-*' | sort)
 
 echo "Compiling the app icon"
 xcrun actool \
@@ -336,9 +323,6 @@ codesign "${sign_args[@]}" "$sparkle/Versions/B/Autoupdate"
 codesign "${sign_args[@]}" "$sparkle/Versions/B/Updater.app"
 codesign "${sign_args[@]}" "$sparkle"
 codesign "${sign_args[@]}" "$contents/Helpers/trawl-embed"
-while IFS= read -r plugin_binary; do
-  codesign "${sign_args[@]}" "$plugin_binary"
-done < <(find "$contents/Helpers/plugins" -mindepth 1 -maxdepth 1 -type f -name 'trawl-*' | sort)
 codesign "${sign_args[@]}" ${app_entitlements[@]+"${app_entitlements[@]}"} "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 

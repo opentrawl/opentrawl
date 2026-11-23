@@ -11,7 +11,7 @@ import (
 )
 
 type PluginCmd struct {
-	List    PluginListCmd    `cmd:"" default:"withargs" help:"List discovered standalone plugins"`
+	List    PluginListCmd    `cmd:"" default:"withargs" help:"List bundled and external plugins"`
 	Install PluginInstallCmd `cmd:"" help:"Stage a standalone plugin executable and pin its hash and capabilities"`
 	Remove  PluginRemoveCmd  `cmd:"" help:"Remove a staged standalone plugin; keep its archive"`
 }
@@ -34,9 +34,13 @@ type PluginRemoveCmd struct {
 }
 
 func (c *PluginListCmd) Run(r *Runtime) error {
-	discovered := pluginruntime.DiscoverExternalPlugins(r.ctx, r.stateRoot, builtInTrawlerIdentitySet())
-	rows := make([]render.ExternalPluginRowPresentation, 0, len(discovered))
-	for _, plugin := range discovered {
+	bundled := pluginruntime.LoadBundledMultiCallPlugins(r.stateRoot, bundledMultiCallPlugins, true)
+	external := pluginruntime.DiscoverExternalPlugins(r.ctx, r.stateRoot, reservedFirstPartyTrawlerIdentitySet())
+	rows := make([]render.ExternalPluginRowPresentation, 0, len(bundled)+len(external))
+	for _, plugin := range bundled {
+		rows = append(rows, externalPluginRowPresentation(plugin))
+	}
+	for _, plugin := range external {
 		rows = append(rows, externalPluginRowPresentation(plugin))
 	}
 	return r.output.WriteExternalPluginList(render.ExternalPluginListPresentation{Plugins: rows})
@@ -64,7 +68,7 @@ func (c *PluginInstallCmd) Run(r *Runtime) error {
 			ApprovedAuthOrigins:        c.AllowAuthOrigin,
 			ApprovedArchiveDirOverride: c.ArchiveDir,
 		},
-		builtInTrawlerIdentitySet(),
+		reservedFirstPartyTrawlerIdentitySet(),
 	)
 	if err != nil {
 		return render.ExternalPluginOperationFailed(err.Error())
@@ -87,8 +91,8 @@ func (c *PluginRemoveCmd) Run(r *Runtime) error {
 	return r.output.WriteExternalPluginRemoved(c.Plugin, removed)
 }
 
-func builtInTrawlerIdentitySet() map[string]struct{} {
-	identities := make(map[string]struct{}, len(trawlerFactories))
+func reservedFirstPartyTrawlerIdentitySet() map[string]struct{} {
+	identities := make(map[string]struct{}, len(trawlerFactories)+len(bundledMultiCallPlugins))
 	for _, registration := range trawlerFactories {
 		trawler := registration.factory()
 		declaration := trawler.RegisteredTrawlerDeclaration()
@@ -96,14 +100,15 @@ func builtInTrawlerIdentitySet() map[string]struct{} {
 			identities[id] = struct{}{}
 		}
 	}
+	for _, registration := range bundledMultiCallPlugins {
+		if id := strings.TrimSpace(registration.PluginIdentifier); id != "" {
+			identities[id] = struct{}{}
+		}
+	}
 	return identities
 }
 
 func externalPluginRowPresentation(plugin pluginruntime.DiscoveredExternalPlugin) render.ExternalPluginRowPresentation {
-	origin := "staged"
-	if plugin.IsBundledFirstParty {
-		origin = "bundled"
-	}
 	status := "ok"
 	errorSentence := ""
 	if plugin.DiscoveryError != nil {
@@ -118,7 +123,7 @@ func externalPluginRowPresentation(plugin pluginruntime.DiscoveredExternalPlugin
 	return render.ExternalPluginRowPresentation{
 		PluginIdentifier:            plugin.PluginIdentifier,
 		DisplayName:                 displayName,
-		OriginLabel:                 origin,
+		OriginLabel:                 plugin.DiscoveryOrigin.Label(),
 		StatusLabel:                 status,
 		ExecutableSHA256Short:       shortHash,
 		ApprovedCapabilitiesSummary: formatDiscoveredPluginCapabilities(plugin),
@@ -128,7 +133,7 @@ func externalPluginRowPresentation(plugin pluginruntime.DiscoveredExternalPlugin
 
 func formatDiscoveredPluginCapabilities(plugin pluginruntime.DiscoveredExternalPlugin) string {
 	var parts []string
-	if plugin.IsBundledFirstParty {
+	if plugin.DiscoveryOrigin.TrustsDeclaredCapabilities() {
 		declared := plugin.Manifest.GetDeclaredCapabilities()
 		for _, host := range declared.GetDeclaredNetworkHosts() {
 			parts = append(parts, "host:"+host)

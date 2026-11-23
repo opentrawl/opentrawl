@@ -15,6 +15,7 @@ if firstCommandLineArgument == "--cli" {
 
 if URL(fileURLWithPath: commandLineArguments[0]).lastPathComponent == "trawl"
   || firstCommandLineArgument == "__trawlkit_wire"
+  || firstCommandLineArgument == "__trawlkit_plugin_worker"
 {
   exit(OpenTrawlRunCommandLine(CommandLine.argc, CommandLine.unsafeArgv))
 }

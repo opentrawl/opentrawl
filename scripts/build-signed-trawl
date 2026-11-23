@@ -45,10 +45,3 @@ rewrite_and_sign() {
 }
 
 rewrite_and_sign "$output"
-
-plugins_dir="$(dirname "$output")/plugins"
-"$repo_root/scripts/build-bundled-plugins" --output-dir "$plugins_dir"
-while IFS= read -r plugin_binary; do
-  chmod +x "$plugin_binary"
-  rewrite_and_sign "$plugin_binary"
-done < <(find "$plugins_dir" -mindepth 1 -maxdepth 1 -type f -name 'trawl-*' | sort)

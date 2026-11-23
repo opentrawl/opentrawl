@@ -63,6 +63,7 @@ cmp "$expected_layout" "$mount/.DS_Store"
 cmp "$expected_background" "$mount/.background/background.png"
 [[ -x "$app/Contents/MacOS/Trawl" && -x "$cli" ]]
 [[ -L "$cli" && "$(readlink "$cli")" == "../MacOS/Trawl" ]]
+[[ ! -e "$app/Contents/Helpers/plugins" ]]
 [[ -d "$app/Contents/Frameworks/Sparkle.framework" ]]
 
 [[ "$(plutil -extract CFBundleIdentifier raw -o - "$info")" == "org.opentrawl.trawl" ]]
@@ -110,6 +111,10 @@ done < <(otool -L "$app/Contents/MacOS/Trawl" | awk 'NR > 1 { print $1 }')
 version="$(plutil -extract CFBundleShortVersionString raw -o - "$info")"
 [[ "$("$cli" --version)" == "$version" ]]
 "$cli" --help >/dev/null
+plugin_verify_state="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-verify-plugins.XXXXXX")"
+OPENTRAWL_STATE_ROOT="$plugin_verify_state" "$cli" plugin list >/dev/null
+OPENTRAWL_STATE_ROOT="$plugin_verify_state" "$cli" status money >/dev/null
+/bin/rm -rf "$plugin_verify_state"
 
 minimum="$(plutil -extract LSMinimumSystemVersion raw -o - "$info")"
 minos="$(xcrun vtool -show-build "$app/Contents/MacOS/Trawl" | awk '$1 == "minos" { print $2 }')"

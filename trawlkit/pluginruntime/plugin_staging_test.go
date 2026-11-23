@@ -1,12 +1,17 @@
 package pluginruntime
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
+	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -135,5 +140,92 @@ func TestBundledReadPathResolutionHandlesDirectoriesFilesAndConfigFields(t *test
 	}
 	if len(cfgDirs) != 1 || cfgDirs[0] != sourceDir {
 		t.Fatalf("unexpected config dirs: %v", cfgDirs)
+	}
+}
+
+type minimalBundledMultiCallTestTrawler struct{}
+
+func (*minimalBundledMultiCallTestTrawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
+	return trawlkit.RegisteredTrawlerDeclaration{
+		RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity("money"),
+		RegisteredTrawlerCommandName: "money",
+		RegisteredTrawlerDisplayName: "Money",
+		RegisteredTrawlerBranding: &federation.TrawlerBranding{
+			SymbolName:  "banknote.fill",
+			AccentColor: "#0A9A63",
+		},
+		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE,
+		RegisteredTrawlerPrivacyBoundary: control.Privacy{
+			Reads:           "Local archive.",
+			LeavesMachine:   "Nothing.",
+			NetworkRequests: "None.",
+		},
+	}
+}
+
+func (*minimalBundledMultiCallTestTrawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {
+	return nil
+}
+
+func (*minimalBundledMultiCallTestTrawler) TrawlerCommands() []trawlkit.TrawlerCommand {
+	return []trawlkit.TrawlerCommand{{
+		SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS,
+		TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand,
+	}}
+}
+
+func (*minimalBundledMultiCallTestTrawler) Status(context.Context, *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
+	return &status.TrawlerStatusResponse{}, nil
+}
+
+func TestLoadBundledMultiCallPluginsConfiguresWorkerArgsAndOriginWithoutHashingByDefault(t *testing.T) {
+	stateRoot := t.TempDir()
+	registrations := []BundledMultiCallPluginRegistration{{
+		PluginIdentifier: "money",
+		Factory:          func() trawlkit.Trawler { return &minimalBundledMultiCallTestTrawler{} },
+	}}
+
+	fast := LoadBundledMultiCallPlugins(stateRoot, registrations, false)
+	if len(fast) != 1 {
+		t.Fatalf("got %d bundled plugins, want 1", len(fast))
+	}
+	if fast[0].DiscoveryError != nil {
+		t.Fatalf("unexpected discovery error: %v", fast[0].DiscoveryError)
+	}
+	if fast[0].DiscoveryOrigin != PluginDiscoveryOriginBundledMultiCall || fast[0].DiscoveryOrigin.Label() != "bundled" {
+		t.Fatalf("unexpected discovery origin: %v (%q)", fast[0].DiscoveryOrigin, fast[0].DiscoveryOrigin.Label())
+	}
+	if fast[0].ExecutableSHA256 != "" {
+		t.Fatalf("expected empty sha256 when computeExecutableSHA256=false, got %q", fast[0].ExecutableSHA256)
+	}
+	if len(fast[0].ExecutableArgs) != 2 ||
+		fast[0].ExecutableArgs[0] != trawlkit.HiddenBundledPluginWorkerSubcommand ||
+		fast[0].ExecutableArgs[1] != "money" {
+		t.Fatalf("unexpected multi-call worker args: %v", fast[0].ExecutableArgs)
+	}
+
+	withHash := LoadBundledMultiCallPlugins(stateRoot, registrations, true)
+	if len(withHash) != 1 || len(withHash[0].ExecutableSHA256) != 64 {
+		t.Fatalf("expected 64-char sha256 when computeExecutableSHA256=true, got %+v", withHash)
+	}
+}
+
+func TestValidateDiscoveredPluginIdentityRejectsReservedBundledPluginCollision(t *testing.T) {
+	reserved := map[string]struct{}{
+		"imessage": {},
+		"money":    {},
+		"notes":    {},
+		"telegram": {},
+		"twitter":  {},
+		"whatsapp": {},
+	}
+	err := validateDiscoveredPluginIdentity(
+		"money",
+		externalPluginCandidate{expectedPluginID: "money", discoveryOrigin: PluginDiscoveryOriginStagedExternal},
+		reserved,
+		map[string]struct{}{},
+	)
+	if err == nil || !strings.Contains(err.Error(), "collides") {
+		t.Fatalf("expected collision error for reserved bundled plugin id, got: %v", err)
 	}
 }

@@ -27,23 +27,190 @@ const (
 	pluginManifestCacheDirectory  = ".manifest-cache"
 )
 
-// DiscoveredExternalPlugin holds one discovered standalone plugin executable
-// together with its verified manifest, trust policy, and ready-to-use adapter.
-type DiscoveredExternalPlugin struct {
-	PluginIdentifier    string
-	ExecutablePath      string
-	ExecutableSHA256    string
-	IsBundledFirstParty bool
-	Manifest            *plugincontract.PluginManifestResponse
-	TrustRecord         *plugincontract.PluginTrustRecord
-	Trawler             trawlkit.Trawler
-	DiscoveryError      error
+// PluginDiscoveryOrigin identifies how a sandboxed plugin was loaded and which
+// capability approval policy applies to it.
+type PluginDiscoveryOrigin int
+
+const (
+	// PluginDiscoveryOriginStagedExternal represents a standalone external plugin
+	// installed under <stateRoot>/plugins/<id>/staged.bin with a SHA-256-pinned
+	// trust.pb record.
+	PluginDiscoveryOriginStagedExternal PluginDiscoveryOrigin = iota
+	// PluginDiscoveryOriginBundledMultiCall represents a first-party plugin
+	// compiled into the host trawl binary and executed inside Seatbelt via
+	// HiddenBundledPluginWorkerSubcommand.
+	PluginDiscoveryOriginBundledMultiCall
+	// PluginDiscoveryOriginEnvironmentDirectory represents a standalone external
+	// plugin discovered via the OPENTRAWL_PLUGIN_DIRS environment variable.
+	PluginDiscoveryOriginEnvironmentDirectory
+)
+
+// Label returns the short human-readable origin label shown by `trawl plugin list`.
+func (origin PluginDiscoveryOrigin) Label() string {
+	switch origin {
+	case PluginDiscoveryOriginBundledMultiCall:
+		return "bundled"
+	case PluginDiscoveryOriginEnvironmentDirectory:
+		return "external"
+	default:
+		return "staged"
+	}
 }
 
-// DiscoverExternalPlugins locates bundled first-party plugin executables and
-// user-installed staged plugins under stateRoot, probes and caches manifests
-// under a zero-privilege Seatbelt sandbox, and rejects identifiers that collide
-// with reservedBuiltInIDs.
+// TrustsDeclaredCapabilities reports whether the host grants capabilities
+// declared by the plugin manifest without requiring a separate staged trust.pb
+// approval record.
+func (origin PluginDiscoveryOrigin) TrustsDeclaredCapabilities() bool {
+	return origin == PluginDiscoveryOriginBundledMultiCall ||
+		origin == PluginDiscoveryOriginEnvironmentDirectory
+}
+
+// BundledMultiCallPluginRegistration registers one first-party plugin compiled
+// into the host trawl executable and run out-of-process inside Seatbelt.
+type BundledMultiCallPluginRegistration struct {
+	PluginIdentifier string
+	Factory          func() trawlkit.Trawler
+}
+
+// DiscoveredExternalPlugin holds one loaded sandboxed plugin (either a bundled
+// multi-call first-party plugin or a standalone external executable) together
+// with its verified manifest, trust policy, and ready-to-use adapter.
+type DiscoveredExternalPlugin struct {
+	PluginIdentifier string
+	ExecutablePath   string
+	ExecutableArgs   []string
+	ExecutableSHA256 string
+	DiscoveryOrigin  PluginDiscoveryOrigin
+	Manifest         *plugincontract.PluginManifestResponse
+	TrustRecord      *plugincontract.PluginTrustRecord
+	Trawler          trawlkit.Trawler
+	DiscoveryError   error
+}
+
+// LoadBundledMultiCallPlugins builds in-process manifests and sandboxed
+// multi-call worker adapters for first-party plugins compiled into the host
+// trawl binary. Each plugin still runs out-of-process inside the exact same
+// Seatbelt sandbox, capability policy, Keychain secret broker, and loopback
+// HTTP allowlist proxy as standalone external plugins.
+func LoadBundledMultiCallPlugins(
+	stateRoot string,
+	registrations []BundledMultiCallPluginRegistration,
+	computeExecutableSHA256 bool,
+) []DiscoveredExternalPlugin {
+	if len(registrations) == 0 {
+		return nil
+	}
+	resolvedStateRoot, err := trawlkit.ResolveStateRoot(stateRoot)
+	if err != nil {
+		resolvedStateRoot = ""
+	}
+	exePath, exeErr := os.Executable()
+	canonicalExePath := ""
+	if exeErr == nil {
+		canonicalExePath = canonicalizeExecutablePath(exePath)
+	}
+	executableSHA256 := ""
+	if computeExecutableSHA256 && canonicalExePath != "" {
+		if digestHex, hashErr := computeFileSHA256Hex(canonicalExePath); hashErr == nil {
+			executableSHA256 = digestHex
+		}
+	}
+
+	discovered := make([]DiscoveredExternalPlugin, 0, len(registrations))
+	for _, registration := range registrations {
+		discovered = append(discovered, loadBundledMultiCallPlugin(
+			resolvedStateRoot,
+			canonicalExePath,
+			executableSHA256,
+			exeErr,
+			registration,
+		))
+	}
+	return discovered
+}
+
+func loadBundledMultiCallPlugin(
+	resolvedStateRoot string,
+	canonicalExePath string,
+	executableSHA256 string,
+	exeErr error,
+	registration BundledMultiCallPluginRegistration,
+) DiscoveredExternalPlugin {
+	expectedID := strings.TrimSpace(registration.PluginIdentifier)
+	if exeErr != nil || canonicalExePath == "" {
+		return DiscoveredExternalPlugin{
+			PluginIdentifier: expectedID,
+			DiscoveryOrigin:  PluginDiscoveryOriginBundledMultiCall,
+			DiscoveryError:   fmt.Errorf("resolve host trawl executable for bundled plugin %q: %w", expectedID, exeErr),
+		}
+	}
+	if registration.Factory == nil {
+		return DiscoveredExternalPlugin{
+			PluginIdentifier: expectedID,
+			ExecutablePath:   canonicalExePath,
+			ExecutableSHA256: executableSHA256,
+			DiscoveryOrigin:  PluginDiscoveryOriginBundledMultiCall,
+			DiscoveryError:   fmt.Errorf("bundled plugin %q factory is nil", expectedID),
+		}
+	}
+	manifestResp, err := trawlkit.BuildTrawlerPluginManifest(registration.Factory())
+	if err != nil {
+		return DiscoveredExternalPlugin{
+			PluginIdentifier: expectedID,
+			ExecutablePath:   canonicalExePath,
+			ExecutableSHA256: executableSHA256,
+			DiscoveryOrigin:  PluginDiscoveryOriginBundledMultiCall,
+			DiscoveryError:   err,
+		}
+	}
+	pluginID := trawlkit.RegisteredTrawlerIdentityText(manifestResp.GetRegisteredTrawlerManifest().GetRegisteredTrawler())
+	if err := secrets.ValidatePluginIdentifier(pluginID); err != nil {
+		return DiscoveredExternalPlugin{
+			PluginIdentifier: pluginID,
+			ExecutablePath:   canonicalExePath,
+			ExecutableSHA256: executableSHA256,
+			DiscoveryOrigin:  PluginDiscoveryOriginBundledMultiCall,
+			Manifest:         manifestResp,
+			DiscoveryError:   fmt.Errorf("invalid bundled plugin identity: %w", err),
+		}
+	}
+	if expectedID != "" && expectedID != pluginID {
+		return DiscoveredExternalPlugin{
+			PluginIdentifier: pluginID,
+			ExecutablePath:   canonicalExePath,
+			ExecutableSHA256: executableSHA256,
+			DiscoveryOrigin:  PluginDiscoveryOriginBundledMultiCall,
+			Manifest:         manifestResp,
+			DiscoveryError:   fmt.Errorf("bundled plugin registration %q does not match manifest identity %q", expectedID, pluginID),
+		}
+	}
+	trustRecord := loadOptionalPluginTrustRecord(resolvedStateRoot, pluginID)
+	workerArgs := []string{trawlkit.HiddenBundledPluginWorkerSubcommand, pluginID}
+	adapter := NewExternalPluginTrawler(ExternalPluginTrawlerConfig{
+		PluginIdentifier: pluginID,
+		ExecutablePath:   canonicalExePath,
+		ExecutableArgs:   workerArgs,
+		ExecutableSHA256: executableSHA256,
+		DiscoveryOrigin:  PluginDiscoveryOriginBundledMultiCall,
+		Manifest:         manifestResp,
+		TrustRecord:      trustRecord,
+	})
+	return DiscoveredExternalPlugin{
+		PluginIdentifier: pluginID,
+		ExecutablePath:   canonicalExePath,
+		ExecutableArgs:   workerArgs,
+		ExecutableSHA256: executableSHA256,
+		DiscoveryOrigin:  PluginDiscoveryOriginBundledMultiCall,
+		Manifest:         manifestResp,
+		TrustRecord:      trustRecord,
+		Trawler:          adapter,
+	}
+}
+
+// DiscoverExternalPlugins locates standalone external plugin executables from
+// OPENTRAWL_PLUGIN_DIRS and user-installed staged plugins under stateRoot,
+// probes and caches manifests under a zero-privilege Seatbelt sandbox, and
+// rejects identifiers that collide with reservedBuiltInIDs.
 func DiscoverExternalPlugins(
 	ctx context.Context,
 	stateRoot string,
@@ -75,10 +242,10 @@ func DiscoverExternalPlugins(
 }
 
 type externalPluginCandidate struct {
-	expectedPluginID    string
-	executablePath      string
-	isBundledFirstParty bool
-	trustRecordPath     string
+	expectedPluginID string
+	executablePath   string
+	discoveryOrigin  PluginDiscoveryOrigin
+	trustRecordPath  string
 }
 
 func collectExternalPluginCandidates(stateRoot string) []externalPluginCandidate {
@@ -97,11 +264,11 @@ func collectExternalPluginCandidates(stateRoot string) []externalPluginCandidate
 		candidates = append(candidates, candidate)
 	}
 
-	for _, dir := range bundledPluginSearchDirectories() {
-		for _, execPath := range scanBundledPluginDirectory(dir) {
+	for _, dir := range environmentPluginSearchDirectories() {
+		for _, execPath := range scanExternalPluginDirectory(dir) {
 			addCandidate(externalPluginCandidate{
-				executablePath:      execPath,
-				isBundledFirstParty: true,
+				executablePath:  execPath,
+				discoveryOrigin: PluginDiscoveryOriginEnvironmentDirectory,
 			})
 		}
 	}
@@ -120,57 +287,42 @@ func collectExternalPluginCandidates(stateRoot string) []externalPluginCandidate
 				continue
 			}
 			addCandidate(externalPluginCandidate{
-				expectedPluginID:    pluginID,
-				executablePath:      stagedPath,
-				isBundledFirstParty: false,
-				trustRecordPath:     filepath.Join(pluginsDir, pluginID, pluginTrustRecordFilename),
+				expectedPluginID: pluginID,
+				executablePath:   stagedPath,
+				discoveryOrigin:  PluginDiscoveryOriginStagedExternal,
+				trustRecordPath:  filepath.Join(pluginsDir, pluginID, pluginTrustRecordFilename),
 			})
 		}
 	}
 	return candidates
 }
 
-func bundledPluginSearchDirectories() []string {
+func environmentPluginSearchDirectories() []string {
+	envDirs := strings.TrimSpace(os.Getenv(pluginDirsEnvironmentVariable))
+	if envDirs == "" {
+		return nil
+	}
 	var dirs []string
 	seen := make(map[string]struct{})
-	addDir := func(raw string) {
+	for _, raw := range filepath.SplitList(envDirs) {
 		trimmed := strings.TrimSpace(raw)
 		if trimmed == "" {
-			return
+			continue
 		}
 		abs, err := filepath.Abs(trimmed)
 		if err != nil {
-			return
+			continue
 		}
 		if _, dup := seen[abs]; dup {
-			return
+			continue
 		}
 		seen[abs] = struct{}{}
 		dirs = append(dirs, abs)
 	}
-
-	if envDirs := strings.TrimSpace(os.Getenv(pluginDirsEnvironmentVariable)); envDirs != "" {
-		for _, dir := range filepath.SplitList(envDirs) {
-			addDir(dir)
-		}
-	}
-
-	if exePath, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exePath)
-		addDir(filepath.Join(exeDir, "plugins"))
-		addDir(filepath.Join(exeDir, "..", "Helpers", "plugins"))
-		addDir(exeDir)
-		if resolvedExe, resolveErr := filepath.EvalSymlinks(exePath); resolveErr == nil {
-			resolvedDir := filepath.Dir(resolvedExe)
-			addDir(filepath.Join(resolvedDir, "plugins"))
-			addDir(filepath.Join(resolvedDir, "..", "Helpers", "plugins"))
-			addDir(resolvedDir)
-		}
-	}
 	return dirs
 }
 
-func scanBundledPluginDirectory(dir string) []string {
+func scanExternalPluginDirectory(dir string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
@@ -226,13 +378,14 @@ func loadExternalPluginCandidate(
 	}
 
 	var trustRecord *plugincontract.PluginTrustRecord
-	if !candidate.isBundledFirstParty {
+	if candidate.discoveryOrigin == PluginDiscoveryOriginStagedExternal {
 		loadedTrust, trustErr := loadAndVerifyPluginTrustRecord(candidate.trustRecordPath, candidate.expectedPluginID, digestHex)
 		if trustErr != nil {
 			return &DiscoveredExternalPlugin{
 				PluginIdentifier: candidate.expectedPluginID,
 				ExecutablePath:   candidate.executablePath,
 				ExecutableSHA256: digestHex,
+				DiscoveryOrigin:  candidate.discoveryOrigin,
 				DiscoveryError:   trustErr,
 			}
 		}
@@ -244,46 +397,46 @@ func loadExternalPluginCandidate(
 	manifestResp, err := loadOrProbePluginManifest(ctx, stateRoot, candidate.executablePath, digestHex)
 	if err != nil {
 		return &DiscoveredExternalPlugin{
-			PluginIdentifier:    candidate.expectedPluginID,
-			ExecutablePath:      candidate.executablePath,
-			ExecutableSHA256:    digestHex,
-			IsBundledFirstParty: candidate.isBundledFirstParty,
-			DiscoveryError:      err,
+			PluginIdentifier: candidate.expectedPluginID,
+			ExecutablePath:   candidate.executablePath,
+			ExecutableSHA256: digestHex,
+			DiscoveryOrigin:  candidate.discoveryOrigin,
+			DiscoveryError:   err,
 		}
 	}
 
 	pluginID := trawlkit.RegisteredTrawlerIdentityText(manifestResp.GetRegisteredTrawlerManifest().GetRegisteredTrawler())
 	if err := validateDiscoveredPluginIdentity(pluginID, candidate, reservedBuiltInIDs, seenPluginIDs); err != nil {
 		return &DiscoveredExternalPlugin{
-			PluginIdentifier:    pluginID,
-			ExecutablePath:      candidate.executablePath,
-			ExecutableSHA256:    digestHex,
-			IsBundledFirstParty: candidate.isBundledFirstParty,
-			Manifest:            manifestResp,
-			DiscoveryError:      err,
+			PluginIdentifier: pluginID,
+			ExecutablePath:   candidate.executablePath,
+			ExecutableSHA256: digestHex,
+			DiscoveryOrigin:  candidate.discoveryOrigin,
+			Manifest:         manifestResp,
+			DiscoveryError:   err,
 		}
 	}
 
-	if candidate.isBundledFirstParty && trustRecord == nil {
+	if candidate.discoveryOrigin != PluginDiscoveryOriginStagedExternal && trustRecord == nil {
 		trustRecord = loadOptionalPluginTrustRecord(stateRoot, pluginID)
 	}
 
 	adapter := NewExternalPluginTrawler(ExternalPluginTrawlerConfig{
-		PluginIdentifier:    pluginID,
-		ExecutablePath:      candidate.executablePath,
-		ExecutableSHA256:    digestHex,
-		IsBundledFirstParty: candidate.isBundledFirstParty,
-		Manifest:            manifestResp,
-		TrustRecord:         trustRecord,
+		PluginIdentifier: pluginID,
+		ExecutablePath:   candidate.executablePath,
+		ExecutableSHA256: digestHex,
+		DiscoveryOrigin:  candidate.discoveryOrigin,
+		Manifest:         manifestResp,
+		TrustRecord:      trustRecord,
 	})
 	return &DiscoveredExternalPlugin{
-		PluginIdentifier:    pluginID,
-		ExecutablePath:      candidate.executablePath,
-		ExecutableSHA256:    digestHex,
-		IsBundledFirstParty: candidate.isBundledFirstParty,
-		Manifest:            manifestResp,
-		TrustRecord:         trustRecord,
-		Trawler:             adapter,
+		PluginIdentifier: pluginID,
+		ExecutablePath:   candidate.executablePath,
+		ExecutableSHA256: digestHex,
+		DiscoveryOrigin:  candidate.discoveryOrigin,
+		Manifest:         manifestResp,
+		TrustRecord:      trustRecord,
+		Trawler:          adapter,
 	}
 }
 
