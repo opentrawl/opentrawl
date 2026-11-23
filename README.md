@@ -6,6 +6,8 @@ Your AI does not know your history. Every time you switch models or start a new 
 
 OpenTrawl fixes that. It keeps a private, searchable archive of your apps on your Mac so any AI you use can answer questions from your real life and link straight back to the original message, email, note, or transaction.
 
+![OpenTrawl Mac app showing 11 connected sources](docs/images/app-home.png)
+
 ## Get started on Mac
 
 1. **Download [OpenTrawl for Mac](https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg)** and drag it to Applications.
@@ -14,7 +16,7 @@ OpenTrawl fixes that. It keeps a private, searchable archive of your apps on you
 
 Or paste this directly into your AI:
 
-> Use my local OpenTrawl archive at `/Applications/OpenTrawl.app/Contents/Helpers/trawl`. Start by running it with no arguments and with `--help`, then run a small read-only search and open one result. Use normal text output and do not run `update`, install plugins, or change any files or configuration unless I ask.
+> Use my local OpenTrawl archive at `/Applications/OpenTrawl.app/Contents/Helpers/trawl`. Start by running it with no arguments and with `--help`, then run a small read-only search and open one result to show me how it works. Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl more often (for example by adding a short instruction to my `AGENTS.md` or setting up a skill). Do not run `update`, install plugins, or change any files or configuration unless I ask.
 
 Your agent inspects `trawl` on its own and starts answering questions with links back to the original records.
 
@@ -26,6 +28,9 @@ Your agent inspects `trawl` on its own and starts answering questions with links
 - *"Did I pay that invoice, and which account did it come from?"*
 
 Because your archive stays on your disk in standard SQLite files, you can point Claude, Codex, Gemini, OpenClaw, Hermes, or a local model at the same history anytime.
+
+![Searching across Telegram, Notes, Gmail, WhatsApp, iMessage, and Money in OpenTrawl](docs/images/app-search.png)
+*Real Mac app render with anonymised example data.*
 
 ## What it connects to
 
