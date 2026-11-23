@@ -5,16 +5,28 @@ import TrawlClient
 public struct SearchStateInput: Sendable, Equatable {
   public let query: String
   public let registeredTrawler: RegisteredTrawlerIdentity?
+  public let earliestMatchingArchiveRecordTimeInclusive: Date?
+  public let latestMatchingArchiveRecordTimeInclusive: Date?
   public let limit: UInt32
 
   public init(
     query: String,
     registeredTrawler: RegisteredTrawlerIdentity?,
+    earliestMatchingArchiveRecordTimeInclusive: Date? = nil,
+    latestMatchingArchiveRecordTimeInclusive: Date? = nil,
     limit: UInt32
   ) {
     self.query = query
     self.registeredTrawler = registeredTrawler
+    self.earliestMatchingArchiveRecordTimeInclusive = earliestMatchingArchiveRecordTimeInclusive
+    self.latestMatchingArchiveRecordTimeInclusive = latestMatchingArchiveRecordTimeInclusive
     self.limit = limit
+  }
+
+  public var hasSearchCriteria: Bool {
+    !query.isEmpty
+      || earliestMatchingArchiveRecordTimeInclusive != nil
+      || latestMatchingArchiveRecordTimeInclusive != nil
   }
 }
 
@@ -133,32 +145,40 @@ public final class SearchModel {
 
   public func search(
     _ rawQuery: String,
-    registeredTrawler: RegisteredTrawlerIdentity?
+    registeredTrawler: RegisteredTrawlerIdentity?,
+    earliestMatchingArchiveRecordTimeInclusive: Date? = nil,
+    latestMatchingArchiveRecordTimeInclusive: Date? = nil
   ) async {
     generation &+= 1
-    openGeneration &+= 1
     let token = generation
     let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !query.isEmpty else {
+    let input = SearchStateInput(
+      query: query,
+      registeredTrawler: registeredTrawler,
+      earliestMatchingArchiveRecordTimeInclusive: earliestMatchingArchiveRecordTimeInclusive,
+      latestMatchingArchiveRecordTimeInclusive: latestMatchingArchiveRecordTimeInclusive,
+      limit: TrawlArchiveSearchRequest.defaultMaximumReturnedSearchMatchCount
+    )
+    guard input.hasSearchCriteria else {
       clearCommittedSearch()
       return
     }
 
     timedOutLocally = false
     phase = .loading
-    let input = SearchStateInput(
-      query: query,
-      registeredTrawler: registeredTrawler,
-      limit: TrawlArchiveSearchRequest.defaultMaximumReturnedSearchMatchCount
-    )
     observe(.loading(input))
 
     do {
       try await Task.sleep(for: debounce)
       guard token == generation else { return }
-      let response = try await searchWithinLimit(
-        query,
-        registeredTrawler: registeredTrawler)
+      let request = TrawlArchiveSearchRequest(
+        searchQueryText: query,
+        onlySearchThisRegisteredTrawler: registeredTrawler,
+        earliestMatchingArchiveRecordTimeInclusive: earliestMatchingArchiveRecordTimeInclusive,
+        latestMatchingArchiveRecordTimeInclusive: latestMatchingArchiveRecordTimeInclusive,
+        maximumReturnedSearchMatchCount: input.limit
+      )
+      let response = try await searchWithinLimit(request)
       observe(.response(input, response))
       try Task.checkCancellation()
       guard token == generation else { return }
@@ -323,16 +343,13 @@ public final class SearchModel {
   }
 
   private func searchWithinLimit(
-    _ query: String,
-    registeredTrawler: RegisteredTrawlerIdentity?
+    _ request: TrawlArchiveSearchRequest
   ) async throws -> FederatedTrawlerSearchOperation {
     let client = client
     let waitLimit = waitLimit
     return try await withThrowingTaskGroup(of: FederatedTrawlerSearchOperation.self) { group in
       group.addTask {
-        try await client.search(
-          query,
-          registeredTrawler: registeredTrawler)
+        try await client.search(request)
       }
       group.addTask {
         try await Task.sleep(for: waitLimit)
@@ -361,7 +378,18 @@ public final class SearchInteraction {
     }
   }
   public private(set) var registeredTrawler: RegisteredTrawlerIdentity?
+  public private(set) var earliestMatchingArchiveRecordTimeInclusive: Date?
+  public private(set) var latestMatchingArchiveRecordTimeInclusive: Date?
   public var selectedSearchMatchIdentifier: SearchMatch.ID?
+
+  public var hasActiveDateRange: Bool {
+    earliestMatchingArchiveRecordTimeInclusive != nil
+      || latestMatchingArchiveRecordTimeInclusive != nil
+  }
+
+  public var hasSearchCriteria: Bool {
+    !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasActiveDateRange
+  }
 
   public init(model: SearchModel, registeredTrawler: RegisteredTrawlerIdentity?) {
     self.model = model
@@ -369,13 +397,44 @@ public final class SearchInteraction {
   }
 
   public func changeScope(to registeredTrawler: RegisteredTrawlerIdentity?) {
+    guard registeredTrawler != self.registeredTrawler else { return }
+    self.registeredTrawler = registeredTrawler
+    invalidateInput()
+  }
+
+  public func changeDateRange(
+    earliestInclusive: Date?,
+    latestInclusive: Date?
+  ) {
     guard
-      registeredTrawler != self.registeredTrawler
+      earliestInclusive != earliestMatchingArchiveRecordTimeInclusive
+        || latestInclusive != latestMatchingArchiveRecordTimeInclusive
     else {
       return
     }
-    self.registeredTrawler = registeredTrawler
+    earliestMatchingArchiveRecordTimeInclusive = earliestInclusive
+    latestMatchingArchiveRecordTimeInclusive = latestInclusive
     invalidateInput()
+  }
+
+  public func applyScopeAndDateRange(
+    registeredTrawler: RegisteredTrawlerIdentity?,
+    earliestInclusive: Date?,
+    latestInclusive: Date?
+  ) {
+    let changed =
+      registeredTrawler != self.registeredTrawler
+      || earliestInclusive != earliestMatchingArchiveRecordTimeInclusive
+      || latestInclusive != latestMatchingArchiveRecordTimeInclusive
+    guard changed else { return }
+    self.registeredTrawler = registeredTrawler
+    earliestMatchingArchiveRecordTimeInclusive = earliestInclusive
+    latestMatchingArchiveRecordTimeInclusive = latestInclusive
+    invalidateInput()
+  }
+
+  public func clearDateRange() {
+    changeDateRange(earliestInclusive: nil, latestInclusive: nil)
   }
 
   public func resultForReturn() -> SearchMatch? {

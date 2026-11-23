@@ -1,18 +1,92 @@
+import AppKit
 import Foundation
 import SwiftUI
 
 enum TrawlDesign {
-  static let defaultWindow = CGSize(width: 1200, height: 820)
-  static let minimumWindow = defaultWindow
-  static let maximumWindow = defaultWindow
-  static let onboardingWindow = defaultWindow
-  static let contentInset: CGFloat = 30
-  static let constellationInset: CGFloat = 12
+  static let defaultWindow = CGSize(width: 1_360, height: 860)
+  static let minimumWindow = CGSize(width: 1_200, height: 820)
+  static let onboardingWindow = CGSize(width: 1_200, height: 820)
+
+  static func clampedDefaultWindowSize(for visibleFrame: CGRect?) -> CGSize {
+    guard let visibleFrame else { return defaultWindow }
+    let width = min(defaultWindow.width, max(minimumWindow.width, visibleFrame.width - 24))
+    let height = min(defaultWindow.height, max(minimumWindow.height, visibleFrame.height - 24))
+    return CGSize(width: floor(width), height: floor(height))
+  }
+
+  enum Space {
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 14
+    static let lg: CGFloat = 20
+    static let xl: CGFloat = 34
+    static let xxl: CGFloat = 48
+  }
+
+  /// Three custom radii only: macOS draws window corners, native Capsule draws
+  /// filter chips, and 22.37% squircles draw app icons. Rows, rules, and match
+  /// diamonds stay square (0).
+  enum Radius {
+    static let control: CGFloat = 6
+    static let surface: CGFloat = 12
+    static let panel: CGFloat = 20
+    static let appIconFraction: CGFloat = 0.2237
+  }
+
+  enum Colors {
+    static let paper = dynamicColor(
+      light: NSColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.043, green: 0.055, blue: 0.075, alpha: 1.0)
+    )
+    static let surface = dynamicColor(
+      light: NSColor(srgbRed: 0.969, green: 0.969, blue: 0.969, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.075, green: 0.094, blue: 0.125, alpha: 1.0)
+    )
+    static let ink = dynamicColor(
+      light: NSColor(srgbRed: 0.063, green: 0.063, blue: 0.063, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.949, green: 0.957, blue: 0.973, alpha: 1.0)
+    )
+    static let mutedInk = dynamicColor(
+      light: NSColor(srgbRed: 0.435, green: 0.435, blue: 0.435, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.569, green: 0.600, blue: 0.659, alpha: 1.0)
+    )
+    static let hairline = dynamicColor(
+      light: NSColor(srgbRed: 0.863, green: 0.863, blue: 0.863, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.145, green: 0.173, blue: 0.220, alpha: 1.0)
+    )
+    static let matchRed = dynamicColor(
+      light: NSColor(srgbRed: 0.902, green: 0.200, blue: 0.137, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.941, green: 0.306, blue: 0.251, alpha: 1.0)
+    )
+    static let selectBlue = dynamicColor(
+      light: NSColor(srgbRed: 0.110, green: 0.275, blue: 0.839, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.310, green: 0.494, blue: 1.0, alpha: 1.0)
+    )
+    static let selectBlueSurface = dynamicColor(
+      light: NSColor(srgbRed: 0.110, green: 0.275, blue: 0.839, alpha: 0.10),
+      dark: NSColor(srgbRed: 0.310, green: 0.494, blue: 1.0, alpha: 0.18)
+    )
+    static let warningAmber = dynamicColor(
+      light: NSColor(srgbRed: 0.769, green: 0.482, blue: 0.0, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.941, green: 0.659, blue: 0.188, alpha: 1.0)
+    )
+
+    static func dynamicColor(light: NSColor, dark: NSColor) -> Color {
+      Color(
+        nsColor: NSColor(name: nil) { appearance in
+          let match = appearance.bestMatch(from: [.darkAqua, .aqua])
+          return match == .darkAqua ? dark : light
+        })
+    }
+  }
+
+  static let brandRed = Colors.matchRed
+  static let contentInset: CGFloat = Space.lg
   static let onboardingFooterHeight: CGFloat = 72
   static let onboardingTopInset: CGFloat = 76
   static let onboardingPageWidth: CGFloat = 920
   static let commandDemoPageWidth: CGFloat =
-    onboardingWindow.width - contentInset * 2
+    onboardingWindow.width - 30 * 2
   static let commandDemoTerminalHeight: CGFloat = 668
   static let commandDemoTerminalContentInset: CGFloat = 18
   static let commandDemoOutputFontSize: CGFloat = 18
@@ -20,49 +94,43 @@ enum TrawlDesign {
   static let onboardingCopyWidth: CGFloat = onboardingPageWidth
   static let returningFooterHeight: CGFloat = 28
   static let onboardingHeroIcon: CGFloat = 96
-  static let onboardingIntroSpacing: CGFloat = 14
+  static let onboardingIntroSpacing: CGFloat = Space.md
   static let onboardingElementSpacing: CGFloat = 12
   static let onboardingSectionSpacing: CGFloat = 24
-  static let onboardingBlockSpacing: CGFloat = 48
+  static let onboardingBlockSpacing: CGFloat = Space.xxl
   static let onboardingSubgroupSpacing: CGFloat = 18
   static let permissionStateSlotHeight: CGFloat = 56
   static let onboardingRowHeight: CGFloat = 36
-  static let searchResultsMinimumWidth: CGFloat = 360
-  static let searchRecordMinimumWidth: CGFloat = 400
-  static let searchResultsMaximumWidth: CGFloat = 460
-  static let searchWorkspaceMaximumWidth: CGFloat = 1_600
-  static let recordReadingWidth: CGFloat = 760
-  static let constellationMaximumWidth: CGFloat =
-    maximumWindow.width - constellationInset * 2
-  static let constellationMaximumHeight: CGFloat =
-    maximumWindow.height - returningFooterHeight - constellationInset * 2
-  static let constellationMaximumAspectRatio: CGFloat = 2.4
-  static let panelCornerRadius: CGFloat = 22
-  static let backgroundContentOpacity = 0.42
-  static let backgroundContentBlur: CGFloat = 4
-  static let modalVeilOpacity = 0.68
-  static let centreSize: CGFloat = 104
-  static let sourceGraphAnchorOffset: CGFloat = 27
 
-  static let brandRed = Color(red: 0.902, green: 0.2, blue: 0.137)
-  static let net = Color.primary.opacity(0.1)
-  static let spoke = Color.primary.opacity(0.18)
+  // Strata band geometry
+  static let strataRestingLaneMinimumHeight: CGFloat = 34
+  static let strataRestingLaneMaximumHeight: CGFloat = 50
+  static let strataLaneHeight: CGFloat = 26
+  static let strataSlimLaneHeight: CGFloat = 14
+  static let strataLabelColumnWidth: CGFloat = 156
+  static let strataCountColumnWidth: CGFloat = 94
+  static let strataUndatedColumnWidth: CGFloat = 28
+  static let strataFutureGutterWidth: CGFloat = 34
+  static let strataAxisHeight: CGFloat = 28
+  static let strataMinimumBottomSplitHeight: CGFloat = 400
+
+  // Search split geometry
+  static let searchResultsMinimumWidth: CGFloat = 380
+  static let searchRecordMinimumWidth: CGFloat = 420
+  static let searchResultsMaximumWidth: CGFloat = 490
+  static let searchWorkspaceMaximumWidth: CGFloat = 1_680
+  static let recordReadingWidth: CGFloat = 760
+  static let panelCornerRadius: CGFloat = Radius.panel
 
   enum Typography {
     static let pageTitle = Font.system(size: 24, weight: .semibold)
     static let sectionHeader = Font.system(size: 13, weight: .semibold)
     static let body = Font.system(size: 15, weight: .regular)
     static let meta = Font.system(size: 13, weight: .regular)
+    static let laneLabel = Font.system(size: 12.5, weight: .medium)
+    static let monoSmall = Font.system(size: 11.5, weight: .regular, design: .monospaced)
+    static let monoAxis = Font.system(size: 10.5, weight: .medium, design: .monospaced)
   }
-
-  static let meshSeed: UInt64 = {
-    let identity =
-      Bundle.main.object(forInfoDictionaryKey: "GitCommit") as? String
-      ?? "opentrawl"
-    return identity.utf8.reduce(0xcbf2_9ce4_8422_2325) { hash, byte in
-      (hash ^ UInt64(byte)) &* 0x100_0000_01b3
-    }
-  }()
 
   static func usesCompactSearchLayout(width: CGFloat) -> Bool {
     width < contentInset * 2 + searchResultsMinimumWidth + searchRecordMinimumWidth

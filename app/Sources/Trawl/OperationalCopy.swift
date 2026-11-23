@@ -73,7 +73,8 @@ enum OperationalCopy {
 
   enum Search {
     static func retainedResults(for phase: SearchPhase, query: String?) -> String? {
-      let previousSearch = query ?? "the previous search"
+      let trimmed = query?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let previousSearch = trimmed.isEmpty ? "the previous search" : trimmed
       return switch phase {
       case .loading:
         "Showing results for \(previousSearch) while searching."

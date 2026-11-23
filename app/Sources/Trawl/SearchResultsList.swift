@@ -30,36 +30,48 @@ struct SearchResultsList: View {
 
   var body: some View {
     GeometryReader { proxy in
-      ScrollView {
-        LazyVStack(spacing: 0) {
-          SearchResultsContext(
-            phase: phase,
-            resultCount: searchMatches.count,
-            resultLimit: resultLimit,
-            committedQuery: committedQuery
-          )
-          ForEach(searchMatches) { searchMatch in
-            Button {
-              selectedSearchMatchIdentifier = searchMatch.id
-              onOpen(searchMatch)
-            } label: {
-              SearchResultRow(
-                searchMatch: searchMatch,
-                title: title(searchMatch),
-                registeredTrawlerDisplayName: trawlerDisplayName(
-                  searchMatch.registeredTrawler),
-                showsTrawlerDisplayName: showsTrawlerDisplayName,
-                isSelected: selectedSearchMatchIdentifier == searchMatch.id
-              )
+      ScrollViewReader { scrollProxy in
+        ScrollView {
+          LazyVStack(spacing: 0) {
+            SearchResultsContext(
+              phase: phase,
+              resultCount: searchMatches.count,
+              resultLimit: resultLimit,
+              committedQuery: committedQuery
+            )
+            ForEach(searchMatches) { searchMatch in
+              Button {
+                selectedSearchMatchIdentifier = searchMatch.id
+                onOpen(searchMatch)
+              } label: {
+                SearchResultRow(
+                  searchMatch: searchMatch,
+                  title: title(searchMatch),
+                  registeredTrawlerDisplayName: trawlerDisplayName(
+                    searchMatch.registeredTrawler),
+                  showsTrawlerDisplayName: showsTrawlerDisplayName,
+                  isSelected: selectedSearchMatchIdentifier == searchMatch.id
+                )
+              }
+              .id(searchMatch.id)
+              .buttonStyle(.plain)
+              Rectangle()
+                .fill(TrawlDesign.Colors.hairline.opacity(0.75))
+                .frame(height: 0.5)
+                .padding(.leading, 44)
             }
-            .buttonStyle(.plain)
-            Divider()
+          }
+          .frame(
+            width: min(proxy.size.width, TrawlDesign.recordReadingWidth),
+            alignment: .leading
+          )
+        }
+        .onChange(of: selectedSearchMatchIdentifier) { _, selectedID in
+          guard let selectedID else { return }
+          withAnimation(.easeInOut(duration: 0.14)) {
+            scrollProxy.scrollTo(selectedID, anchor: .center)
           }
         }
-        .frame(
-          width: min(proxy.size.width, TrawlDesign.recordReadingWidth),
-          alignment: .leading
-        )
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -193,19 +205,21 @@ private struct SearchResultRow: View {
         }
       }
     }
-    .padding(.vertical, 7)
-    .padding(.horizontal, 10)
+    .padding(.vertical, 10)
+    .padding(.horizontal, 12)
+    .frame(minHeight: 68, alignment: .topLeading)
     .background(
-      isSelected ? TrawlDesign.brandRed.opacity(0.12) : .clear,
-      in: RoundedRectangle(cornerRadius: 8)
+      isSelected ? TrawlDesign.Colors.selectBlueSurface : .clear,
+      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control)
     )
     .overlay {
       if isSelected {
-        RoundedRectangle(cornerRadius: 8)
-          .stroke(TrawlDesign.brandRed.opacity(0.28), lineWidth: 1)
+        RoundedRectangle(cornerRadius: TrawlDesign.Radius.control)
+          .stroke(TrawlDesign.Colors.selectBlue.opacity(0.32), lineWidth: 1)
       }
     }
-    .padding(.horizontal, 5)
+    .padding(.horizontal, 6)
+    .padding(.vertical, 2)
     .contentShape(.rect)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)

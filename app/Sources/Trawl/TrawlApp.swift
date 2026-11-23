@@ -102,8 +102,8 @@ struct TrawlApp: App {
         openFullDiskAccess: delegate.requestFullDiskAccess
       )
       .frame(
-        width: TrawlDesign.defaultWindow.width,
-        height: TrawlDesign.defaultWindow.height
+        minWidth: TrawlDesign.minimumWindow.width,
+        minHeight: TrawlDesign.minimumWindow.height
       )
     }
     .defaultSize(
@@ -112,7 +112,7 @@ struct TrawlApp: App {
     )
     .defaultLaunchBehavior(launchInBackground ? .suppressed : .presented)
     .restorationBehavior(.disabled)
-    .windowResizability(.contentSize)
+    .windowResizability(.contentMinSize)
     .commands {
       CommandGroup(after: .appInfo) {
         CheckForUpdatesCommand(updates: delegate.updates)

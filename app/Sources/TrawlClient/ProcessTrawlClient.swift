@@ -118,11 +118,12 @@ public struct ProcessTrawlClient: TrawlClient {
     {
       arguments += ["--trawler", registeredTrawler.registeredTrawlerIdentity]
     }
+    let fractionalISO = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     if let earliestMatchingArchiveRecordTime = request.earliestMatchingArchiveRecordTimeInclusive {
-      arguments += ["--after", earliestMatchingArchiveRecordTime.ISO8601Format()]
+      arguments += ["--after", earliestMatchingArchiveRecordTime.formatted(fractionalISO)]
     }
     if let latestMatchingArchiveRecordTime = request.latestMatchingArchiveRecordTimeInclusive {
-      arguments += ["--before", latestMatchingArchiveRecordTime.ISO8601Format()]
+      arguments += ["--before", latestMatchingArchiveRecordTime.formatted(fractionalISO)]
     }
     arguments += ["--limit", String(request.maximumReturnedSearchMatchCount)]
     if !request.searchQueryText.isEmpty {

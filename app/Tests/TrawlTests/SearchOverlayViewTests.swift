@@ -5,13 +5,14 @@ import Testing
 
 @Suite(.serialized)
 struct SearchOverlayViewTests {
-  @Test func productUsesOneFixed1200By820Frame() {
-    let frame = CGSize(width: 1_200, height: 820)
+  @Test func mainWindowDefaultsTo1360By860With1200By820MinimumAndFixedOnboarding() {
+    let minimum = CGSize(width: 1_200, height: 820)
+    let defaultSize = CGSize(width: 1_360, height: 860)
 
-    #expect(TrawlDesign.defaultWindow == frame)
-    #expect(TrawlDesign.minimumWindow == frame)
-    #expect(TrawlDesign.maximumWindow == frame)
-    #expect(TrawlDesign.onboardingWindow == frame)
-    #expect(!TrawlDesign.usesCompactSearchLayout(width: frame.width))
+    #expect(TrawlDesign.defaultWindow == defaultSize)
+    #expect(TrawlDesign.minimumWindow == minimum)
+    #expect(TrawlDesign.onboardingWindow == minimum)
+    #expect(!TrawlDesign.usesCompactSearchLayout(width: minimum.width))
+    #expect(!TrawlDesign.usesCompactSearchLayout(width: defaultSize.width))
   }
 }

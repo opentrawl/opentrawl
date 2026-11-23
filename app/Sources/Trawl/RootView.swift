@@ -15,22 +15,10 @@ struct RootView: View {
   let terminalCommand: String
   let openFullDiskAccess: @MainActor () -> Void
 
-  private enum SearchWorkspaceVisibility: Equatable {
-    case notCreated
-    case presented
-    case hiddenPreservingWorkspace
-  }
-
   @State private var onboarding: OnboardingModel
   @State private var appInstallations: MacAppInstallations
   @State private var trawlerIconStore = TrawlerIconStore()
-  @State private var searchScope: RestingTrawler?
-  @State private var searchQuery = ""
-  @State private var searchWorkspaceVisibility: SearchWorkspaceVisibility = .notCreated
   @State private var searchFocusRequestToken = 0
-  @State private var constellationActivity: ConstellationActivity = .idle
-  @State private var constellationTrafficEvent: ConstellationTrafficEvent?
-  @State private var trafficClearTask: Task<Void, Never>?
   @State private var hasCopiedAIInstructions = false
   @State private var aiPromptCopyResetTask: Task<Void, Never>?
   @State private var hasCopiedTerminalCommand = false
@@ -68,36 +56,15 @@ struct RootView: View {
         CanvasBackground()
         if onboarding.isComplete {
           home
-            .opacity(isSearching ? 0.18 : 1)
-            .allowsHitTesting(!isSearching)
-            .accessibilityHidden(isSearching)
-          if hasSearchWorkspace {
-            SearchOverlay(
-              client: client,
-              scope: $searchScope,
-              initialQuery: searchQuery,
-              trawlerStatuses: model.trawlerStatuses.filter {
-                featureFlags.includes($0.id)
-              },
-              availableTrawlers: searchableHomeTrawlers,
-              focusRequestToken: searchFocusRequestToken,
-              onTrafficChange: presentTraffic,
-              onQueryChange: { searchQuery = $0 },
-              onDismiss: dismissSearch
-            )
-            .opacity(isSearching ? 1 : 0)
-            .allowsHitTesting(isSearching)
-            .accessibilityHidden(!isSearching)
-          }
           Button("") {
-            showSearch(scope: searchScope)
+            searchFocusRequestToken &+= 1
           }
           .keyboardShortcut("k", modifiers: .command)
           .opacity(0)
           .frame(width: 0, height: 0)
           .accessibilityHidden(true)
           Button("") {
-            showSearch(scope: searchScope)
+            searchFocusRequestToken &+= 1
           }
           .keyboardShortcut("f", modifiers: .command)
           .opacity(0)
@@ -232,7 +199,7 @@ struct RootView: View {
           openFullDiskAccess()
         }
         .padding(.horizontal, TrawlDesign.contentInset)
-        .padding(.top, TrawlDesign.contentInset)
+        .padding(.top, TrawlDesign.Space.md)
       }
       if case .loading = model.phase, model.trawlerStatuses.isEmpty {
         ProgressView("Loading apps")
@@ -245,19 +212,20 @@ struct RootView: View {
           Task { await model.refresh() }
         }
       } else {
-        ConstellationView(
+        StrataWorkspaceView(
+          client: client,
           trawlers: homeTrawlers,
-          trawlerDetailOverrides: HomeTrawlerPresentation.detailOverrides(
+          searchableTrawlers: searchableHomeTrawlers,
+          trawlerStatuses: model.trawlerStatuses.filter {
+            featureFlags.includes($0.id)
+          },
+          detailOverrides: HomeTrawlerPresentation.detailOverrides(
             for: homeTrawlers,
             appInstallations: appInstallations
           ),
-          disabledTrawlers: comingSoonTrawlers,
-          activity: homeConstellationActivity,
-          trafficEvent: constellationTrafficEvent,
-          onSelectEverything: { showSearch(scope: nil) },
-          onSelectTrawler: { showSearch(scope: $0) }
+          updatingTrawlers: activelyUpdatingTrawlers,
+          focusRequestToken: searchFocusRequestToken
         )
-        .padding(TrawlDesign.constellationInset)
       }
     }
   }
@@ -270,55 +238,21 @@ struct RootView: View {
     homeTrawlers.filter { $0.state != .comingSoon }
   }
 
-  /// While an update runs, the constellation animates traffic to the
-  /// trawlers that are still updating.
-  private var homeConstellationActivity: ConstellationActivity {
-    guard model.isUpdating, case .idle = constellationActivity else {
-      return constellationActivity
-    }
-    let updatingSourceIDs = Set(
+  private var activelyUpdatingTrawlers: Set<RegisteredTrawlerIdentity> {
+    guard model.isUpdating else { return [] }
+    return Set(
       model.updateProgress.compactMap { registeredTrawler, progressState in
         switch progressState {
         case .waiting, .building, .finalising:
-          registeredTrawler.registeredTrawlerIdentity
+          registeredTrawler
         case .finished, .failed:
           nil
         }
       })
-    guard !updatingSourceIDs.isEmpty else { return constellationActivity }
-    return .updating(sourceIDs: updatingSourceIDs)
-  }
-
-  private var comingSoonTrawlers: Set<RegisteredTrawlerIdentity> {
-    Set(
-      model.registeredTrawlerCatalog.compactMap {
-        $0.registeredTrawlerReleaseState == .comingSoon ? $0.id : nil
-      })
-  }
-
-  private var isSearching: Bool {
-    searchWorkspaceVisibility == .presented
-  }
-
-  private var hasSearchWorkspace: Bool {
-    searchWorkspaceVisibility != .notCreated
-  }
-
-  private func showSearch(scope: RestingTrawler?) {
-    searchScope = scope
-    searchWorkspaceVisibility = .presented
-    searchFocusRequestToken &+= 1
   }
 
   private func finishOnboarding() {
     onboarding.complete()
-  }
-
-  private func dismissSearch() {
-    presentTraffic(activity: .idle, event: nil)
-    if hasSearchWorkspace {
-      searchWorkspaceVisibility = .hiddenPreservingWorkspace
-    }
   }
 
   /// The archive keeps itself up to date. This button shows that state and
@@ -395,22 +329,6 @@ struct RootView: View {
       hasCopiedTerminalCommand = false
     }
   }
-
-  private func presentTraffic(
-    activity: ConstellationActivity,
-    event: ConstellationTrafficEvent?
-  ) {
-    trafficClearTask?.cancel()
-    constellationActivity = activity
-    constellationTrafficEvent = event
-    guard event != nil else { return }
-    trafficClearTask = Task { @MainActor in
-      try? await Task.sleep(for: .seconds(4))
-      guard !Task.isCancelled else { return }
-      constellationActivity = .idle
-      constellationTrafficEvent = nil
-    }
-  }
 }
 
 enum HomeTrawlerPresentation {
@@ -445,7 +363,7 @@ struct AutomaticUpdateTaskID: Hashable {
 
 private struct CanvasBackground: View {
   var body: some View {
-    Color(nsColor: .windowBackgroundColor)
+    TrawlDesign.Colors.paper
       .ignoresSafeArea()
   }
 }

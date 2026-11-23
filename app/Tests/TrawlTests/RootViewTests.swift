@@ -10,9 +10,9 @@ import Testing
 @Suite(.serialized)
 struct RootViewTests {
   @MainActor
-  @Test func onboardingAndMainProductUseOneFixedWindowContract() {
+  @Test func onboardingStaysFixedAndMainWindowIsResizable() {
     let window = NSWindow(
-      contentRect: NSRect(origin: .zero, size: TrawlDesign.defaultWindow),
+      contentRect: NSRect(origin: .zero, size: TrawlDesign.onboardingWindow),
       styleMask: [.titled, .closable, .miniaturizable, .resizable],
       backing: .buffered,
       defer: false
@@ -37,15 +37,15 @@ struct RootViewTests {
     #expect(window.level == .normal)
 
     coordinator.apply(isOnboarding: false, to: window)
-    #expect(window.contentLayoutRect.size == TrawlDesign.defaultWindow)
-    #expect(!window.styleMask.contains(.resizable))
-    #expect(window.contentMinSize == TrawlDesign.defaultWindow)
-    #expect(window.contentMaxSize == TrawlDesign.defaultWindow)
-    #expect(window.collectionBehavior.contains(.fullScreenNone))
-    #expect(!window.collectionBehavior.contains(.fullScreenPrimary))
+    #expect(window.styleMask.contains(.resizable))
+    #expect(window.contentMinSize == TrawlDesign.minimumWindow)
+    #expect(window.contentMaxSize.width > TrawlDesign.defaultWindow.width)
+    #expect(window.contentMaxSize.height > TrawlDesign.defaultWindow.height)
+    #expect(window.collectionBehavior.contains(.fullScreenPrimary))
+    #expect(!window.collectionBehavior.contains(.fullScreenNone))
     #expect(window.tabbingMode == .disallowed)
     #expect(window.level == .normal)
-    #expect(window.standardWindowButton(.zoomButton)?.isHidden == true)
+    #expect(window.standardWindowButton(.zoomButton)?.isHidden == false)
     #expect(window.titleVisibility == .visible)
     #expect(!window.titlebarAppearsTransparent)
   }
@@ -70,20 +70,20 @@ struct RootViewTests {
   }
 
   @MainActor
-  @Test func returningLaunchUsesTheSameFixedWindow() {
+  @Test func returningLaunchUsesResizableWindowWithMinimum1200By820() {
     let window = NSWindow(
       contentRect: NSRect(origin: .zero, size: TrawlDesign.minimumWindow),
-      styleMask: [.titled, .closable, .miniaturizable, .resizable],
+      styleMask: [.titled, .closable, .miniaturizable],
       backing: .buffered,
       defer: false
     )
 
     WindowBehavior.Coordinator().apply(isOnboarding: false, to: window)
 
-    #expect(window.contentLayoutRect.size == TrawlDesign.defaultWindow)
-    #expect(!window.styleMask.contains(.resizable))
-    #expect(window.contentMinSize == TrawlDesign.defaultWindow)
-    #expect(window.contentMaxSize == TrawlDesign.defaultWindow)
+    #expect(window.styleMask.contains(.resizable))
+    #expect(window.contentMinSize == TrawlDesign.minimumWindow)
+    #expect(window.contentLayoutRect.size.width >= TrawlDesign.minimumWindow.width)
+    #expect(window.contentLayoutRect.size.height >= TrawlDesign.minimumWindow.height)
   }
 
 }
