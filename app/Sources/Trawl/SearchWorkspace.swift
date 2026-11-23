@@ -40,6 +40,24 @@ enum SearchWorkspaceLayout: Equatable {
   }
 }
 
+enum SearchWorkspaceGeometry {
+  static let wideResultsWidth = TrawlDesign.searchResultsMaximumWidth
+
+  struct WideLayout: Equatable {
+    let resultsOriginX: CGFloat
+    let reservesRecordRegion: Bool
+  }
+
+  static func layout(for workspace: SearchWorkspaceLayout) -> WideLayout {
+    switch workspace {
+    case .results, .split:
+      WideLayout(resultsOriginX: 0, reservesRecordRegion: true)
+    case .compactRecord:
+      WideLayout(resultsOriginX: 0, reservesRecordRegion: false)
+    }
+  }
+}
+
 enum SearchWorkspaceFieldContent: Equatable {
   case none
   case scopedPrompt
@@ -49,276 +67,133 @@ enum SearchWorkspaceFieldContent: Equatable {
   }
 }
 
-struct SpotlightSearchHeader: View {
-  @Binding var query: String
-  let scope: RestingTrawler?
-  let activeCategory: TrawlerFilterCategory
-  let availableCategories: [TrawlerFilterCategory]
-  let isSearching: Bool
-  let fieldIdentity: UUID
-  @FocusState.Binding var focus: SearchFocus?
-  let onClearScope: () -> Void
-  let onSelectCategory: (TrawlerFilterCategory) -> Void
-  let onSubmit: () -> Void
-  let onMoveToResults: () -> Void
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      SpotlightSearchField(
-        query: $query,
-        scope: scope,
-        isSearching: isSearching,
-        focus: $focus,
-        onClearScope: onClearScope,
-        onSubmit: onSubmit,
-        onMoveToResults: onMoveToResults
-      )
-      .id(fieldIdentity)
-
-      if scope == nil, availableCategories.count > 1 {
-        SpotlightCategoryChipBar(
-          categories: availableCategories,
-          activeCategory: activeCategory,
-          onSelect: onSelectCategory
-        )
-      }
-    }
-    .padding(.horizontal, 18)
-    .padding(.vertical, 12)
-    .background(TrawlDesign.canvasBackground)
-  }
-}
-
-private struct SpotlightSearchField: View {
-  @Binding var query: String
-  let scope: RestingTrawler?
-  let isSearching: Bool
-  @FocusState.Binding var focus: SearchFocus?
-  let onClearScope: () -> Void
-  let onSubmit: () -> Void
-  let onMoveToResults: () -> Void
-
-  private var isFieldFocused: Bool {
-    focus == .field
-  }
-
-  var body: some View {
-    HStack(spacing: 10) {
-      Group {
-        if isSearching {
-          ProgressView()
-            .controlSize(.small)
-            .frame(width: 16, height: 16)
-        } else {
-          Image(systemName: "magnifyingglass")
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(isFieldFocused ? TrawlDesign.brandRed : .secondary)
-        }
-      }
-      .frame(width: 18)
-
-      if let scope {
-        HStack(spacing: 6) {
-          TrawlerIconView(registeredTrawler: scope.id, size: 18)
-          Text(scope.registeredTrawlerDisplayName)
-            .font(.callout.weight(.semibold))
-            .lineLimit(1)
-          Button(action: onClearScope) {
-            Image(systemName: "xmark")
-              .font(.system(size: 9, weight: .bold))
-              .foregroundStyle(.secondary)
-          }
-          .buttonStyle(.plain)
-          .help("Search all apps")
-          .accessibilityLabel("Clear app filter")
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(TrawlDesign.brandRed.opacity(0.12), in: Capsule())
-        .overlay(Capsule().strokeBorder(TrawlDesign.brandRed.opacity(0.28), lineWidth: 0.75))
-        .fixedSize(horizontal: true, vertical: false)
-      }
-
-      TextField(
-        scope.map { "Search \($0.registeredTrawlerDisplayName)…" }
-          ?? OperationalCopy.Home.searchPlaceholder,
-        text: $query
-      )
-      .font(.system(size: 15))
-      .textFieldStyle(.plain)
-      .focused($focus, equals: .field)
-      .defaultFocus($focus, .field, priority: .userInitiated)
-      .layoutPriority(1)
-      .onSubmit(onSubmit)
-      .onKeyPress(.downArrow) {
-        onMoveToResults()
-        return .handled
-      }
-
-      if query.isEmpty {
-        Text("⌘K")
-          .font(.caption2.weight(.semibold).monospaced())
-          .foregroundStyle(.secondary)
-          .fixedSize()
-          .padding(.horizontal, 6)
-          .padding(.vertical, 3)
-          .background(TrawlDesign.surfaceBackground, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-          .overlay(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-              .strokeBorder(TrawlDesign.hairlineBorder, lineWidth: 0.5)
-          )
-          .fixedSize()
-      } else {
-        Button {
-          query = ""
-          Task { @MainActor in focus = .field }
-        } label: {
-          Image(systemName: "xmark.circle.fill")
-            .font(.body)
-            .foregroundStyle(.secondary)
-            .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .help("Clear search query")
-        .accessibilityLabel("Clear search query")
-      }
-    }
-    .padding(.horizontal, 14)
-    .frame(height: 44)
-    .background(
-      TrawlDesign.elevatedSurface,
-      in: RoundedRectangle(cornerRadius: TrawlDesign.searchBarCornerRadius, style: .continuous)
-    )
-    .overlay(
-      RoundedRectangle(cornerRadius: TrawlDesign.searchBarCornerRadius, style: .continuous)
-        .strokeBorder(
-          isFieldFocused ? TrawlDesign.brandRed.opacity(0.55) : TrawlDesign.hairlineBorder,
-          lineWidth: isFieldFocused ? 1.5 : 0.75
-        )
-    )
-  }
-}
-
-private struct SpotlightCategoryChipBar: View {
-  let categories: [TrawlerFilterCategory]
-  let activeCategory: TrawlerFilterCategory
-  let onSelect: (TrawlerFilterCategory) -> Void
-
-  var body: some View {
-    ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 6) {
-        ForEach(categories) { category in
-          let isSelected = category == activeCategory
-          Button {
-            onSelect(category)
-          } label: {
-            HStack(spacing: 5) {
-              Image(systemName: category.symbolName)
-                .font(.caption2.weight(.semibold))
-              Text(category.displayName)
-                .font(.caption.weight(isSelected ? .semibold : .medium))
-            }
-            .foregroundStyle(isSelected ? Color.white : .secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-              isSelected ? TrawlDesign.brandRed : TrawlDesign.surfaceBackground,
-              in: Capsule()
-            )
-            .overlay(
-              Capsule().strokeBorder(
-                isSelected ? Color.clear : TrawlDesign.hairlineBorder.opacity(0.8),
-                lineWidth: 0.5
-              )
-            )
-          }
-          .buttonStyle(.plain)
-          .accessibilityAddTraits(isSelected ? .isSelected : [])
-        }
-      }
-    }
-  }
-}
-
-struct SearchResultsWorkspace: View {
+struct SearchWorkspace: View {
   @Bindable var interaction: SearchInteraction
   let scope: RestingTrawler?
-  let activeCategory: TrawlerFilterCategory
-  let filteredMatches: [SearchMatch]
   let trawlerResolver: SearchTrawlerResolver
   let isCompact: Bool
   let model: SearchModel
-  let helperController: TrawlHelperController
+  let fieldIdentity: UUID
   @FocusState.Binding var focus: SearchFocus?
+  let onClearScope: () -> Void
+  let onReturnToTrawlers: () -> Void
   let onSubmit: () -> Void
+  let onMoveToResults: () -> Void
   let onEscape: () -> Void
   let onOpen: (SearchMatch) -> Void
-  let onOpenLink: (GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void
   let onReturnToResults: () -> Void
   let showsCompactRecord: Bool
 
   var body: some View {
-    switch SearchWorkspaceMode.resolve(
-      phase: model.phase,
-      resultCount: filteredMatches.count
-    ) {
-    case .field, .outcome:
-      SearchOutcomeView(
+    VStack(spacing: 0) {
+      searchField
+        .padding(14)
+      switch SearchWorkspaceMode.resolve(
         phase: model.phase,
-        isScoped: scope != nil || activeCategory != .all,
-        timedOutLocally: model.timedOutLocally
-      )
-    case .results:
-      switch SearchWorkspaceLayout.resolve(
-        isCompact: isCompact,
-        showsCompactRecord: showsCompactRecord,
-        openPhase: model.openPhase
-      ) {
-      case .results:
-        if isCompact {
-          resultsList
-        } else {
-          HStack(spacing: 0) {
-            resultsList
-              .frame(width: TrawlDesign.searchResultsMaximumWidth)
-            Divider()
-            ResultPreview(
-              phase: model.openPhase,
-              trawlerDisplayName: { trawlerDisplayName(for: $0) },
-              helperController: helperController,
-              onOpenLink: onOpenLink
-            )
-          }
+        resultCount: model.searchMatches.count)
+      {
+      case .field:
+        if SearchWorkspaceFieldContent.resolve(isScoped: scope != nil) == .scopedPrompt,
+          let scope
+        {
+          Divider()
+          ScopedSearchPrompt(scope: scope)
         }
-      case .compactRecord:
+      case .outcome:
+        Divider()
+        SearchOutcome(
+          phase: model.phase,
+          isScoped: scope != nil,
+          timedOutLocally: model.timedOutLocally
+        )
+      case .results:
+        Divider()
+        workspaceLayout
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+  }
+
+  private var searchField: some View {
+    SearchField(
+      query: $interaction.query,
+      scope: scope,
+      focus: $focus,
+      onClearScope: onClearScope,
+      onReturnToTrawlers: onReturnToTrawlers,
+      onSubmit: onSubmit,
+      onMoveToResults: onMoveToResults
+    )
+    .id(fieldIdentity)
+  }
+
+  @ViewBuilder
+  private var workspaceLayout: some View {
+    switch SearchWorkspaceLayout.resolve(
+      isCompact: isCompact,
+      showsCompactRecord: showsCompactRecord,
+      openPhase: model.openPhase
+    ) {
+    case .results:
+      if isCompact {
+        results.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+      } else {
+        wideWorkspace(layout: .results) {
+          Spacer(minLength: TrawlDesign.searchRecordMinimumWidth)
+        }
+      }
+    case .compactRecord:
+      ZStack {
+        results
+          .opacity(0)
+          .allowsHitTesting(false)
+          .accessibilityHidden(true)
         CompactRecordWorkspace(
           phase: model.openPhase,
-          trawlerDisplayName: { trawlerDisplayName(for: $0) },
-          helperController: helperController,
           focus: $focus,
           onReturnToResults: onReturnToResults,
-          onOpenLink: onOpenLink
+          onOpenLink: openLinkedRecord
         )
-      case .split:
-        HStack(spacing: 0) {
-          resultsList
-            .frame(width: TrawlDesign.searchResultsMaximumWidth)
-          Divider()
-          ResultPreview(
-            phase: model.openPhase,
-            trawlerDisplayName: { trawlerDisplayName(for: $0) },
-            helperController: helperController,
-            onOpenLink: onOpenLink
-          )
-        }
+      }
+    case .split:
+      wideWorkspace(layout: .split) {
+        Divider()
+        ResultPreview(phase: model.openPhase, onOpenLink: openLinkedRecord)
       }
     }
   }
 
-  private var resultsList: some View {
+  private func openLinkedRecord(
+    _ link: GloballyRoutableTrawlLink,
+    anchor: RecordAnchorIdentifier
+  ) {
+    Task {
+      await model.open(link: link, anchor: anchor)
+    }
+  }
+
+  private func wideWorkspace<Preview: View>(
+    layout: SearchWorkspaceLayout,
+    @ViewBuilder preview: () -> Preview
+  ) -> some View {
+    let geometry = SearchWorkspaceGeometry.layout(for: layout)
+    return HStack(spacing: 0) {
+      results.frame(
+        minWidth: SearchWorkspaceGeometry.wideResultsWidth,
+        idealWidth: SearchWorkspaceGeometry.wideResultsWidth,
+        maxWidth: SearchWorkspaceGeometry.wideResultsWidth,
+        maxHeight: .infinity
+      )
+      preview()
+    }
+    .padding(.leading, geometry.resultsOriginX)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+  }
+
+  private var results: some View {
     SearchResultsList(
       phase: model.phase,
-      searchMatches: filteredMatches,
+      searchMatches: model.searchMatches,
       trawlerDisplayName: {
         $0.map(trawlerDisplayName(for:))
           ?? SearchTrawlerResolver.unavailableDisplayName
@@ -347,15 +222,14 @@ struct SearchResultsWorkspace: View {
     }
     return model.trawlerDisplayName(
       for: registeredTrawler,
-      resolvedName: trawlerResolver.displayName(for: registeredTrawler)
+      resolvedName: trawlerResolver.displayName(
+        for: registeredTrawler)
     )
   }
 }
 
 private struct CompactRecordWorkspace: View {
   let phase: SearchOpenPhase
-  let trawlerDisplayName: (RegisteredTrawlerIdentity) -> String?
-  let helperController: TrawlHelperController
   @FocusState.Binding var focus: SearchFocus?
   let onReturnToResults: () -> Void
   let onOpenLink: (GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void
@@ -374,18 +248,120 @@ private struct CompactRecordWorkspace: View {
       .padding(.horizontal, 14)
       .padding(.vertical, 9)
       Divider()
-      ResultPreview(
-        phase: phase,
-        trawlerDisplayName: trawlerDisplayName,
-        helperController: helperController,
-        onOpenLink: onOpenLink
-      )
+      ResultPreview(phase: phase, onOpenLink: onOpenLink)
     }
     .onAppear { focus = .record }
   }
 }
 
-private struct SearchOutcomeView: View {
+private struct SearchField: View {
+  @Binding var query: String
+  let scope: RestingTrawler?
+  @FocusState.Binding var focus: SearchFocus?
+  let onClearScope: () -> Void
+  let onReturnToTrawlers: () -> Void
+  let onSubmit: () -> Void
+  let onMoveToResults: () -> Void
+
+  var body: some View {
+    HStack(spacing: 9) {
+      Button(action: onReturnToTrawlers) {
+        Image(systemName: "chevron.left")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .frame(width: 32, height: 32)
+          .contentShape(.rect)
+      }
+      .buttonStyle(.plain)
+      .help("Return to apps")
+      .accessibilityLabel("Return to apps")
+      Image(systemName: "magnifyingglass")
+        .foregroundStyle(.secondary)
+      TextField(
+        scope.map { "Search \($0.registeredTrawlerDisplayName)" }
+          ?? "Find anything in your archive",
+        text: $query)
+        .textFieldStyle(.plain)
+        .focused($focus, equals: .field)
+        .defaultFocus($focus, .field, priority: .userInitiated)
+        .layoutPriority(1)
+        .onSubmit(onSubmit)
+        .onKeyPress(.downArrow) {
+          onMoveToResults()
+          return .handled
+        }
+      if let scope {
+        HStack(spacing: 8) {
+          TrawlerIconView(
+            registeredTrawler: scope.id,
+            size: 36)
+            .scaleEffect(1.22)
+            .frame(width: 36, height: 36)
+            .clipShape(.rect(cornerRadius: 8))
+          Text(scope.registeredTrawlerDisplayName)
+            .font(.callout.weight(.semibold))
+            .lineLimit(1)
+            .fixedSize()
+          Button(action: onClearScope) {
+            Text("All apps")
+              .font(.caption.weight(.semibold))
+          }
+          .buttonStyle(.plain)
+          .help("Search all apps")
+          .accessibilityLabel("Search all apps")
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 7)
+        .padding(.vertical, 2)
+        .background(.secondary.opacity(0.14), in: Capsule())
+        .fixedSize(horizontal: true, vertical: false)
+      }
+      Group {
+        if query.isEmpty {
+          Color.clear
+            .accessibilityHidden(true)
+        } else {
+          Button(action: clearQuery) {
+            Image(systemName: "xmark.circle.fill")
+              .font(.body)
+              .foregroundStyle(.secondary)
+              .contentShape(.circle)
+          }
+          .buttonStyle(.plain)
+          .help("Clear search query")
+          .accessibilityLabel("Clear search query")
+        }
+      }
+      .frame(width: 20, height: 20)
+    }
+    .padding(.horizontal, 13)
+    .frame(height: 44)
+    .background(.secondary.opacity(0.08), in: Capsule())
+  }
+
+  private func clearQuery() {
+    query = ""
+    Task { @MainActor in
+      focus = .field
+    }
+  }
+}
+
+private struct ScopedSearchPrompt: View {
+  let scope: RestingTrawler
+
+  var body: some View {
+    ContentUnavailableView {
+      Label("Search \(scope.registeredTrawlerDisplayName)", systemImage: "magnifyingglass")
+    } description: {
+      Text("Enter a word or phrase to search this app.")
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .padding()
+  }
+}
+
+private struct SearchOutcome: View {
   let phase: SearchPhase
   let isScoped: Bool
   let timedOutLocally: Bool

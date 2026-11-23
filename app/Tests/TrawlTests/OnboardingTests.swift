@@ -77,25 +77,6 @@ struct OnboardingTests {
     #expect(defaults.string(forKey: OnboardingModel.checkpointOwnerKey) == nil)
   }
 
-  @MainActor
-  @Test func skippingFullDiskAccessMovesDirectlyToArchiveBuild() {
-    let suite = "OnboardingTests.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defer { defaults.removePersistentDomain(forName: suite) }
-    let onboarding = OnboardingModel(
-      defaults: defaults,
-      checkpointOwner: "build",
-      openFullDiskAccess: {}
-    )
-    let appModel = AppModel(client: ProcessTrawlClient())
-    onboarding.showPermission()
-    #expect(onboarding.stage == .permission)
-
-    onboarding.continueWithoutFullDiskAccess(appModel: appModel) { [] }
-
-    #expect(onboarding.stage == .building)
-  }
-
   @Test func aiInstructionNamesItsIntentAndDoesNotClaimToChangeConfiguration() {
     let instruction = AgentPrompts.connectAI
     #expect(instruction.hasPrefix("Help me start using OpenTrawl"))

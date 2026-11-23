@@ -237,37 +237,6 @@ final class OnboardingModel {
       appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
 
-  /// Zero-FDA onboarding path: proceed directly to building zero-FDA archives
-  /// without gating first launch behind macOS Full Disk Access.
-  func continueWithoutFullDiskAccess(
-    appModel: AppModel,
-    registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
-  ) {
-    FullDiskAccessGuide.dismiss()
-    permissionGuideIsOpen = false
-    let currentRegisteredTrawlers = registeredTrawlers()
-    if currentRegisteredTrawlers.isEmpty, appModel.phase == .loading {
-      permissionTask?.cancel()
-      permissionTask = nil
-      updateTask?.cancel()
-      flowState = .building(needsInitialUpdateResume: true)
-      saveCheckpoint(.building)
-      updateTask = Task { @MainActor [weak self, weak appModel] in
-        guard let self, let appModel else { return }
-        await appModel.refresh()
-        guard !Task.isCancelled else { return }
-        let refreshed = registeredTrawlers()
-        if !refreshed.isEmpty {
-          await appModel.updateNow(registeredTrawlers: refreshed)
-        }
-        guard !Task.isCancelled else { return }
-        self.updateTask = nil
-      }
-      return
-    }
-    startInitialUpdate(appModel: appModel, registeredTrawlers: currentRegisteredTrawlers)
-  }
-
   func startInitialUpdate(
     appModel: AppModel,
     registeredTrawlers: [RegisteredTrawlerIdentity]

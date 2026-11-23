@@ -6,10 +6,6 @@ enum OperationalCopy {
     static let cancel = "Stop"
     static let continueAction = "Continue"
     static let retry = "Try again"
-    static let skipForNow = "Skip for now"
-    static let done = "Done"
-    static let copy = "Copy"
-    static let copied = "Copied"
   }
 
   enum FullDiskAccess {
@@ -20,12 +16,6 @@ enum OperationalCopy {
     static let notConfirmed = "OpenTrawl cannot confirm Full Disk Access yet."
     static let instruction = "In Full Disk Access, turn on OpenTrawl, then return to the app."
     static let needed = "Full Disk Access needed"
-    static let optionalCardTitle = "Optional: unlock Mac-locked apps"
-    static let optionalCardBody =
-      "Zero-FDA apps work right now. Grant Full Disk Access only if you also want to search Apple Messages, Notes, and Mail."
-    static let optionalOnboardingNote =
-      "You can skip this step and start searching Gmail, Telegram, WhatsApp, Calendar, Contacts, Photos, Money, Health, and Twitter right now."
-    static let unlockAction = "Unlock…"
   }
 
   enum ArchiveBuild {
@@ -75,35 +65,9 @@ enum OperationalCopy {
     static let copiedAIPromptConfirmation = "Copied. Paste it into your AI."
     static let copyTerminalCommandAction = "Copy command to use `trawl` in your Terminal"
     static let copiedTerminalCommandConfirmation = "Copied. Paste it into Terminal."
-    static let updatingArchive = "Updating…"
-    static let updateArchiveShort = "Update"
-    static let updatedAtFormat = "Updated %1$@"
-    static let lastUpdatedAtFormat = "Updated %1$@"
-    static let searchPlaceholder = "Search messages, email, notes, health, money…"
-    static let allApps = "All apps"
-    static let builtInAppsSection = "Your apps"
-    static let pluginsSection = "Plugins"
-    static let connectAIButton = "Connect AI"
-    static let semanticSearchTitle = "Local semantic search"
-    static let semanticOnShort = "Semantic"
-    static let semanticOffShort = "Semantic Off"
-    static let zeroFDABadge = "No FDA needed"
-    static let macFDABadge = "Uses Mac FDA"
-  }
-
-  enum AgentAccess {
-    static let sheetTitle = "Connect your AI"
-    static let sheetSubtitle =
-      "Your archive stays on this Mac. Choose which apps an AI can read using scoped, read-only tokens."
-    static let quickPromptHeading = "Prompt any AI"
-    static let detectedAgentsHeading = "Local AI apps"
-    static let tokensHeading = "Who can read what"
-    static let noTokensYet =
-      "No scoped MCP tokens yet. Run `trawl connect --write` in Terminal to connect installed AI apps with read-only tokens."
-    static let copyConnectCommand = "Copy `trawl connect --write`"
-    static let copyMCPCommand = "Copy `trawl mcp` command"
-    static let revokeAction = "Revoke"
-    static let revokedLabel = "Revoked"
+    static let updatingArchive = "Updating your archive…"
+    static let updatedAtFormat = "Updated at %1$@"
+    static let lastUpdatedAtFormat = "Last updated at %1$@"
   }
 
   enum Search {
@@ -145,7 +109,7 @@ enum OperationalCopy {
     ) -> String {
       return switch phase {
       case .complete:
-        "Try another word, clear a filter chip, or search all apps."
+        ""
       case .partial:
         isScoped
           ? "This app could not be searched. Your archive is unchanged. Try again."
@@ -174,15 +138,5 @@ enum OperationalCopy {
       "Opening this result took too long. Choose another result or try again."
     static let noteBodyUnavailable =
       "The note text is not available. Choose another result."
-    static let selectMatchPrompt = "Select a result to read it in full"
-    static let selectMatchHint = "Use ↑ and ↓ to move through matches."
-    static let copyLinkAction = "Copy link"
-    static let copiedLinkConfirmation = "Link copied"
-    static let relatedAroundAction = "Around this time"
-    static let loadEarlierMessages = "Load earlier messages"
-    static let loadLaterMessages = "Load later messages"
-    static let loadingMoreMessages = "Loading messages…"
-    static let noAdditionalMessages = "No additional messages in this window."
-    static let matchedBadge = "Match"
   }
 }

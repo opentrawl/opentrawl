@@ -3,92 +3,64 @@ import TrawlClient
 
 struct PersonRecordView: View {
   let personRecord: PersonRecord
-  var recordTrawler: RegisteredTrawlerIdentity? = nil
-  var trawlerDisplayName: String? = nil
   let targetAnchor: RecordAnchorIdentifier
-  var trawlLink: GloballyRoutableTrawlLink? = nil
-  var helperController: TrawlHelperController? = nil
-  var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)? = nil
-
-  @State private var isShowingAround = false
 
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
-          RecordDetailHeader(
-            registeredTrawler: recordTrawler,
-            trawlerDisplayName: trawlerDisplayName,
-            title: personRecord.personDisplayName,
-            subtitle: personRecord.alternativePersonDisplayNames.isEmpty
-              ? nil : personRecord.alternativePersonDisplayNames.formatted(),
-            trawlLink: trawlLink,
-            showsAroundToggle: helperController != nil && trawlLink != nil,
-            isShowingAround: isShowingAround,
-            onToggleAround: { isShowingAround.toggle() }
-          )
-          .id(PersonRecordAnchorIdentifier.personDisplayName)
-
-          if isShowingAround, let helperController, let trawlLink {
-            AroundRelatedRecordsSection(
-              trawlLink: trawlLink,
-              helperController: helperController,
-              onOpenLink: onOpenLink
+          Text(personRecord.personDisplayName)
+            .font(.title2)
+            .textSelection(.enabled)
+            .id(PersonRecordAnchorIdentifier.personDisplayName)
+          if !personRecord.alternativePersonDisplayNames.isEmpty {
+            LabeledContent(
+              "Known as",
+              value: personRecord.alternativePersonDisplayNames.formatted()
+            )
+            .id(PersonRecordAnchorIdentifier.alternativePersonDisplayName)
+          }
+          if let annotation = personRecord.personRelationshipOrContextAnnotation {
+            LabeledContent(
+              "Relationship or context",
+              value: annotation.personRelationshipOrContextDescription
+            )
+            .id(
+              PersonRecordAnchorIdentifier.personRelationshipOrContextDescription
+                .recordAnchorIdentifier)
+            LabeledContent(
+              "Stated",
+              value: String(
+                format: "%04d-%02d-%02d",
+                annotation.personRelationshipOrContextDescriptionStatedDate.calendarYear,
+                annotation.personRelationshipOrContextDescriptionStatedDate.calendarMonthNumber,
+                annotation.personRelationshipOrContextDescriptionStatedDate.calendarDayOfMonth)
             )
           }
-
-          if personRecord.personRelationshipOrContextAnnotation != nil
-            || !personRecord.trawlersContributingFactsToPersonRecord.isEmpty
-          {
-            RecordMetadataCard {
-              if let annotation = personRecord.personRelationshipOrContextAnnotation {
-                LabeledContent(
-                  "Relationship or context",
-                  value: annotation.personRelationshipOrContextDescription
-                )
-                .id(
-                  PersonRecordAnchorIdentifier.personRelationshipOrContextDescription
-                    .recordAnchorIdentifier)
-                LabeledContent(
-                  "Stated",
-                  value: String(
-                    format: "%04d-%02d-%02d",
-                    annotation.personRelationshipOrContextDescriptionStatedDate.calendarYear,
-                    annotation.personRelationshipOrContextDescriptionStatedDate.calendarMonthNumber,
-                    annotation.personRelationshipOrContextDescriptionStatedDate.calendarDayOfMonth)
-                )
-              }
-              if !personRecord.trawlersContributingFactsToPersonRecord.isEmpty {
-                LabeledContent(
-                  "Apps",
-                  value: personRecord.trawlersContributingFactsToPersonRecord.map(
-                    \.registeredTrawlerDisplayName
-                  ).formatted()
-                )
-              }
-            }
-            .font(.callout)
+          if !personRecord.trawlersContributingFactsToPersonRecord.isEmpty {
+            LabeledContent(
+              "Apps",
+              value: personRecord.trawlersContributingFactsToPersonRecord.map(
+                \.registeredTrawlerDisplayName
+              ).formatted()
+            )
           }
-
           if !personRecord.personContactMethodsInDisplayOrder.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
               Text(
                 "Contact",
                 comment: "Heading above a person's contact methods."
               )
-              .font(.caption.weight(.semibold))
-              .foregroundStyle(.secondary)
-              RecordMetadataCard {
-                ForEach(personRecord.personContactMethodsInDisplayOrder) { contactMethod in
-                  PersonContactMethodRow(contactMethod: contactMethod)
-                    .id(
-                      contactMethod.personContactMethodKind.recordAnchor.recordAnchorIdentifier)
-                }
+              .font(.headline)
+              ForEach(personRecord.personContactMethodsInDisplayOrder) { contactMethod in
+                PersonContactMethodRow(contactMethod: contactMethod)
+                  .id(
+                    contactMethod.personContactMethodKind.recordAnchor.recordAnchorIdentifier)
               }
             }
           }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: TrawlDesign.recordReadingWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
@@ -130,11 +102,8 @@ private struct PersonContactMethodRow: View {
             comment: "Label for a person's account handle.")
         }
       }
-      .font(.callout)
-      .foregroundStyle(.secondary)
       .frame(width: 112, alignment: .leading)
       Text(contactMethod.personContactMethodDisplayValue)
-        .font(.callout)
         .textSelection(.enabled)
       Spacer(minLength: 0)
     }

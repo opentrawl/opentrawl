@@ -1,96 +1,137 @@
 ---
 written_by: ai
-updated_by: "AI, Gemini 4 Neon, 2026-11-23"
 ---
 
 # OpenTrawl for Mac
 
 The Mac app is the human interface to the same local archives and contracts as
-the `trawl` CLI. Both surfaces preserve app identities, match semantics,
+the `trawl` CLI. Both surfaces preserve source identities, match semantics,
 record refs and failure meanings; they differ only in presentation and
 interaction.
 
-The Mac client invokes `status`, `update`, `search` and `open` over the typed
-protobuf boundary, and reads local semantic search status, scoped AI token
-state, conversation context expansion and cross-app `around` context from the
-same bundled `trawl` helper.
+The Mac process client currently invokes `status`, `update`, `search` and
+`open`. The CLI also invokes trawler-specific commands. The protobuf contract
+defines their closed list and detail responses, but the Mac app does not
+currently invoke those commands.
 
 ## Product promise
 
-Spotlight for your local digital life on Mac. Search all your apps from one
-always-ready field, recognise the right item at a glance, read its full
-chronological context without losing your place, and control which AI tools can
-read which apps.
+Search your local digital life from one calm Mac workspace. Recognise the right
+item, see why it matched and read its source-owned context without losing your
+place.
 
 ## Product model
 
-The main workspace pairs a native macOS app sidebar with an always-ready
-Spotlight search bar (`⌘K`) and category filter chips:
+The constellation is the home and source map. The central diamond searches all
+available sources; a source control scopes the same search to that source.
+
+Search is a stable workspace:
 
 ```text
-sidebar / Spotlight bar (⌘K) -> matching row -> source-owned record at the match
+constellation -> query -> matching row -> source-owned record at the match
 ```
 
-- When the search field is empty, the workspace shows the archive overview:
-  total indexed records, local semantic search state, AI access, archive
-  freshness, and a card for each built-in app (including Apple Health) and
-  installed external plugin with real formatted record counts, last-updated
-  time, and status.
-- Typing immediately switches to the split search workspace (results list on
-  the left, full opened record on the right).
-- Selecting an app in the sidebar or clicking an app card scopes Spotlight to
-  that app. Category chips filter across Messages, Email, Notes, Calendar,
-  Contacts, Photos, Money, Health, Twitter and Plugins.
-
-## Zero-FDA-first onboarding and optional Mac FDA
-
-Apps that do not require macOS Full Disk Access work immediately on first
-launch. Full Disk Access is presented as an optional unlock for Mac-locked
-databases (Apple Messages, Apple Notes and Apple Mail) rather than a mandatory
-gate that blocks updating or searching the rest of the archive.
+There is no intermediate evidence page. A row helps someone recognise a
+result. Selecting it opens the bounded record and anchors the exact match.
 
 ## Search matches
 
-A result is a match, not merely a record. It carries the app, record ref,
-target anchor, concise summary, highlighted evidence and the small facts needed
-to recognise it.
+A result is a match, not merely a record. It carries the source, record ref,
+target anchor, concise source-owned summary, labelled evidence and the small
+facts needed to recognise it.
 
-Rows lead with the thing a person recognises: app badge, primary title,
-right-aligned smart timestamp, deduplicated context subtitle (never redundant
-key-value prefixes such as `Sender:`, `In:` or `message:`), and highlighted
-matched fragments.
+The source owns those meanings. Federation validates, combines and orders the
+matches without rewriting them. The protobuf boundary and Swift client preserve
+the same facts, and the app renders them without switching on a source ID.
+
+Evidence is exact provenance with a resolvable anchor. It may be message text,
+an email passage, a calendar field, a contact field, OCR, an attachment name or
+another source-native fact. It is not an invented ranking explanation.
 
 ## Opened records
 
-- **Messages** render in natural chronological order (oldest at the top, newest
-  at the bottom) with day dividers, sender labels, and the matched message
-  highlighted and auto-scrolled into view. When earlier or later messages were
-  omitted from the initial window, controls let the user load additional
-  context inline.
-- **Every opened record** (Messages, Conversations, Notes, People, Calendar
-  events, Email, Photos, Money, Health, Twitter and plugins) includes a
-  one-click `Copy link` button for its globally routable Trawl link and an
-  `Around this time` toggle to inspect related records across other apps.
-- Long histories remain bounded; the app never dumps an unbounded archive into
-  memory.
+An opened record is one shared typed message, conversation, person or calendar
+event, or one bounded trawler-specific detail. A trawler-specific detail has a
+name, ordered fields and an optional text body. Its field values are limited to
+text, an unsigned count, a time or calendar date, and a Trawl link.
 
-## Search workspace ergonomics
+Long conversations and histories open around the matched target and say when
+more exists. The app never hides an unbounded dump behind a click.
 
-- The main window is natively resizable (`920×620` minimum, `1200×820` default)
-  and supports both Light and Dark mode using adaptive macOS system colors.
-- Wide windows keep the result list and opened record side by side. Narrow
-  windows drill into the opened record and return to the unchanged list.
-- Keyboard shortcuts: `⌘K` focuses search, `⌘1` selects all apps, `⌘R` updates
-  the archive, `↑`/`↓` navigates matches, `Return` opens the selected match,
-  and `Esc` steps back cleanly from record -> results -> field -> clear.
-- The last committed result page stays stable while a replacement query runs.
+## Search workspace
+
+- All-source and source-scoped search use the same field and make the scope
+  visible.
+- The last committed result page stays stable while a revised query runs. Old
+  results are never presented as the answer to a new draft query.
+- A wide window keeps the result list and opened record together. A narrow
+  window drills into the record and returns to the unchanged list.
+- Escape cancels the current edit or returns focus; it does not discard the
+  search.
+- Keyboard and VoiceOver users can reach every source, result, selected state,
+  record action and failure meaning.
+
+Rows lead with the thing a person recognises: the conversation or people,
+email subject, event, note, photo, post or contact. Detail leads with content,
+not archive machinery.
+
+## Record presentation
+
+- Messages show conversation identity and bounded surrounding messages.
+- Conversations show their people and recent activity.
+- People show names, contact methods and contributing trawlers.
+- Calendar events show their title, time, calendar, place, people and details.
+- Other opened records use the closed trawler-specific detail contract.
+
+The app renders these shared records and bounded details. It does not consume
+an arbitrary document grammar or switch on a trawler identity to select a
+bespoke record schema.
+
+## Constellation
+
+- Source controls have equal visual and interaction weight.
+- Positions are deterministic, balanced and spatially stable. The graph is a
+  connected network around the diamond, not a status dashboard.
+- Each control makes its action and source contents visible without hover.
+- Healthy sources stay quiet. A problem replaces normal supporting text only
+  when the person can act on it.
+- Ambient motion is decorative. Search or update activity uses a distinct and
+  truthful state. Reduce Motion produces a static composition.
+
+The app does not show green health dots, routine last-update labels, unexplained
+spinners, global warning banners or `Needs update` housekeeping.
 
 ## Honest states
 
-The app distinguishes no matches, partial failure, total failure, timeout,
-unsigned-app sync requirements, sign-in requirements, closed apps and optional
-Full Disk Access requirements. A problem appears once, next to the work it
-affects, and never blocks healthy apps.
+The app distinguishes no matches, partial source failure, total failure,
+timeout and a source that is not set up. A problem appears once, next to the
+work it affects, and states which sources contributed.
+
+Result bounds are factual. The app may state how many results it shows and
+whether more exist. It does not claim `Top 20` without a defined and tested
+ranking policy.
+
+## Cross-source ordering
+
+Scores from separate source databases are not automatically comparable, and a
+busy source must not silently crowd out the others. Evaluate ordering through
+real archive searches for recall, time to the correct open, wrong opens, source
+starvation, stability, evidence correctness and latency. Use the simplest
+policy with a clear measured win and label it honestly.
+
+## Design principles
+
+1. One local memory, several clients.
+2. The constellation is the corpus home and a real scope control.
+3. A result identifies the match, not just its container.
+4. The row supports recognition; selection opens the record at the match.
+5. Sources own meaning; federation composes; clients render and interact.
+6. Human presentation is required, bounded and source-authored.
+7. Preserve place through stable refs, not a second private UI archive.
+8. Remove anything that does not help someone choose a source, recognise a
+   result, read a record or act on a problem.
+9. Use motion, colour, size and status only for facts the product knows.
+10. Prefer one obvious path, safe defaults and no settings zoo.
 
 Verification may read a real archive, but its queries, results, screenshots,
 contents, counts and other derived facts stay outside this public repository.

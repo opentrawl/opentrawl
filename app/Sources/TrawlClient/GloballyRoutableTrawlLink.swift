@@ -1,14 +1,14 @@
 import Foundation
 
-public struct GloballyRoutableTrawlLinkRoute: Sendable, Equatable {
-  public let registeredTrawler: RegisteredTrawlerIdentity
-  public let localShortReference: LocalTrawlerShortReference
+struct GloballyRoutableTrawlLinkRoute {
+  let registeredTrawler: RegisteredTrawlerIdentity
+  let localShortReference: LocalTrawlerShortReference
 }
 
 private let globallyRoutableTrawlLinkLocalShortReferenceAlphabet =
   Set("23456789abcdefghjkmnpqrstuvwxyz")
 
-public func parseGloballyRoutableTrawlLink(
+func parseGloballyRoutableTrawlLink(
   _ globallyRoutableTrawlLink: GloballyRoutableTrawlLink
 ) -> GloballyRoutableTrawlLinkRoute? {
   let trimmedGloballyRoutableTrawlLink =

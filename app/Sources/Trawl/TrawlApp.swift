@@ -1,6 +1,6 @@
 import AppKit
-import Observation
 import PermissionGuide
+import Observation
 import SwiftUI
 import TrawlClient
 import TrawlCore
@@ -15,7 +15,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var automaticRefreshTrawlers: [RegisteredTrawlerIdentity] = []
   private let appInstallations = MacAppInstallations()
   let runtimeConfiguration = TrawlRuntimeConfiguration()
-  let commandSignals = AppCommandSignals()
   lazy var client: any TrawlClient = ProcessTrawlClient(configuration: runtimeConfiguration)
   lazy var model = AppModel(
     client: client,
@@ -100,12 +99,11 @@ struct TrawlApp: App {
         client: delegate.client,
         onboarding: delegate.onboarding,
         aiInstruction: AgentPrompts.connectAI,
-        openFullDiskAccess: delegate.requestFullDiskAccess,
-        commandSignals: delegate.commandSignals
+        openFullDiskAccess: delegate.requestFullDiskAccess
       )
       .frame(
-        minWidth: TrawlDesign.minimumWindow.width,
-        minHeight: TrawlDesign.minimumWindow.height
+        width: TrawlDesign.defaultWindow.width,
+        height: TrawlDesign.defaultWindow.height
       )
     }
     .defaultSize(
@@ -114,34 +112,12 @@ struct TrawlApp: App {
     )
     .defaultLaunchBehavior(launchInBackground ? .suppressed : .presented)
     .restorationBehavior(.disabled)
+    .windowResizability(.contentSize)
     .commands {
       CommandGroup(after: .appInfo) {
         CheckForUpdatesCommand(updates: delegate.updates)
       }
       CommandGroup(replacing: .newItem) {}
-      CommandMenu("Archive") {
-        Button("Search Archive") {
-          delegate.commandSignals.focusSearch()
-        }
-        .keyboardShortcut("k", modifiers: .command)
-
-        Button("All Apps") {
-          delegate.commandSignals.selectAllApps()
-        }
-        .keyboardShortcut("1", modifiers: .command)
-
-        Divider()
-
-        Button(HumanCopy.Home.updateArchiveAction) {
-          delegate.commandSignals.updateArchive()
-        }
-        .keyboardShortcut("r", modifiers: .command)
-
-        Button(OperationalCopy.Home.connectAIButton) {
-          delegate.commandSignals.showConnectAI()
-        }
-        .keyboardShortcut(".", modifiers: [.command, .shift])
-      }
       CommandGroup(after: .help) {
         Divider()
         Button("Debug: Restart Onboarding") {

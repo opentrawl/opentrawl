@@ -3,56 +3,27 @@ import TrawlClient
 
 struct OpenedNoteRecordView: View {
   let openedNoteRecord: OpenedNoteRecord
-  var recordTrawler: RegisteredTrawlerIdentity? = nil
-  var trawlerDisplayName: String? = nil
   let targetAnchor: RecordAnchorIdentifier
-  var trawlLink: GloballyRoutableTrawlLink? = nil
-  var helperController: TrawlHelperController? = nil
-  var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)? = nil
-
-  @State private var isShowingAround = false
 
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
-          RecordDetailHeader(
-            registeredTrawler: recordTrawler,
-            trawlerDisplayName: trawlerDisplayName,
-            title: openedNoteRecord.noteDisplayName.isEmpty ? "Note" : openedNoteRecord.noteDisplayName,
-            subtitle: openedNoteRecord.noteFolderDisplayName.isEmpty
-              ? nil : openedNoteRecord.noteFolderDisplayName,
-            trawlLink: trawlLink,
-            showsAroundToggle: helperController != nil && trawlLink != nil,
-            isShowingAround: isShowingAround,
-            onToggleAround: { isShowingAround.toggle() }
-          )
-          .id(openedNoteRecord.noteDisplayNameAnchor.recordAnchorIdentifier)
-
-          if isShowingAround, let helperController, let trawlLink {
-            AroundRelatedRecordsSection(
-              trawlLink: trawlLink,
-              helperController: helperController,
-              onOpenLink: onOpenLink
-            )
-          }
-
-          OpenedNoteRecordMetadata(
+          OpenedNoteRecordHeader(
+            noteDisplayName: openedNoteRecord.noteDisplayName,
             noteFolderDisplayName: openedNoteRecord.noteFolderDisplayName,
             noteCreatedTime: openedNoteRecord.noteCreatedTime,
             noteModifiedTime: openedNoteRecord.noteModifiedTime,
             openedNoteVersionTime: openedNoteRecord.openedNoteVersionTime,
             recoveredNoteVersionCount: openedNoteRecord.recoveredNoteVersionCount,
             specificRecoveredNoteVersionWasOpened:
-              openedNoteRecord.specificRecoveredNoteVersionWasOpened
-          )
-
+              openedNoteRecord.specificRecoveredNoteVersionWasOpened,
+            noteDisplayNameAnchor: openedNoteRecord.noteDisplayNameAnchor)
           OpenedNoteRecordBody(
             openedNoteBody: openedNoteRecord.openedNoteBody,
-            openedNoteBodyAnchor: openedNoteRecord.openedNoteBodyAnchor
-          )
+            openedNoteBodyAnchor: openedNoteRecord.openedNoteBodyAnchor)
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: TrawlDesign.recordReadingWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
@@ -64,16 +35,22 @@ struct OpenedNoteRecordView: View {
   }
 }
 
-private struct OpenedNoteRecordMetadata: View {
+private struct OpenedNoteRecordHeader: View {
+  let noteDisplayName: String
   let noteFolderDisplayName: String
   let noteCreatedTime: Date?
   let noteModifiedTime: Date?
   let openedNoteVersionTime: Date?
   let recoveredNoteVersionCount: UInt64
   let specificRecoveredNoteVersionWasOpened: Bool
+  let noteDisplayNameAnchor: RecordAnchorIdentifier
 
   var body: some View {
-    RecordMetadataCard {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(noteDisplayName.isEmpty ? "Note" : noteDisplayName)
+        .font(.title2)
+        .textSelection(.enabled)
+        .id(noteDisplayNameAnchor.recordAnchorIdentifier)
       if !noteFolderDisplayName.isEmpty {
         LabeledContent("Folder", value: noteFolderDisplayName)
       }
@@ -88,7 +65,6 @@ private struct OpenedNoteRecordMetadata: View {
       }
       LabeledContent("Versions", value: recoveredNoteVersionCount.formatted())
     }
-    .font(.callout)
   }
 }
 
@@ -99,10 +75,8 @@ private struct OpenedNoteRecordTime: View {
   var body: some View {
     LabeledContent {
       Text(time, format: .dateTime.year().month().day().hour().minute())
-        .monospacedDigit()
     } label: {
       Text(label)
-        .foregroundStyle(.secondary)
     }
   }
 }
@@ -115,8 +89,6 @@ private struct OpenedNoteRecordBody: View {
     switch openedNoteBody {
     case .available(let noteBodyText):
       Text(noteBodyText)
-        .font(.body)
-        .lineSpacing(4)
         .textSelection(.enabled)
         .id(openedNoteBodyAnchor.recordAnchorIdentifier)
     case .unavailable:
@@ -125,7 +97,7 @@ private struct OpenedNoteRecordBody: View {
         systemImage: "doc.questionmark",
         description: Text(OperationalCopy.Record.noteBodyUnavailable)
       )
-      .id(openedNoteBodyAnchor.recordAnchorIdentifier)
+        .id(openedNoteBodyAnchor.recordAnchorIdentifier)
     }
   }
 }
