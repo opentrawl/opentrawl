@@ -8,8 +8,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>OpenTrawl Privacy &amp; End-to-End Encryption</title>
-<meta name="description" content="How OpenTrawl keeps your archive private on your Mac, with local models, and in our planned end-to-end encrypted cloud tiers.">
+<title>OpenTrawl Privacy &amp; Encryption</title>
+<meta name="description" content="How OpenTrawl keeps your archive private on your Mac today, with local models, and end-to-end encrypted when sync and cloud ship.">
 <style>
 :root {
   --white: #ffffff;
@@ -74,10 +74,10 @@ h1 { margin-top: 44px; font-size: clamp(30px, 4.5vw, 46px); font-weight: 700; le
 .lead { margin-top: 14px; font-size: 17px; color: var(--ink); max-width: 720px; }
 h2 { margin-top: 44px; padding-top: 18px; border-top: var(--rule); font-size: 22px; letter-spacing: -0.02em; }
 p { margin-top: 10px; max-width: 740px; color: var(--ink); }
-ul { margin: 12px 0 0 20px; max-width: 740px; color: var(--ink); display: flex; flex-direction: column; gap: 9px; }
+ul { margin: 12px 0 0 20px; max-width: 740px; color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
 
 .pillars {
-  margin-top: 22px;
+  margin-top: 24px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border: 1px solid var(--black);
@@ -90,27 +90,6 @@ ul { margin: 12px 0 0 20px; max-width: 740px; color: var(--ink); display: flex; 
 .pillar:last-child { border-right: none; }
 .pillar strong { display: block; font-size: 15px; margin-bottom: 6px; color: var(--black); }
 .pillar p { margin-top: 0; font-size: 13.5px; line-height: 1.5; }
-
-.table-scroll { margin-top: 18px; border: 1px solid var(--black); }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; text-align: left; }
-th {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--grey);
-  background: var(--paper);
-  padding: 11px 13px;
-  border-bottom: var(--rule);
-  border-right: var(--hair);
-}
-th:last-child { border-right: none; }
-td { padding: 12px 13px; border-bottom: var(--hair); border-right: var(--hair); vertical-align: top; color: var(--ink); }
-td:last-child { border-right: none; }
-tr:last-child td { border-bottom: none; }
-td.mode { font-weight: 700; color: var(--black); }
-td.mode span { display: block; font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--grey); margin-top: 2px; }
-.cant { color: var(--green); font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
 
 .callout {
   margin-top: 16px;
@@ -161,35 +140,6 @@ footer a:hover { color: var(--red); border-color: var(--red); }
 }
 @media (max-width: 720px) {
   .btn-top.ghost { display: none; }
-  .table-scroll { border: none; }
-  table, thead, tbody, tr, td { display: block; width: 100%; }
-  thead { display: none; }
-  tr {
-    border: 1px solid var(--black);
-    margin-bottom: 14px;
-    background: var(--white);
-  }
-  tr:last-child { margin-bottom: 0; }
-  td {
-    border-right: none;
-    border-bottom: var(--hair);
-    padding: 10px 14px;
-  }
-  td.mode {
-    background: var(--paper);
-    border-bottom: var(--rule);
-    font-size: 15px;
-  }
-  td[data-label]::before {
-    content: attr(data-label);
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--grey);
-    margin-bottom: 3px;
-  }
 }
 </style>
 </head>
@@ -224,7 +174,7 @@ footer a:hover { color: var(--red); border-color: var(--red); }
       <a href="index.html">Home</a>
       <a href="plugins.html">Plugins</a>
       <a class="active" href="security.html">Privacy</a>
-      <a href="index.html#pricing">Pricing</a>
+      <a href="index.html#waitlist">Waitlist</a>
     </nav>
     <div class="topbar-cta">
       <a class="btn-top ghost" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
@@ -235,93 +185,44 @@ footer a:hover { color: var(--red); border-color: var(--red); }
     <a href="index.html">Home</a>
     <a href="plugins.html">Plugins</a>
     <a class="active" href="security.html">Privacy</a>
-    <a href="index.html#pricing">Pricing</a>
+    <a href="index.html#waitlist">Waitlist</a>
   </nav>
 </header>
 
 <main class="wrap">
-  <h1>Privacy &amp; End-to-End Encryption</h1>
-  <p class="lead">Privacy is a human right. OpenTrawl is built in the EU 🇪🇺, open source under the MIT licence, and designed so you never have to take our word for it: today everything stays on your Mac, and our planned sync and cloud tiers are designed to be end-to-end encrypted so OpenTrawl cannot read your data.</p>
+  <h1>Privacy &amp; Encryption</h1>
+  <p class="lead">Privacy is a human right. OpenTrawl is built in the EU 🇪🇺 and open source under the MIT licence. Today everything stays on your Mac. When we add sync and cloud access, it will be end-to-end encrypted so nobody, not us and not your cloud provider, can read your data.</p>
 
   <div class="pillars">
     <div class="pillar">
-      <strong>Local + local models</strong>
-      <p>Pair OpenTrawl on your Mac with a local coding agent running Ollama or MLX. Neither OpenTrawl nor any AI company sees your messages, emails, or notes.</p>
+      <strong>Local on your Mac today</strong>
+      <p>Your archives are plain SQLite files under <code>~/.opentrawl</code>. No OpenTrawl servers, no account, no analytics, and no tracking.</p>
     </div>
     <div class="pillar">
-      <strong>End-to-end encrypted (planned)</strong>
-      <p>Your archive is encrypted on your device before upload. Apple users get free encrypted sync using their own iCloud with keys in iCloud Keychain: Apple can't read it, we can't read it, nobody can read it. Only you can read it. Cross-platform sync uses encrypted blobs on Azure Blob Storage.</p>
+      <strong>Local models, zero AI exposure</strong>
+      <p>Pair OpenTrawl with a local coding agent running Ollama or MLX on Apple Silicon. Neither OpenTrawl nor any AI company sees your messages, emails, or notes.</p>
     </div>
     <div class="pillar">
-      <strong>Hardware-locked memory (planned)</strong>
-      <p>Remote 24/7 search is planned to run inside Azure Confidential Containers (AMD SEV-SNP), where the CPU encrypts RAM and unlocks queries only for a session authenticated by your device key. That design keeps OpenTrawl admins out of memory.</p>
+      <strong>End-to-end encrypted (coming next)</strong>
+      <p>Your archive is encrypted on your device before it ever leaves. Nobody, not us and not your cloud provider, can read your data. Only you can.</p>
     </div>
   </div>
 
-  <h2>How your data is protected across every tier</h2>
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Tier</th>
-          <th>Your devices</th>
-          <th>OpenTrawl servers</th>
-          <th>Cloud storage</th>
-          <th>Your AI &amp; teammates</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="mode">Local ($0)<span>Available now · free iCloud sync planned</span></td>
-          <td data-label="Your devices">Full local archive &amp; search (optional planned Mac/iPhone sync via your own iCloud + iCloud Keychain)</td>
-          <td data-label="OpenTrawl servers"><span class="cant">Nothing uploaded</span></td>
-          <td data-label="Cloud storage"><span class="cant">Local only</span><br>(or encrypted blobs in your own iCloud: Apple can't read it, we can't read it, only you can)</td>
-          <td data-label="Your AI &amp; teammates">No AI cloud exposure with local models; or only what you open with cloud AI</td>
-        </tr>
-        <tr>
-          <td class="mode">Encrypted Sync ($7/mo)<span>Planned</span></td>
-          <td data-label="Your devices">Full archive synced across Mac, iPhone, Linux &amp; Windows</td>
-          <td data-label="OpenTrawl servers"><span class="cant">Designed so we cannot read</span><br>Keys stay on your devices</td>
-          <td data-label="Cloud storage">Encrypted blobs only (Azure Blob Storage)</td>
-          <td data-label="Your AI &amp; teammates">Only what you search &amp; open locally</td>
-        </tr>
-        <tr>
-          <td class="mode">Encrypted Cloud ($19/mo)<span>Planned</span></td>
-          <td data-label="Your devices">Full archive + 24/7 remote search</td>
-          <td data-label="OpenTrawl servers"><span class="cant">Designed so we cannot read</span><br>Azure Confidential Containers (AMD SEV-SNP); requires your session key</td>
-          <td data-label="Cloud storage">Encrypted blobs only (Azure Blob Storage)</td>
-          <td data-label="Your AI &amp; teammates">Only the sources you grant each agent</td>
-        </tr>
-        <tr>
-          <td class="mode">Encrypted Dedicated ($119/mo)<span>Planned</span></td>
-          <td data-label="Your devices">Full archive + dedicated 24/7 server</td>
-          <td data-label="OpenTrawl servers"><span class="cant">Designed so we cannot read</span><br>Single-user Azure Confidential Container (AMD SEV-SNP) + manual update approval</td>
-          <td data-label="Cloud storage">Encrypted blobs only (Azure Blob Storage)</td>
-          <td data-label="Your AI &amp; teammates">Only the sources you grant each agent</td>
-        </tr>
-        <tr>
-          <td class="mode">Encrypted Teams ($39/seat/mo)<span>Planned · 3-seat min</span></td>
-          <td data-label="Your devices">Private personal archive + shared team archive</td>
-          <td data-label="OpenTrawl servers"><span class="cant">Designed so we cannot read</span><br>Dedicated team Azure Confidential Container (AMD SEV-SNP)</td>
-          <td data-label="Cloud storage">Separate encrypted personal &amp; team blobs (Azure Blob Storage)</td>
-          <td data-label="Your AI &amp; teammates">Teammates never see personal archives; shared team sources follow per-agent rules</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <h2>How OpenTrawl works today</h2>
+  <ul>
+    <li><strong>Strictly read-only.</strong> OpenTrawl copies your history into local archives for search. It cannot send a message, delete an email, or edit a note.</li>
+    <li><strong>Isolated external plugins.</strong> Every external plugin runs inside a macOS sandbox with zero network, folder, or Keychain access by default. OpenTrawl pins each installed plugin's SHA-256 hash and stops if an update changes the binary or asks for new access.</li>
+    <li><strong>Verify the Mac app before granting Full Disk Access.</strong> Open OpenTrawl and use <strong>Click to copy AI review prompt</strong>. It gives Claude or Codex the signed app bundle on your disk and its public GitHub commit so your AI can check what the app reads and confirm there is no telemetry.</li>
+  </ul>
 
-  <h2>Verify what runs on your Mac and in the cloud</h2>
   <div class="callout">
-    <strong>On your Mac today:</strong> Open OpenTrawl and use <strong>Click to copy AI review prompt</strong> before granting Full Disk Access. It gives Claude or Codex the signed app bundle on your disk and its public GitHub commit so your AI can check what the app reads and confirm there is no telemetry.
-  </div>
-  <div class="callout">
-    <strong>In our planned Encrypted Cloud:</strong> Every server build will come straight from our public GitHub repo and be published 72 hours before it goes live. You will be able to check from your terminal that the server handling your queries matches the exact public source code.
+    <strong>When sync and cloud launch:</strong> Encryption happens on your device before anything is uploaded, with your keys staying under your control. Any server handling encrypted remote search will be built from public GitHub code so you can verify what runs from your terminal.
   </div>
 
   <h2>Where the limits are</h2>
   <ul>
     <li><strong>Cloud AI providers see what you send them.</strong> If you connect a cloud AI (Claude, ChatGPT, Codex), whatever conversations or emails that agent opens go to that AI provider under its privacy terms. Use a local model on your Mac if you want no AI company to see your data.</li>
-    <li><strong>Storage servers still see basic metadata.</strong> Encrypted cloud backups hide your messages, notes, and source names, but storage servers can still see coarse padded file sizes and when you sync. Stay on Local if you want zero cloud backups.</li>
+    <li><strong>Cloud backups still expose basic metadata.</strong> Encrypted backups hide your messages, notes, and source names, but storage servers can still see coarse file sizes and when you sync. Stay local if you want zero cloud backups.</li>
     <li><strong>Your Mac or iPhone itself.</strong> If malware runs on an unlocked device, local files are exposed like any other app on that device.</li>
   </ul>
 

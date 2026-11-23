@@ -16,7 +16,7 @@
 OpenTrawl: Spotlight for the Agentic OS
 
 [meta.description]
-Give coding agents on your Mac searchable access to your messages, email, notes, photos, calendar, finances, and X history. Local-first and open source today, with end-to-end encrypted sync and cloud tiers planned.
+Give coding agents on your Mac searchable access to your messages, email, notes, photos, calendar, finances, and X history. Local-first, open source, and private.
 
 [card.line.1]
 Spotlight for the Agentic OS.
@@ -36,8 +36,8 @@ Plugins
 [nav.security]
 Privacy
 
-[nav.pricing]
-Pricing
+[nav.waitlist]
+Waitlist
 
 [button.download]
 Download for Mac
@@ -139,7 +139,7 @@ Plain Markdown files you own in Obsidian or git. Switch AI models tomorrow and k
 Privacy is a human right
 
 [privacy.lead]
-Your messages, finances, and photos belong to you. OpenTrawl is built in the EU 🇪🇺, open source under MIT, and designed so OpenTrawl cannot read your archive: local on your Mac today, and end-to-end encrypted in our planned sync and cloud tiers.
+Your messages, finances, and photos belong to you. OpenTrawl is built in the EU 🇪🇺, open source under MIT, and stays local on your Mac today. When we add sync and cloud access, it will be end-to-end encrypted so nobody, not us and not your cloud provider, can read your data.
 
 [privacy.p1.title]
 Everything stays on your Mac
@@ -154,10 +154,10 @@ Run with local models so no AI company sees your data
 Point a local coding agent running Ollama or MLX on Apple Silicon at OpenTrawl and neither OpenTrawl nor any AI company sees your messages, emails, or notes.
 
 [privacy.p3.title]
-End-to-end encrypted sync & cloud (planned)
+End-to-end encrypted when sync and cloud ship
 
 [privacy.p3.body]
-On Apple devices, planned iCloud sync uses your own iCloud as an encrypted dropbox with keys in iCloud Keychain: Apple can't read it, we can't read it, nobody can read it. Only you can read it. Paid cloud tiers run on Azure Blob Storage and Azure Confidential Containers (AMD SEV-SNP) requiring your live session key.
+Your archive is encrypted on your device before it ever leaves. Nobody, not us and not your cloud provider, can read your data. Only you can.
 
 [privacy.p4.title]
 Read-only, never sends or edits
@@ -172,52 +172,16 @@ Have your AI check that it does what it says it does
 Reading Apple apps like Messages, Notes, and Mail requires macOS Full Disk Access. Don't take our word for it: open the Mac app and use **Click to copy AI review prompt** so Claude or Codex can inspect the app bundle on your Mac against our public GitHub source before you turn it on.
 
 [privacy.security.link]
-How encryption and hardware-locked memory work →
+Read how OpenTrawl protects your privacy →
 
-[pricing.title]
-Free on your Mac forever. Encrypted sync and cloud tiers coming next.
-
-[pricing.lead]
-The Mac app, CLI, and built-in sources are free and MIT open source, with free encrypted Mac-to-iPhone iCloud sync planned (keys in iCloud Keychain: Apple can't read it, we can't read it, only you can). Paid tiers add cross-platform encrypted sync on Azure and 24/7 remote search in hardware-locked memory.
-
-[pricing.t0.name]
-Local
-
-[pricing.t0.status]
-Available now
-
-[pricing.t1.name]
-Encrypted Sync
-
-[pricing.t1.status]
-Planned
-
-[pricing.t2.name]
-Encrypted Cloud
-
-[pricing.t2.status]
-Planned
-
-[pricing.t3.name]
-Encrypted Dedicated
-
-[pricing.t3.status]
-Planned
-
-[pricing.t4.name]
-Encrypted Teams
-
-[pricing.t4.status]
-Planned · $39/seat/month (3-seat min)
-
-[pricing.t4.desc]
-Private personal archives plus a shared end-to-end encrypted team archive, per-agent access controls, and dedicated team hardware.
+[waitlist.heading]
+Free on your Mac forever.
 
 [waitlist.title]
-Join the waitlist for encrypted sync, cloud, and team plans
+Join the waitlist for iPhone sync and 24/7 cloud access
 
 [waitlist.lead]
-Leave your email and pick what you want first. No newsletter, no spam: one email when your tier opens.
+The Mac app, CLI, and built-in sources are free and MIT open source. Leave your email and pick what you want next. No newsletter, no spam: one email when it opens.
 
 [footer.byline]
 Built by [Josh Palmer](https://x.com/jjpcodes) · OpenClaw community maintainer · ex Spotify · made in Rotterdam 🇪🇺 🇳🇱

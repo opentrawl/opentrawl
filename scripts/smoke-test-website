@@ -335,8 +335,7 @@ async function main() {
           }
         }
         const ask3Border = getComputedStyle(document.querySelectorAll('.ask-card')[2]).borderBottomWidth;
-        const tier3Border = getComputedStyle(document.querySelectorAll('.tier')[2]).borderBottomWidth;
-        return { count: icons.length, rowSpread: Math.max(...tops) - Math.min(...tops), bad, ask3Border, tier3Border };
+        return { count: icons.length, rowSpread: Math.max(...tops) - Math.min(...tops), bad, ask3Border };
       });
       if (iconCheck.count !== 11 || iconCheck.rowSpread > 2) {
         failures.push(`/ @${w}x${h}: hero icons did not stay on one row (count=${iconCheck.count}, rowSpread=${iconCheck.rowSpread}px)`);
@@ -344,8 +343,8 @@ async function main() {
       if (iconCheck.bad.length > 0) {
         failures.push(`/ @${w}x${h}: icon tooltip widens page: ${iconCheck.bad.join(', ')}`);
       }
-      if (w <= 390 && (iconCheck.ask3Border === '0px' || iconCheck.tier3Border === '0px')) {
-        failures.push(`/ @${w}x${h}: missing mobile card divider (ask3=${iconCheck.ask3Border}, tier3=${iconCheck.tier3Border})`);
+      if (w <= 390 && iconCheck.ask3Border === '0px') {
+        failures.push(`/ @${w}x${h}: missing mobile card divider (ask3=${iconCheck.ask3Border})`);
       }
     }
 
@@ -369,10 +368,10 @@ async function main() {
       }
     }
 
-    // 4. Sticky-topbar anchor clearance on #examples, #wiki, #pricing
+    // 4. Sticky-topbar anchor clearance on #examples, #wiki, #privacy, #waitlist
     await cdp.setViewport(1440, 900);
     await cdp.goto(baseUrl + '/');
-    for (const href of ['#examples', '#wiki', '#pricing']) {
+    for (const href of ['#examples', '#wiki', '#privacy', '#waitlist']) {
       await cdp.evaluate(`() => {
         document.documentElement.style.scrollBehavior = 'auto';
         const link = document.querySelector('.nav a[href="${href}"]');
@@ -389,28 +388,22 @@ async function main() {
       }
     }
 
-    // 5. Waitlist defaults, single-tier pre-select, validation & honest preview-mode message
+    // 5. Waitlist defaults, validation & honest preview-mode message
     const wl = await cdp.evaluate(() => {
       const form = document.getElementById('waitlist-form');
       const email = document.getElementById('waitlist-email');
       const status = document.getElementById('waitlist-status');
       const defaultChecked = form.querySelectorAll('input[name="devices"]:checked').length;
-      const dedBtn = document.querySelector('[data-pick-tier="Encrypted Dedicated ($119/mo)"]');
-      if (dedBtn) dedBtn.click();
-      const picked = Array.from(form.querySelectorAll('input[name="devices"]:checked')).map((c) => c.value);
       email.value = 'not-an-email';
       form.dispatchEvent(new Event('submit', { cancelable: true }));
       const invalidMsg = status.textContent;
       email.value = 'test@example.com';
       form.dispatchEvent(new Event('submit', { cancelable: true }));
       const previewMsg = status.textContent;
-      return { defaultChecked, picked, invalidMsg, previewMsg };
+      return { defaultChecked, invalidMsg, previewMsg };
     });
     if (wl.defaultChecked !== 0) {
       failures.push(`waitlist should start with 0 tiers checked, got ${wl.defaultChecked}`);
-    }
-    if (wl.picked.length !== 1 || wl.picked[0] !== 'Encrypted Dedicated ($119/mo)') {
-      failures.push(`waitlist tier picker expected only Encrypted Dedicated, got ${JSON.stringify(wl.picked)}`);
     }
     if (!wl.invalidMsg || !wl.invalidMsg.toLowerCase().includes('type your email')) {
       failures.push(`waitlist invalid email check unexpected: ${JSON.stringify(wl.invalidMsg)}`);

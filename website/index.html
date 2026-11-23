@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>OpenTrawl: Spotlight for the Agentic OS</title>
-<meta name="description" content="Give coding agents on your Mac searchable access to your messages, email, notes, photos, calendar, finances, and X history. Local-first and open source today, with end-to-end encrypted sync and cloud tiers planned.">
+<meta name="description" content="Give coding agents on your Mac searchable access to your messages, email, notes, photos, calendar, finances, and X history. Local-first, open source, and private.">
 <link rel="canonical" href="https://opentrawl.sh/">
 <link rel="alternate" type="text/plain" href="llms.txt" title="LLMs.txt">
 
@@ -18,7 +18,7 @@
 <meta property="og:site_name" content="OpenTrawl">
 <meta property="og:url" content="https://opentrawl.sh/">
 <meta property="og:title" content="OpenTrawl: Spotlight for the Agentic OS">
-<meta property="og:description" content="Give coding agents on your Mac searchable access to your messages, email, notes, photos, calendar, finances, and X history. Local-first and open source today, with end-to-end encrypted sync and cloud tiers planned.">
+<meta property="og:description" content="Give coding agents on your Mac searchable access to your messages, email, notes, photos, calendar, finances, and X history. Local-first, open source, and private.">
 <meta property="og:image" content="https://opentrawl.sh/card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -26,7 +26,7 @@
 <meta name="twitter:site" content="@opentrawl">
 <meta name="twitter:creator" content="@jjpcodes">
 <meta name="twitter:title" content="OpenTrawl: Spotlight for the Agentic OS">
-<meta name="twitter:description" content="Give coding agents on your Mac searchable access to your messages, email, notes, photos, calendar, finances, and X history. Local-first and open source today, with end-to-end encrypted sync and cloud tiers planned.">
+<meta name="twitter:description" content="Give coding agents on your Mac searchable access to your messages, email, notes, photos, calendar, finances, and X history. Local-first, open source, and private.">
 <meta name="twitter:image" content="https://opentrawl.sh/card.png">
 <meta name="twitter:image:alt" content="OpenTrawl: Spotlight for the Agentic OS. Local AI search for all your apps.">
 <style>
@@ -877,7 +877,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <a href="#wiki">Personal Wiki</a>
       <a href="plugins.html">Plugins</a>
       <a href="#privacy">Privacy</a>
-      <a href="#pricing">Pricing</a>
+      <a href="#waitlist">Waitlist</a>
     </nav>
 
     <div class="topbar-buttons">
@@ -890,7 +890,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <a href="#wiki">Personal Wiki</a>
     <a href="plugins.html">Plugins</a>
     <a href="#privacy">Privacy</a>
-    <a href="#pricing">Pricing</a>
+    <a href="#waitlist">Waitlist</a>
   </nav>
 </header>
 
@@ -1064,7 +1064,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   <section class="section" id="privacy">
     <div class="section-head">
       <h2>Privacy is a human right</h2>
-      <p class="section-lead">Your messages, finances, and photos belong to you. OpenTrawl is built in the EU 🇪🇺, open source under MIT, and designed so OpenTrawl cannot read your archive: local on your Mac today, and end-to-end encrypted in our planned sync and cloud tiers.</p>
+      <p class="section-lead">Your messages, finances, and photos belong to you. OpenTrawl is built in the EU 🇪🇺, open source under MIT, and stays local on your Mac today. When we add sync and cloud access, it will be end-to-end encrypted so nobody, not us and not your cloud provider, can read your data.</p>
     </div>
 
     <div class="privacy-grid">
@@ -1077,8 +1077,8 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
         <p>Point a local coding agent running Ollama or MLX on Apple Silicon at OpenTrawl and neither OpenTrawl nor any AI company sees your messages, emails, or notes.</p>
       </div>
       <div class="privacy-item">
-        <h3>End-to-end encrypted sync &amp; cloud (planned)</h3>
-        <p>On Apple devices, planned iCloud sync uses your own iCloud as an encrypted dropbox with keys in iCloud Keychain: Apple can't read it, we can't read it, nobody can read it. Only you can read it. Paid cloud tiers run on Azure Blob Storage and Azure Confidential Containers (AMD SEV-SNP) requiring your live session key.</p>
+        <h3>End-to-end encrypted when sync and cloud ship</h3>
+        <p>Your archive is encrypted on your device before it ever leaves. Nobody, not us and not your cloud provider, can read your data. Only you can.</p>
       </div>
       <div class="privacy-item">
         <h3>Read-only, never sends or edits</h3>
@@ -1091,91 +1091,21 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
         <h3>Have your AI check that it does what it says it does</h3>
         <p>Reading Apple apps like Messages, Notes, and Mail requires macOS Full Disk Access. Don't take our word for it: open the Mac app and use <b>Click to copy AI review prompt</b> so Claude or Codex can inspect the app bundle on your Mac against our public GitHub source before you turn it on.</p>
       </div>
-      <a class="inline-link" href="security.html">How encryption and hardware-locked memory work →</a>
+      <a class="inline-link" href="security.html">Read how OpenTrawl protects your privacy →</a>
     </div>
   </section>
 
-  <!-- PRICING & WAITLIST (Agent Keyring pattern) -->
-  <section class="section" id="pricing">
+  <!-- WAITLIST -->
+  <section class="section" id="waitlist">
     <div class="section-head">
-      <h2>Free on your Mac forever. Encrypted sync and cloud tiers coming next.</h2>
-      <p class="section-lead">The Mac app, CLI, and built-in sources are free and MIT open source, with free encrypted Mac-to-iPhone iCloud sync planned (keys in iCloud Keychain: Apple can't read it, we can't read it, only you can). Paid tiers add cross-platform encrypted sync on Azure and 24/7 remote search in hardware-locked memory.</p>
+      <h2>Free on your Mac forever.</h2>
     </div>
 
-    <div class="tier-grid">
-      <article class="tier live">
-        <div>
-          <span class="tier-status">Available now</span>
-          <h3 class="tier-name">Local</h3>
-          <div class="tier-price"><span class="tier-amount">$0</span><span class="tier-period">/ forever</span></div>
-          <ul class="tier-list">
-            <li>Mac app &amp; <code>trawl</code> CLI (MIT)</li>
-            <li>Built-in sources &amp; local plugins</li>
-            <li>Works with cloud or local models</li>
-            <li>Planned: free encrypted Mac/iPhone sync via your own iCloud (keys in iCloud Keychain)</li>
-          </ul>
-        </div>
-        <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
-      </article>
-
-      <article class="tier">
-        <div>
-          <span class="tier-status">Planned</span>
-          <h3 class="tier-name">Encrypted Sync</h3>
-          <div class="tier-price"><span class="tier-amount">$7</span><span class="tier-period">/ mo</span></div>
-          <ul class="tier-list">
-            <li>50 GB end-to-end encrypted backup (Azure Blob Storage)</li>
-            <li>Cross-platform sync (Mac, iPhone, Linux, Windows)</li>
-            <li>Encryption keys stay on your devices</li>
-          </ul>
-        </div>
-        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Sync ($7/mo)">Join waitlist</a>
-      </article>
-
-      <article class="tier">
-        <div>
-          <span class="tier-status">Planned</span>
-          <h3 class="tier-name">Encrypted Cloud</h3>
-          <div class="tier-price"><span class="tier-amount">$19</span><span class="tier-period">/ mo</span></div>
-          <ul class="tier-list">
-            <li>Everything in Encrypted Sync</li>
-            <li>24/7 remote search for phone &amp; cloud AI</li>
-            <li>Hardware-locked memory (Azure AMD SEV-SNP) even we cannot read</li>
-          </ul>
-        </div>
-        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Cloud ($19/mo)">Join waitlist</a>
-      </article>
-
-      <article class="tier">
-        <div>
-          <span class="tier-status">Planned</span>
-          <h3 class="tier-name">Encrypted Dedicated</h3>
-          <div class="tier-price"><span class="tier-amount">$119</span><span class="tier-period">/ mo</span></div>
-          <ul class="tier-list">
-            <li>Dedicated single-user hardware-locked memory</li>
-            <li>250 GB end-to-end encrypted storage</li>
-            <li>Manual approval before any server update</li>
-          </ul>
-        </div>
-        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Dedicated ($119/mo)">Join waitlist</a>
-      </article>
-    </div>
-
-    <div class="teams-bar">
-      <div class="teams-copy">
-        <strong>Encrypted Teams</strong>
-        <span class="teams-status">Planned · $39/seat/month (3-seat min)</span>
-        <p>Private personal archives plus a shared end-to-end encrypted team archive, per-agent access controls, and dedicated team hardware.</p>
-      </div>
-      <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Teams ($39/seat)">Join waitlist</a>
-    </div>
-
-    <!-- Waitlist form mirrored from Agent Keyring (/api/waitlist) -->
-    <div class="waitlist-card" id="waitlist">
+    <div class="waitlist-card" style="margin-top:20px">
       <div class="waitlist-grid">
         <div class="waitlist-copy">
-          <h3>Join the waitlist for encrypted sync, cloud, and team plans</h3>
-          <p>Leave your email and pick what you want first. No newsletter, no spam: one email when your tier opens.</p>
+          <h3>Join the waitlist for iPhone sync and 24/7 cloud access</h3>
+          <p>The Mac app, CLI, and built-in sources are free and MIT open source. Leave your email and pick what you want next. No newsletter, no spam: one email when it opens.</p>
         </div>
 
         <form id="waitlist-form" data-endpoint="/api/waitlist" novalidate>
@@ -1184,12 +1114,11 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
             <input name="company" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;">
             <button type="submit" class="btn btn-lg">Email me</button>
           </div>
-          <span class="checks-label">What do you want first?</span>
+          <span class="checks-label">What do you want next?</span>
           <div class="check-row">
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Sync ($7/mo)"> Encrypted Sync ($7)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)"> Encrypted Cloud ($19)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Dedicated ($119/mo)"> Encrypted Dedicated ($119)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Teams ($39/seat)"> Encrypted Teams</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Sync ($7/mo)"> Encrypted sync (Mac &amp; iPhone)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)"> 24/7 encrypted cloud</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Teams ($39/seat)"> Teams</label>
           </div>
           <div class="inline-note" id="waitlist-status" aria-live="polite"></div>
         </form>

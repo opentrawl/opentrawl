@@ -877,7 +877,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <a href="#wiki">{{nav.wiki}}</a>
       <a href="plugins.html">{{nav.plugins}}</a>
       <a href="#privacy">{{nav.security}}</a>
-      <a href="#pricing">{{nav.pricing}}</a>
+      <a href="#waitlist">{{nav.waitlist}}</a>
     </nav>
 
     <div class="topbar-buttons">
@@ -890,7 +890,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <a href="#wiki">{{nav.wiki}}</a>
     <a href="plugins.html">{{nav.plugins}}</a>
     <a href="#privacy">{{nav.security}}</a>
-    <a href="#pricing">{{nav.pricing}}</a>
+    <a href="#waitlist">{{nav.waitlist}}</a>
   </nav>
 </header>
 
@@ -1095,83 +1095,13 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     </div>
   </section>
 
-  <!-- PRICING & WAITLIST (Agent Keyring pattern) -->
-  <section class="section" id="pricing">
+  <!-- WAITLIST -->
+  <section class="section" id="waitlist">
     <div class="section-head">
-      <h2>{{pricing.title}}</h2>
-      <p class="section-lead">{{pricing.lead}}</p>
+      <h2>{{waitlist.heading}}</h2>
     </div>
 
-    <div class="tier-grid">
-      <article class="tier live">
-        <div>
-          <span class="tier-status">{{pricing.t0.status}}</span>
-          <h3 class="tier-name">{{pricing.t0.name}}</h3>
-          <div class="tier-price"><span class="tier-amount">$0</span><span class="tier-period">/ forever</span></div>
-          <ul class="tier-list">
-            <li>Mac app &amp; <code>trawl</code> CLI (MIT)</li>
-            <li>Built-in sources &amp; local plugins</li>
-            <li>Works with cloud or local models</li>
-            <li>Planned: free encrypted Mac/iPhone sync via your own iCloud (keys in iCloud Keychain)</li>
-          </ul>
-        </div>
-        <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">{{button.download}}</a>
-      </article>
-
-      <article class="tier">
-        <div>
-          <span class="tier-status">{{pricing.t1.status}}</span>
-          <h3 class="tier-name">{{pricing.t1.name}}</h3>
-          <div class="tier-price"><span class="tier-amount">$7</span><span class="tier-period">/ mo</span></div>
-          <ul class="tier-list">
-            <li>50 GB end-to-end encrypted backup (Azure Blob Storage)</li>
-            <li>Cross-platform sync (Mac, iPhone, Linux, Windows)</li>
-            <li>Encryption keys stay on your devices</li>
-          </ul>
-        </div>
-        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Sync ($7/mo)">Join waitlist</a>
-      </article>
-
-      <article class="tier">
-        <div>
-          <span class="tier-status">{{pricing.t2.status}}</span>
-          <h3 class="tier-name">{{pricing.t2.name}}</h3>
-          <div class="tier-price"><span class="tier-amount">$19</span><span class="tier-period">/ mo</span></div>
-          <ul class="tier-list">
-            <li>Everything in Encrypted Sync</li>
-            <li>24/7 remote search for phone &amp; cloud AI</li>
-            <li>Hardware-locked memory (Azure AMD SEV-SNP) even we cannot read</li>
-          </ul>
-        </div>
-        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Cloud ($19/mo)">Join waitlist</a>
-      </article>
-
-      <article class="tier">
-        <div>
-          <span class="tier-status">{{pricing.t3.status}}</span>
-          <h3 class="tier-name">{{pricing.t3.name}}</h3>
-          <div class="tier-price"><span class="tier-amount">$119</span><span class="tier-period">/ mo</span></div>
-          <ul class="tier-list">
-            <li>Dedicated single-user hardware-locked memory</li>
-            <li>250 GB end-to-end encrypted storage</li>
-            <li>Manual approval before any server update</li>
-          </ul>
-        </div>
-        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Dedicated ($119/mo)">Join waitlist</a>
-      </article>
-    </div>
-
-    <div class="teams-bar">
-      <div class="teams-copy">
-        <strong>{{pricing.t4.name}}</strong>
-        <span class="teams-status">{{pricing.t4.status}}</span>
-        <p>{{pricing.t4.desc}}</p>
-      </div>
-      <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Teams ($39/seat)">Join waitlist</a>
-    </div>
-
-    <!-- Waitlist form mirrored from Agent Keyring (/api/waitlist) -->
-    <div class="waitlist-card" id="waitlist">
+    <div class="waitlist-card" style="margin-top:20px">
       <div class="waitlist-grid">
         <div class="waitlist-copy">
           <h3>{{waitlist.title}}</h3>
@@ -1184,12 +1114,11 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
             <input name="company" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;">
             <button type="submit" class="btn btn-lg">Email me</button>
           </div>
-          <span class="checks-label">What do you want first?</span>
+          <span class="checks-label">What do you want next?</span>
           <div class="check-row">
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Sync ($7/mo)"> Encrypted Sync ($7)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)"> Encrypted Cloud ($19)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Dedicated ($119/mo)"> Encrypted Dedicated ($119)</label>
-            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Teams ($39/seat)"> Encrypted Teams</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Sync ($7/mo)"> Encrypted sync (Mac &amp; iPhone)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)"> 24/7 encrypted cloud</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Teams ($39/seat)"> Teams</label>
           </div>
           <div class="inline-note" id="waitlist-status" aria-live="polite"></div>
         </form>
