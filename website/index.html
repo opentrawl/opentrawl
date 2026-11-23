@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>OpenTrawl: Spotlight for the Agentic OS</title>
-<meta name="description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, health, finances, and X history on your Mac.">
+<meta name="description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first, open source, and end-to-end encrypted.">
 <link rel="canonical" href="https://opentrawl.sh/">
 <link rel="alternate" type="text/plain" href="llms.txt" title="LLMs.txt">
 
@@ -18,7 +18,7 @@
 <meta property="og:site_name" content="OpenTrawl">
 <meta property="og:url" content="https://opentrawl.sh/">
 <meta property="og:title" content="OpenTrawl: Spotlight for the Agentic OS">
-<meta property="og:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, health, finances, and X history on your Mac.">
+<meta property="og:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first, open source, and end-to-end encrypted.">
 <meta property="og:image" content="https://opentrawl.sh/card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -26,7 +26,7 @@
 <meta name="twitter:site" content="@opentrawl">
 <meta name="twitter:creator" content="@jjpcodes">
 <meta name="twitter:title" content="OpenTrawl: Spotlight for the Agentic OS">
-<meta name="twitter:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, health, finances, and X history on your Mac.">
+<meta name="twitter:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, finances, and X history on your Mac. Local-first, open source, and end-to-end encrypted.">
 <meta name="twitter:image" content="https://opentrawl.sh/card.png">
 <meta name="twitter:image:alt" content="OpenTrawl: Spotlight for the Agentic OS. Local AI search for all your apps.">
 <style>
@@ -48,8 +48,9 @@
 
   --rule: 2px solid var(--black);
   --hair: 1px solid var(--hairline);
-  --page-max: 1180px;
-  --measure: 660px;
+  --page-max: 1320px;
+  --measure: 680px;
+  --nav-h: 56px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -77,9 +78,9 @@ code {
 
 .wrap {
   width: 100%;
-  max-width: calc(var(--page-max) + 48px);
+  max-width: calc(var(--page-max) + 64px);
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 clamp(16px, 3vw, 32px);
 }
 
 /* --- topbar ------------------------------------------------ */
@@ -97,7 +98,7 @@ code {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  height: 54px;
+  height: var(--nav-h);
 }
 .brand {
   display: flex;
@@ -118,7 +119,7 @@ code {
 .nav {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 24px;
   font-size: 13.5px;
   font-weight: 500;
   color: var(--grey);
@@ -164,24 +165,24 @@ code {
 .copy-btn:hover { background: var(--white); color: var(--black); }
 .copy-btn.copied { background: var(--green); border-color: var(--green); color: var(--white); }
 
-/* --- hero: fits cleanly in one viewport on desktop --------- */
+/* --- hero: fits cleanly in one viewport on desktop & wide --- */
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
-  gap: 36px;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  gap: clamp(28px, 3.5vw, 56px);
   align-items: center;
   padding: 28px 0 36px;
-  min-height: calc(100svh - 56px);
+  min-height: calc(100svh - var(--nav-h));
 }
 .hero-copy h1 {
-  font-size: clamp(32px, 3.8vw, 48px);
+  font-size: clamp(34px, 4vw, 54px);
   font-weight: 700;
   letter-spacing: -0.035em;
-  line-height: 1.04;
+  line-height: 1.03;
 }
 .hero-cycle-line {
   margin-top: 14px;
-  font-size: clamp(19px, 2vw, 25px);
+  font-size: clamp(19px, 2vw, 26px);
   font-weight: 700;
   letter-spacing: -0.025em;
   line-height: 1.24;
@@ -204,7 +205,7 @@ code {
   font-size: 16px;
   line-height: 1.5;
   color: var(--ink);
-  max-width: 470px;
+  max-width: 500px;
 }
 .hero-cta {
   margin-top: 22px;
@@ -231,6 +232,7 @@ code {
   color: var(--grey);
 }
 
+/* --- real app icons with clean hover tooltips -------------- */
 .icon-strip {
   margin-top: 24px;
   padding-top: 16px;
@@ -242,20 +244,46 @@ code {
   gap: 8px;
   flex-wrap: wrap;
 }
+.icon-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  outline: none;
+}
 .app-icon {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: block;
   object-fit: contain;
+  transition: transform 0.12s ease;
 }
 .app-icon.square { border-radius: 7px; }
-.icon-more {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--grey);
-  padding: 4px 7px;
-  border: var(--hair);
-  background: var(--paper);
+.icon-tip:hover .app-icon,
+.icon-tip:focus-visible .app-icon {
+  transform: translateY(-2px);
+}
+.icon-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  background: var(--black);
+  color: var(--white);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  padding: 5px 9px;
+  pointer-events: none;
+  display: none;
+  z-index: 30;
+}
+.icon-tip:hover::after,
+.icon-tip:focus-visible::after {
+  display: block;
 }
 .icon-meta {
   margin-top: 10px;
@@ -277,7 +305,7 @@ code {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  height: clamp(460px, calc(100svh - 148px), 600px);
+  height: clamp(460px, calc(100svh - 148px), 610px);
   box-shadow: 0 14px 36px rgba(16, 16, 16, 0.09);
 }
 .aw-chrome {
@@ -362,23 +390,24 @@ code {
 }
 .term-output {
   font-family: var(--font-mono);
-  font-size: 10.7px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.78);
+  font-size: clamp(10.5px, 0.92vw, 12.2px);
+  line-height: 1.52;
+  color: rgba(255, 255, 255, 0.8);
   white-space: pre;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
   flex: 1;
 }
 .term-output.answer-mode {
   white-space: pre-wrap;
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.58;
+  font-size: 14.5px;
+  line-height: 1.6;
   color: rgba(255, 255, 255, 0.92);
 }
 .cite-link {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 0.92em;
   color: #ff8e83;
 }
 .demo-caption {
@@ -387,15 +416,16 @@ code {
   color: var(--grey);
 }
 
-/* --- sections ---------------------------------------------- */
+/* --- sections (with sticky-nav scroll-margin-top!) --------- */
 .section {
   margin-top: 72px;
   border-top: var(--rule);
   padding-top: 36px;
+  scroll-margin-top: calc(var(--nav-h) + 18px);
 }
 .section-head { max-width: var(--measure); }
 .section h2 {
-  font-size: clamp(24px, 3vw, 32px);
+  font-size: clamp(24px, 3vw, 34px);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.14;
@@ -403,7 +433,7 @@ code {
 .section-lead {
   margin-top: 12px;
   font-size: 16px;
-  line-height: 1.52;
+  line-height: 1.54;
   color: var(--ink);
 }
 
@@ -411,7 +441,7 @@ code {
 .ask-grid {
   margin-top: 24px;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border: 1px solid var(--black);
 }
 .ask-card {
@@ -435,12 +465,10 @@ code {
   color: var(--grey);
 }
 
-/* --- day-1 wiki -------------------------------------------- */
-.wiki-grid {
+/* --- one-step connect + mac app ---------------------------- */
+.single-prompt {
   margin-top: 24px;
-  display: grid;
-  grid-template-columns: 1fr 1.1fr;
-  gap: 20px;
+  max-width: 860px;
 }
 .dark-card {
   background: var(--term-bg);
@@ -476,9 +504,36 @@ code {
   border-top: 1px solid var(--term-line);
   background: var(--term-top);
   font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.62);
 }
 
+.app-band {
+  margin-top: 40px;
+  padding-top: 28px;
+  border-top: var(--hair);
+}
+.app-line { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; }
+.app-shot {
+  display: block;
+  width: 100%;
+  max-width: 980px;
+  height: auto;
+  margin-top: 16px;
+}
+.app-why {
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--grey);
+  max-width: var(--measure);
+}
+
+/* --- day-1 personal wiki ----------------------------------- */
+.wiki-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 20px;
+}
 .wiki-sheet {
   border: var(--hair);
   border-top: var(--rule);
@@ -500,14 +555,14 @@ code {
 .wiki-body {
   padding: 16px;
   display: grid;
-  grid-template-columns: 205px 1fr;
-  gap: 16px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
   flex: 1;
 }
 .wiki-tree {
   font-family: var(--font-mono);
   font-size: 11.5px;
-  line-height: 1.8;
+  line-height: 1.75;
   color: var(--grey);
   border-right: var(--hair);
   padding-right: 12px;
@@ -523,7 +578,7 @@ code {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 10px;
   font-size: 13.5px;
   line-height: 1.5;
   color: var(--ink);
@@ -547,76 +602,18 @@ code {
   color: var(--grey);
 }
 
-/* --- connect your AI + mac app ----------------------------- */
-.connect-grid {
-  margin-top: 24px;
-  display: grid;
-  grid-template-columns: 1.25fr 0.75fr;
-  gap: 20px;
-}
-.cli-panel {
-  border: var(--hair);
-  border-top: var(--rule);
-  background: var(--paper);
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 14px;
-  min-width: 0;
-}
-.cli-panel-label {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--grey);
-  font-weight: 700;
-}
-.cli-block {
-  background: var(--term-bg);
-  color: var(--white);
-  padding: 14px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.65;
-  overflow-x: auto;
-  white-space: pre;
-}
-.cli-block .dim { color: rgba(255, 255, 255, 0.5); }
-.cli-block .ok { color: #7dc294; }
-.cli-note { font-size: 13.5px; color: var(--ink); }
-
-.app-band {
-  margin-top: 40px;
-  padding-top: 28px;
-  border-top: var(--hair);
-}
-.app-line { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; }
-.app-shot {
-  display: block;
-  width: 100%;
-  max-width: 960px;
-  height: auto;
-  margin-top: 16px;
-}
-.app-why {
-  margin-top: 12px;
-  font-size: 14px;
-  color: var(--grey);
-  max-width: var(--measure);
-}
-
 /* --- privacy ----------------------------------------------- */
 .privacy-grid {
   margin-top: 24px;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px 36px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 36px;
 }
-.privacy-item h3 { font-size: 15.5px; font-weight: 700; margin-bottom: 4px; }
-.privacy-item p { font-size: 14.5px; color: var(--ink); line-height: 1.5; }
+.privacy-item h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.privacy-item p { font-size: 14.5px; color: var(--ink); line-height: 1.52; }
 
 .fda-box {
-  margin-top: 24px;
+  margin-top: 26px;
   border: var(--hair);
   border-left: 4px solid var(--black);
   background: var(--paper);
@@ -627,15 +624,15 @@ code {
   justify-content: space-between;
   gap: 16px;
 }
-.fda-box-copy { max-width: 720px; }
+.fda-box-copy { max-width: 760px; }
 .fda-box-copy h3 { font-size: 15.5px; font-weight: 700; }
 .fda-box-copy p { margin-top: 4px; font-size: 14px; color: var(--ink); }
 
-/* --- pricing ----------------------------------------------- */
+/* --- pricing & Agent Keyring style waitlist ---------------- */
 .tier-grid {
   margin-top: 24px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--black);
 }
 .tier {
@@ -655,7 +652,7 @@ code {
   color: var(--grey);
 }
 .tier.live .tier-status { color: var(--green); }
-.tier-name { margin-top: 6px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.tier-name { margin-top: 6px; font-size: 17.5px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
 .tier-price {
   margin-top: 10px;
   display: flex;
@@ -678,13 +675,7 @@ code {
 }
 .tier-list li { padding-left: 13px; position: relative; }
 .tier-list li::before { content: "·"; position: absolute; left: 0; font-weight: 700; color: var(--grey); }
-.tier .btn { width: 100%; }
-.tier-planned-note {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--grey);
-  padding-top: 6px;
-}
+.tier .btn, .tier .btn-secondary { width: 100%; }
 
 .teams-bar {
   margin-top: 12px;
@@ -693,13 +684,79 @@ code {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 8px 24px;
+  align-items: center;
+  gap: 12px 24px;
 }
-.teams-bar strong { font-size: 16px; margin-right: 10px; }
-.teams-bar .teams-status { font-family: var(--font-mono); font-size: 12px; color: var(--grey); }
-.teams-bar p { width: 100%; font-size: 14px; color: var(--ink); margin-top: 4px; }
-.pricing-foot { margin-top: 14px; font-size: 14px; }
+.teams-copy { max-width: 760px; }
+.teams-copy strong { font-size: 16px; margin-right: 10px; }
+.teams-status { font-family: var(--font-mono); font-size: 12px; color: var(--grey); }
+.teams-copy p { font-size: 14px; color: var(--ink); margin-top: 4px; }
+
+/* Agent Keyring style waitlist form */
+.waitlist-card {
+  margin-top: 24px;
+  border: var(--rule);
+  background: var(--paper);
+  padding: 24px;
+  scroll-margin-top: calc(var(--nav-h) + 18px);
+}
+.waitlist-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 24px;
+  align-items: start;
+}
+.waitlist-copy h3 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.waitlist-copy p { margin-top: 6px; font-size: 14.5px; color: var(--ink); }
+.waitlist-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.waitlist-input {
+  flex: 1;
+  min-width: 220px;
+  border: var(--rule);
+  background: var(--white);
+  padding: 10px 12px;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  color: var(--black);
+}
+.waitlist-input:focus { outline: none; border-color: var(--red); }
+.checks-label {
+  display: block;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--grey);
+}
+.check-row {
+  margin-top: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  border: var(--hair);
+  background: var(--white);
+  cursor: pointer;
+  user-select: none;
+}
+.check-pill input { accent-color: var(--red); }
+.check-pill:has(input:checked) { border-color: var(--black); font-weight: 700; }
+.inline-note {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--ink);
+  min-height: 18px;
+}
+.inline-note.ok { color: var(--green); font-weight: 600; }
 
 /* --- footer ------------------------------------------------ */
 footer {
@@ -721,30 +778,32 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 .byline { width: 100%; margin-top: 4px; }
 
 /* --- responsive -------------------------------------------- */
-@media (max-width: 1040px) {
+@media (max-width: 1080px) {
   .nav { display: none; }
-  .hero { grid-template-columns: 1fr; min-height: auto; padding: 32px 0 20px; gap: 28px; }
-  .agent-window { height: 470px; }
-  .wiki-grid, .connect-grid { grid-template-columns: 1fr; }
-  .tier-grid { grid-template-columns: repeat(2, 1fr); }
+  .hero { grid-template-columns: minmax(0, 1fr); min-height: auto; padding: 32px 0 20px; gap: 28px; }
+  .agent-window { height: 470px; max-width: 100%; }
+  .wiki-grid, .waitlist-grid { grid-template-columns: minmax(0, 1fr); }
+  .tier-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tier { border-bottom: var(--hair); }
   .tier:nth-child(2n) { border-right: none; }
   .tier:nth-last-child(-n+2) { border-bottom: none; }
 }
 
 @media (max-width: 680px) {
-  .wrap { padding: 0 16px; }
   .topbar { height: 50px; }
-  .topbar .btn, .topbar .btn-secondary { font-size: 12px; padding: 5px 10px; }
-  .ask-grid, .privacy-grid, .tier-grid { grid-template-columns: 1fr; }
+  :root { --nav-h: 50px; }
+  .topbar .btn { font-size: 12px; padding: 5px 12px; white-space: nowrap; }
+  .topbar .btn-secondary { display: none; }
+  .ask-grid, .privacy-grid, .tier-grid { grid-template-columns: minmax(0, 1fr); }
   .ask-card { border-right: none; border-bottom: var(--hair); }
   .ask-card:last-child { border-bottom: none; }
   .tier { border-right: none; border-bottom: var(--hair); }
   .tier:last-child { border-bottom: none; }
-  .wiki-body { grid-template-columns: 1fr; }
+  .wiki-body { grid-template-columns: minmax(0, 1fr); }
   .wiki-tree { border-right: none; border-bottom: var(--hair); padding-right: 0; padding-bottom: 10px; }
   .agent-window { height: 440px; border-radius: 8px; }
   .section { margin-top: 52px; padding-top: 28px; }
+  .waitlist-card { padding: 18px; }
 }
 </style>
 </head>
@@ -781,7 +840,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       <a href="#examples">Examples</a>
       <a href="#wiki">Personal Wiki</a>
       <a href="plugins.html">Plugins</a>
-      <a href="security.html">Security</a>
+      <a href="security.html">Privacy</a>
       <a href="#pricing">Pricing</a>
     </nav>
 
@@ -807,24 +866,25 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
         <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
         <a class="inline-link" href="https://github.com/opentrawl/opentrawl">Read the source on GitHub ↗</a>
       </div>
-      <p class="hero-trust">Nothing leaves your Mac, unless you want it to. Free and open source (MIT).</p>
+      <p class="hero-trust">Nothing leaves your Mac unless you want it to. Free, MIT open source, made in the EU 🇪🇺.</p>
 
       <div class="icon-strip">
         <div class="icon-row" aria-label="Built-in Mac sources">
-          <img class="app-icon" src="icons/imessage.png" width="30" height="30" alt="iMessage">
-          <img class="app-icon" src="icons/whatsapp.png" width="30" height="30" alt="WhatsApp">
-          <img class="app-icon" src="icons/telegram.png" width="30" height="30" alt="Telegram">
-          <img class="app-icon square" src="icons/gmail.png" width="30" height="30" alt="Gmail">
-          <img class="app-icon" src="icons/notes.png" width="30" height="30" alt="Notes">
-          <img class="app-icon" src="icons/contacts.png" width="30" height="30" alt="Contacts">
-          <img class="app-icon" src="icons/calendar.png" width="30" height="30" alt="Calendar">
-          <img class="app-icon" src="icons/photos.png" width="30" height="30" alt="Photos">
-          <img class="app-icon square" src="icons/twitter.png" width="30" height="30" alt="Twitter">
-          <span class="icon-more">+ Mail, Health, Money</span>
+          <span class="icon-tip" tabindex="0" data-tip="iMessage — chats and group threads"><img class="app-icon" src="icons/imessage.png" width="32" height="32" alt="iMessage"></span>
+          <span class="icon-tip" tabindex="0" data-tip="WhatsApp — Desktop messages and groups"><img class="app-icon" src="icons/whatsapp.png" width="32" height="32" alt="WhatsApp"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Telegram — full chat history"><img class="app-icon" src="icons/telegram.png" width="32" height="32" alt="Telegram"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Mail — iCloud and local mailboxes"><img class="app-icon square" src="icons/mail.png" width="32" height="32" alt="Apple Mail"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Gmail — direct read-only Google sync"><img class="app-icon square" src="icons/gmail.png" width="32" height="32" alt="Gmail"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Notes — notes, folders, and past versions"><img class="app-icon" src="icons/notes.png" width="32" height="32" alt="Notes"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Contacts — people matched across apps"><img class="app-icon" src="icons/contacts.png" width="32" height="32" alt="Contacts"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Calendar — events, attendees, and trips"><img class="app-icon" src="icons/calendar.png" width="32" height="32" alt="Calendar"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Apple Photos — dates, places, people, albums"><img class="app-icon" src="icons/photos.png" width="32" height="32" alt="Photos"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Money — bank accounts, balances, transactions"><img class="app-icon square" src="icons/money.svg" width="32" height="32" alt="Money"></span>
+          <span class="icon-tip" tabindex="0" data-tip="Twitter (X) — posts, bookmarks, likes, DMs"><img class="app-icon square" src="icons/twitter.png" width="32" height="32" alt="Twitter"></span>
         </div>
         <div class="icon-meta">
-          <span>12 built-in sources, plus sandboxed plugins.</span>
-          <a class="inline-link" href="plugins.html">Browse plugins →</a>
+          <span>11 apps built in today, plus plugins for more. Hover any icon to see what it archives.</span>
+          <a class="inline-link" href="plugins.html">Browse all apps &amp; plugins →</a>
         </div>
       </div>
     </div>
@@ -856,149 +916,147 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   <!-- WHAT YOU CAN ASK -->
   <section class="section" id="examples">
     <div class="section-head">
-      <h2>What you can ask your AI</h2>
-      <p class="section-lead">Every time you start a new chat or switch models, you re-explain who people are, paste old messages, and dig up receipts yourself. With OpenTrawl on your Mac, your AI looks up the answer directly.</p>
+      <h2>Ask your AI about your actual life</h2>
+      <p class="section-lead">Stop digging through six apps to paste context into a chat window. With OpenTrawl on your Mac, your AI looks up the answer directly and links back to the original record.</p>
     </div>
     <div class="ask-grid">
-      <div class="ask-card">"What did I talk to Sam about across iMessage, WhatsApp, Telegram, and Gmail last month?"<span>iMessage · WhatsApp · Telegram · Gmail</span></div>
-      <div class="ask-card">"Pull up everything from my trip in September: messages, emails, photos, calendar events, and what I spent."<span>trawl around --trip · messages, photos, calendar &amp; money</span></div>
-      <div class="ask-card">"Find that note or X bookmark about home insurance. I do not remember the exact words."<span>Local topic search on Apple Silicon · Notes &amp; X bookmarks</span></div>
-      <div class="ask-card">"Did I pay that invoice, and which account did it come from?"<span>Money &amp; Gmail receipts linked together</span></div>
+      <div class="ask-card">"Did I actually pay that invoice from last month, and which bank account did it come from?"<span>Money &amp; Gmail receipts linked together</span></div>
+      <div class="ask-card">"Pull up every message, email, calendar event, and receipt from my trip to Brighton."<span>Messages, email, calendar &amp; receipts in one timeline</span></div>
+      <div class="ask-card">"What restaurant did Sam recommend on WhatsApp or Telegram earlier this year?"<span>WhatsApp · Telegram · iMessage</span></div>
+      <div class="ask-card">"Find that note or X bookmark about travel insurance. I cannot remember the exact words."<span>Local topic search on Apple Silicon · Notes &amp; X bookmarks</span></div>
     </div>
   </section>
 
-  <!-- DAY-1 PERSONAL WIKI -->
-  <section class="section" id="wiki">
-    <div class="section-head">
-      <h2>Build your personal wiki on Day 1</h2>
-      <p class="section-lead">Most AI memory waits months to learn who you are and traps that memory inside one chat app. OpenTrawl already has years of your messages, email, notes, and calendar on your Mac. Point your agent at <code>trawl</code> once and it compiles a plain Markdown personal wiki with links back to every source record.</p>
-    </div>
-
-    <div class="wiki-grid">
-      <div class="dark-card dark">
-        <div class="card-bar">
-          <span>One-shot prompt for your AI</span>
-          <button class="copy-btn" type="button" data-copy-target="wikiPromptText">Copy prompt</button>
-        </div>
-        <div class="card-text" id="wikiPromptText">Use my local OpenTrawl archive via <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>. Search my last 12 months across messages, email, notes, and calendar, then build a Markdown personal wiki in <code>~/wiki/</code> covering key people, active projects, commitments, and decisions. Cite every fact with its exact <code>trawl open</code> link.</div>
-        <div class="card-foot">Re-run weekly as new messages and emails arrive. Your archives update in the background.</div>
-      </div>
-
-      <div class="wiki-sheet">
-        <div class="wiki-bar">
-          <span>What your agent writes in ~/wiki/</span>
-          <span>Plain Markdown</span>
-        </div>
-        <div class="wiki-body">
-          <div class="wiki-tree" aria-label="Example personal wiki folder">
-            <div>~/wiki/</div>
-            <div>├── index.md</div>
-            <div>├── people/</div>
-            <div>│&nbsp;&nbsp;&nbsp;├── ford-prefect.md</div>
-            <div>│&nbsp;&nbsp;&nbsp;└── trillian.md</div>
-            <div>├── trips/</div>
-            <div class="active">│&nbsp;&nbsp;&nbsp;└── brighton.md</div>
-            <div>└── notes/</div>
-            <div>&nbsp;&nbsp;&nbsp;&nbsp;└── towel-locations.md</div>
-          </div>
-          <div class="wiki-preview">
-            <h3># brighton.md</h3>
-            <ul class="wiki-facts">
-              <li>
-                <strong>Dates:</strong> 22–23 Aug with Ford Prefect and Zaphod.<br>
-                <span class="wiki-cite">trawl open calendar:d8h66</span>
-              </li>
-              <li>
-                <strong>Towel locations:</strong> Spare in hallway cupboard, green in backpack, backup in glovebox.<br>
-                <span class="wiki-cite">trawl open notes:msvku</span>
-              </li>
-              <li>
-                <strong>Pub thread:</strong> Ford asked everyone to grab their towels and meet at the pub.<br>
-                <span class="wiki-cite">trawl open telegram:33zny</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-        <div class="wiki-foot">Plain Markdown files you own in Obsidian or git. Switch AI models tomorrow and keep your whole wiki.</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CONNECT YOUR AI + MAC APP -->
+  <!-- ONE-STEP CONNECT + MAC APP -->
   <section class="section" id="connect">
     <div class="section-head">
-      <h2>Connect the AI you already use</h2>
-      <p class="section-lead">Works with <b>Claude Code</b>, <b>Claude Desktop</b>, <b>Codex</b>, <b>OpenClaw</b>, <b>Hermes</b>, <b>Cursor</b>, <b>T3 Code</b>, and <b>executor.sh</b>. Start by pasting one prompt, or run <code>trawl connect</code> to preview exact config changes and choose which sources each agent can read.</p>
+      <h2>Connect your AI in one step</h2>
+      <p class="section-lead">Download the Mac app, let it build your local archive, then paste this one prompt into Claude Code, Codex, OpenClaw, Hermes, Cursor, T3 Code, or a local model on your Mac.</p>
     </div>
 
-    <div class="connect-grid">
+    <div class="single-prompt">
       <div class="dark-card dark">
         <div class="card-bar">
-          <span>Paste into any AI that can run tools</span>
+          <span>One-shot setup prompt</span>
           <button class="copy-btn" type="button" data-copy-target="connectPromptText">Copy prompt</button>
         </div>
-        <div class="card-text" id="connectPromptText">Use my local OpenTrawl archive at <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>. Start by running it with no arguments and with <code>--help</code>, then run a small read-only search and open one result to show me how it works. Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl more often (for example by adding a short instruction to my <code>AGENTS.md</code> or setting up a skill). Do not run <code>update</code>, install plugins, or change any files or configuration unless I ask.</div>
-      </div>
-
-      <div class="cli-panel">
-        <div class="cli-panel-label">Or connect installed agents in one step</div>
-        <pre class="cli-block"><span class="dim"># preview exact config diffs first</span>
-$ trawl connect
-
-<span class="dim"># limit one agent to Notes and Calendar</span>
-$ trawl connect cursor --sources notes,calendar --write
-<span class="ok">Claude Code, Codex, Cursor, OpenClaw, Hermes, T3</span></pre>
-        <p class="cli-note"><code>trawl connect</code> detects installed local agents, shows the exact config diff before touching any file, and lets you restrict an agent to specific sources (for example Notes and Calendar only).</p>
+        <div class="card-text" id="connectPromptText">Use my local OpenTrawl archive at <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>. Start by running it with no arguments and with <code>--help</code>, then run a small read-only search and open one result to show me how it works. Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl permanently (for example by adding a short note to my <code>AGENTS.md</code> or setting up a skill). Do not run <code>update</code>, install plugins, or change any files unless I ask.</div>
+        <div class="card-foot">Works today with any agent that can run commands, including local models via Ollama or MLX.</div>
       </div>
     </div>
 
     <div class="app-band">
       <p class="app-line">The macOS app is cool too. But the agent terminal is cooler.</p>
       <img class="app-shot" src="app-window.png" width="2528" height="1872"
-           alt="The OpenTrawl Mac app window showing connected local sources in the constellation view">
+           alt="The OpenTrawl Mac app constellation view showing connected local apps">
       <p class="app-why">We mostly made the app to manage the boring technical stuff (permissions, easy updates), so you can stay out of the terminal. That's about it. Claude made some cool animations though.</p>
+    </div>
+  </section>
+
+  <!-- DAY-1 PERSONAL WIKI -->
+  <section class="section" id="wiki">
+    <div class="section-head">
+      <h2>Build a personal wiki from your whole history in one shot</h2>
+      <p class="section-lead">Most AI memory waits months to learn who you are and traps that memory inside one company's chat app. OpenTrawl already has years of your messages, email, notes, calendar, and receipts on your Mac. Run this once to generate a clean, linked Markdown wiki your agents can read on Day 1.</p>
+    </div>
+
+    <div class="wiki-grid">
+      <div class="dark-card dark">
+        <div class="card-bar">
+          <span>One-shot personal wiki prompt</span>
+          <button class="copy-btn" type="button" data-copy-target="wikiPromptText">Copy prompt</button>
+        </div>
+        <div class="card-text" id="wikiPromptText">Using my local OpenTrawl archive at <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>, inspect the last 12 months across messages, email, notes, calendar, and money. Build a Markdown personal wiki in <code>~/wiki/</code> organised into <code>people/</code>, <code>projects/</code>, <code>home/</code>, <code>finances/</code>, <code>trips/</code>, and <code>open-matters.md</code>. Cite every fact with its exact <code>trawl open</code> link so I can verify anything in one click.</div>
+        <div class="card-foot">Re-run weekly to fold new messages, emails, and receipts into the same Markdown files.</div>
+      </div>
+
+      <div class="wiki-sheet">
+        <div class="wiki-bar">
+          <span>What your AI builds in ~/wiki/</span>
+          <span>Plain Markdown</span>
+        </div>
+        <div class="wiki-body">
+          <div class="wiki-tree" aria-label="Example personal wiki folder">
+            <div>~/wiki/</div>
+            <div>├── index.md</div>
+            <div>├── open-matters.md</div>
+            <div>├── people/</div>
+            <div>│&nbsp;&nbsp;&nbsp;├── ford-prefect.md</div>
+            <div>│&nbsp;&nbsp;&nbsp;└── trillian.md</div>
+            <div>├── trips/</div>
+            <div class="active">│&nbsp;&nbsp;&nbsp;└── brighton.md</div>
+            <div>├── finances/</div>
+            <div>│&nbsp;&nbsp;&nbsp;└── magrathea-orders.md</div>
+            <div>└── home/</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;└── towel-locations.md</div>
+          </div>
+          <div class="wiki-preview">
+            <h3># brighton.md</h3>
+            <ul class="wiki-facts">
+              <li>
+                <strong>Dates:</strong> 22–23 Aug with Ford Prefect and Zaphod; Albion v Aston Villa on 23 Aug.<br>
+                <span class="wiki-cite">trawl open calendar:d8h66</span>
+              </li>
+              <li>
+                <strong>Gear &amp; spend:</strong> 2× expedition linen towels, €42.00 from Everyday Account (Magrathea Outfitting).<br>
+                <span class="wiki-cite">trawl open money:42091</span>
+              </li>
+              <li>
+                <strong>Where they are:</strong> Spare in hallway cupboard, green in backpack, backup in glovebox.<br>
+                <span class="wiki-cite">trawl open notes:msvku</span>
+              </li>
+              <li>
+                <strong>Last chat:</strong> Ford asked everyone to grab their towels and meet at the pub.<br>
+                <span class="wiki-cite">trawl open telegram:33zny</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="wiki-foot">Plain Markdown files you own in Obsidian or git. Switch AI models tomorrow and keep your entire personal memory.</div>
+      </div>
     </div>
   </section>
 
   <!-- PRIVACY -->
   <section class="section" id="privacy">
     <div class="section-head">
-      <h2>Private by design</h2>
+      <h2>Privacy is a human right</h2>
+      <p class="section-lead">Your messages, finances, health, and photos belong to you. OpenTrawl is built in the EU 🇪🇺, open source under MIT, and engineered so we can never read your data — on your Mac today, and in our planned encrypted cloud tiers.</p>
     </div>
 
     <div class="privacy-grid">
       <div class="privacy-item">
-        <h3>Your data stays on your Mac</h3>
-        <p>Your archives are plain files in <code>~/.opentrawl</code>. Nothing is uploaded anywhere, and we do not know who you are.</p>
+        <h3>Everything stays on your Mac</h3>
+        <p>Your archives are plain local files in <code>~/.opentrawl</code>. No OpenTrawl servers, no account, no analytics, and no tracking.</p>
       </div>
       <div class="privacy-item">
-        <h3>No servers, no account, no tracking</h3>
-        <p>OpenTrawl runs locally with zero telemetry. The code is on GitHub under the MIT licence. No secrets here.</p>
+        <h3>Run with local models for zero cloud contact</h3>
+        <p>Point a local model on Apple Silicon (Ollama or MLX) at OpenTrawl and neither OpenTrawl nor any AI company ever sees a single message, email, or note.</p>
       </div>
       <div class="privacy-item">
-        <h3>Read-only</h3>
-        <p>OpenTrawl copies your history so you and your AI can search it. It never sends messages, edits notes, or writes back to your apps.</p>
+        <h3>End-to-end encrypted by default</h3>
+        <p>On our planned sync and cloud tiers, your archive is encrypted on your device before upload. Cloud search runs inside hardware-locked confidential memory that requires your live key, so even OpenTrawl cannot see your data.</p>
       </div>
       <div class="privacy-item">
-        <h3>Your AI sees only what it opens</h3>
-        <p>Whatever records an agent reads go to your AI provider under its privacy terms. Limit exposure by granting each agent only the sources it needs.</p>
+        <h3>Read-only, never sends or edits</h3>
+        <p>OpenTrawl only copies your history for search. It cannot send a message, delete an email, or edit a note.</p>
       </div>
     </div>
 
     <div class="fda-box">
       <div class="fda-box-copy">
-        <h3>Check the app before granting Full Disk Access</h3>
-        <p>Reading Apple apps like Messages, Notes, and Mail on macOS requires Full Disk Access. Before you turn it on, click <b>Audit this build</b> inside the Mac app to have Claude or Codex inspect the exact signed app bundle on your disk against the public GitHub commit.</p>
+        <h3>Have your AI check that it does what it says it does</h3>
+        <p>Reading Apple apps like Messages, Notes, and Mail requires macOS Full Disk Access. You should never trust a privacy claim on faith: open the Mac app and click <b>Click to copy AI review prompt</b> to let Claude or Codex inspect the exact app bundle on your disk against our public GitHub source before you turn it on.</p>
       </div>
-      <a class="inline-link" href="security.html">Read our planned cloud security model →</a>
+      <a class="inline-link" href="security.html">How encryption and hardware-locked cloud memory work →</a>
     </div>
   </section>
 
-  <!-- PRICING -->
+  <!-- PRICING & WAITLIST (Agent Keyring pattern) -->
   <section class="section" id="pricing">
     <div class="section-head">
-      <h2>Free on your Mac. Planned cloud tiers for sync and remote agents.</h2>
-      <p class="section-lead">The Mac app, CLI, and all 12 built-in sources are free and open source. Paid tiers are planned next for encrypted Mac-to-iPhone sync and 24/7 remote search when your Mac is asleep.</p>
+      <h2>Free on your Mac forever. Encrypted sync and cloud tiers coming next.</h2>
+      <p class="section-lead">The Mac app, CLI, and built-in sources are free and MIT open source. Planned paid tiers add end-to-end encrypted Mac-to-iPhone sync and 24/7 remote search in hardware-locked memory so even we cannot read your data.</p>
     </div>
 
     <div class="tier-grid">
@@ -1009,8 +1067,8 @@ $ trawl connect cursor --sources notes,calendar --write
           <div class="tier-price"><span class="tier-amount">$0</span><span class="tier-period">/ forever</span></div>
           <ul class="tier-list">
             <li>Mac app &amp; <code>trawl</code> CLI (MIT)</li>
-            <li>All 12 built-in sources &amp; plugins</li>
-            <li>Everything stays on your Mac</li>
+            <li>Built-in sources &amp; local plugins</li>
+            <li>Works with cloud or local models</li>
           </ul>
         </div>
         <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
@@ -1019,68 +1077,92 @@ $ trawl connect cursor --sources notes,calendar --write
       <article class="tier">
         <div>
           <span class="tier-status">Planned</span>
-          <h3 class="tier-name">Blind Sync</h3>
+          <h3 class="tier-name">End-to-End Encrypted Sync</h3>
           <div class="tier-price"><span class="tier-amount">$7</span><span class="tier-period">/ mo</span></div>
           <ul class="tier-list">
-            <li>50 GB encrypted cloud backup</li>
+            <li>50 GB end-to-end encrypted backup</li>
             <li>Mac and iPhone sync</li>
             <li>Encryption keys stay on your devices</li>
           </ul>
         </div>
-        <div class="tier-planned-note">Planned next</div>
+        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Sync ($7/mo)">Join waitlist</a>
       </article>
 
       <article class="tier">
         <div>
           <span class="tier-status">Planned</span>
-          <h3 class="tier-name">Cloud Vault</h3>
+          <h3 class="tier-name">End-to-End Encrypted Cloud</h3>
           <div class="tier-price"><span class="tier-amount">$19</span><span class="tier-period">/ mo</span></div>
           <ul class="tier-list">
-            <li>Everything in Blind Sync</li>
-            <li>24/7 remote search for phone &amp; cloud agents</li>
-            <li>Hardware-locked memory we cannot read</li>
+            <li>Everything in Encrypted Sync</li>
+            <li>24/7 remote search for phone &amp; cloud AI</li>
+            <li>Hardware-locked memory even we cannot read</li>
           </ul>
         </div>
-        <div class="tier-planned-note">Planned next</div>
+        <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Cloud ($19/mo)">Join waitlist</a>
       </article>
 
       <article class="tier">
         <div>
           <span class="tier-status">Planned</span>
-          <h3 class="tier-name">Dedicated</h3>
+          <h3 class="tier-name">Dedicated Hardware</h3>
           <div class="tier-price"><span class="tier-amount">$119</span><span class="tier-period">/ mo</span></div>
           <ul class="tier-list">
-            <li>Dedicated single-user cloud hardware</li>
-            <li>250 GB encrypted storage</li>
-            <li>Manual approval before server updates</li>
+            <li>Dedicated single-user confidential hardware</li>
+            <li>250 GB end-to-end encrypted storage</li>
+            <li>Manual approval before any server update</li>
           </ul>
         </div>
-        <div class="tier-planned-note">Planned next</div>
+        <a class="btn-secondary" href="#waitlist" data-pick-tier="Dedicated ($119/mo)">Join waitlist</a>
       </article>
     </div>
 
     <div class="teams-bar">
-      <div>
+      <div class="teams-copy">
         <strong>Teams</strong>
         <span class="teams-status">Planned · $39 / seat / month (3-seat minimum)</span>
+        <p>Private personal archives plus a shared end-to-end encrypted team archive, per-agent access controls, and dedicated team hardware.</p>
       </div>
-      <p>Private personal archives plus a shared team archive, per-agent access controls, and dedicated team hardware.</p>
+      <a class="btn-secondary" href="#waitlist" data-pick-tier="Teams ($39/seat)">Join waitlist</a>
     </div>
 
-    <p class="pricing-foot">
-      <a class="inline-link" href="security.html">See who can read what across every tier →</a>
-    </p>
+    <!-- Waitlist form mirrored from Agent Keyring (/api/waitlist) -->
+    <div class="waitlist-card" id="waitlist">
+      <div class="waitlist-grid">
+        <div class="waitlist-copy">
+          <h3>Get notified when iPhone sync and Encrypted Cloud open</h3>
+          <p>Leave your email and pick what you want first. No newsletter, no spam — one email when your tier opens.</p>
+        </div>
+
+        <form id="waitlist-form" data-endpoint="/api/waitlist" novalidate>
+          <div class="waitlist-row">
+            <input class="waitlist-input" id="waitlist-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" aria-label="Email address" required>
+            <input name="company" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;">
+            <button type="submit" class="btn btn-lg">Email me</button>
+          </div>
+          <span class="checks-label">What do you want first?</span>
+          <div class="check-row">
+            <label class="check-pill"><input type="checkbox" name="devices" value="iPhone Companion" checked> iPhone</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Sync ($7/mo)"> Encrypted Sync ($7)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Encrypted Cloud ($19/mo)" checked> Encrypted Cloud ($19)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Dedicated ($119/mo)"> Dedicated ($119)</label>
+            <label class="check-pill"><input type="checkbox" name="devices" value="Teams ($39/seat)"> Teams</label>
+          </div>
+          <div class="inline-note" id="waitlist-status" aria-live="polite"></div>
+        </form>
+      </div>
+    </div>
   </section>
 
   <footer>
     <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
     <a href="https://x.com/opentrawl">x.com/opentrawl</a>
     <a href="plugins.html">Plugins</a>
-    <a href="security.html">Security</a>
+    <a href="security.html">Privacy &amp; encryption</a>
     <a href="privacy.html">Gmail privacy</a>
     <a href="https://agent-keyring.jjpcodes.com/">Agent Keyring</a>
     <a href="llms.txt">llms.txt</a>
-    <div class="byline"><span>Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱</span></div>
+    <div class="byline"><span>Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in Rotterdam 🇪🇺 🇳🇱</span></div>
   </footer>
 
 </main>
@@ -1088,7 +1170,7 @@ $ trawl connect cursor --sources notes,calendar --write
 <script>
 (() => {
   // 1. Hero cycling word
-  const words = "iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Health., Money., Twitter.".split(", ");
+  const words = "iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Money., Twitter.".split(", ");
   let wordIdx = 0;
   const slot = document.getElementById("cycle");
   const wordEl = document.getElementById("cycleWord");
@@ -1133,7 +1215,59 @@ $ trawl connect cursor --sources notes,calendar --write
     });
   });
 
-  // 3. Four-beat live agent demo player (reads website/demo-session.txt)
+  // 3. Pricing CTA pre-selects waitlist option
+  document.querySelectorAll("[data-pick-tier]").forEach(link => {
+    link.addEventListener("click", () => {
+      const wanted = link.dataset.pickTier;
+      document.querySelectorAll('#waitlist-form input[name="devices"]').forEach(cb => {
+        if (cb.value === wanted) cb.checked = true;
+      });
+    });
+  });
+
+  // 4. Waitlist form (mirrored from Agent Keyring's /api/waitlist pattern)
+  const form = document.getElementById("waitlist-form");
+  const note = document.getElementById("waitlist-status");
+  if (form && note) {
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const input = document.getElementById("waitlist-email");
+      const email = input ? input.value.trim() : "";
+      if (!email || email.indexOf("@") < 1) {
+        note.className = "inline-note";
+        note.textContent = "Type your email address first.";
+        return;
+      }
+      const devices = Array.from(form.querySelectorAll('input[name="devices"]:checked')).map(c => c.value);
+      const hp = form.querySelector('input[name="company"]');
+      const company = hp ? hp.value.trim() : "";
+      const isLiveHost = window.location.hostname === "opentrawl.sh" || window.location.hostname === "www.opentrawl.sh";
+      const endpoint = isLiveHost ? form.dataset.endpoint : "";
+      if (endpoint) {
+        try {
+          note.className = "inline-note";
+          note.textContent = "Saving...";
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ email, devices, company, source: window.location.hostname }),
+          });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          note.className = "inline-note ok";
+          note.textContent = "Saved. We will email you when early access opens.";
+          form.reset();
+        } catch {
+          note.className = "inline-note";
+          note.textContent = "That did not save. Try again in a minute.";
+        }
+      } else {
+        note.className = "inline-note";
+        note.textContent = "This is a preview copy of the site, so it cannot save your email. Sign up at opentrawl.sh once live.";
+      }
+    });
+  }
+
+  // 5. Four-beat live agent demo player (reads website/demo-session.txt)
   (async () => {
     const commentEl = document.getElementById("termComment");
     const commandEl = document.getElementById("termCommand");
@@ -1190,7 +1324,6 @@ $ trawl connect cursor --sources notes,calendar --write
       });
     });
 
-    // Render beat 0 immediately with zero blank frame
     const first = steps[0];
     commentEl.textContent = "# " + first.comment;
     commandEl.textContent = "❯ " + first.command;

@@ -2,31 +2,30 @@
 ❯ trawl search towel --limit 5
 Search "towel": showing 5 of 127.
 
-when              match                              who                where        link
-2026-07-26 15:13  A ‹towel› is about the most        Ford Prefect → me  the pub      telegram:33zny
-                  massively useful thing an…
-2026-07-18 20:36  Title: ‹towel› locations                              Notes        notes:msvku
-2026-06-14 11:44  -€42.00 · Card payment —           Magrathea          Everyday     money:42091
-                  expedition ‹towel› order #42091    Outfitting         Account
-2026-06-14 11:42  Order #42091 — Heavyweight linen   Magrathea          Receipts     gmail:42091
-                  ‹towel› (slate blue)               Outfitting
-2026-05-13 10:41  have you seen my ‹towel›? leaving  me → Trillian                   whatsapp:qq9v9
-                  for Brighton in 10
+when              match                            who            link
+2026-07-26 15:13  A ‹towel› is about the most      Ford Prefect   telegram:33zny
+                  massively useful thing…
+2026-07-18 20:36  Title: ‹towel› locations         Notes          notes:msvku
+2026-06-14 11:44  -€42.00 · expedition ‹towel›     Magrathea      money:42091
+                  order #42091 (Everyday Account)  Outfitting
+2026-06-14 11:42  Order #42091 — Heavyweight       Magrathea      gmail:42091
+                  linen ‹towel› (slate blue)       Outfitting
+2026-05-13 10:41  have you seen my ‹towel›?        me → Trillian  whatsapp:qq9v9
+                  leaving for Brighton in 10
 
 Open: trawl open telegram:33zny
-More: trawl search towel --limit 10
 === step ===
 # Pull everything around the Brighton trip across all apps
 ❯ trawl around calendar:d8h66 --window 3d
 Around brighton with ford and zaphod (2026-08-20 to 2026-08-26)
 
-When              Source    Join          What                                       Link
-2026-08-22        Calendar  anchor        brighton with ford and zaphod (all day)    calendar:d8h66
-2026-08-23 15:00  Calendar  same window   ALBION V ASTON VILLA · Found in Mail       calendar:265zp
-2026-08-03 22:59  iMessage  Ford Prefect  Ford Prefect · recent thread               imessage:97x8f
-2026-07-26 15:13  Telegram  Ford Prefect  the pub · grab yours and meet at the pub   telegram:33zny
-2026-07-18 20:36  Notes     towel         towel locations · Spare towel in hallway   notes:msvku
-2026-06-14 11:44  Money     receipt       -€42.00 · Magrathea Outfitting #42091      money:42091
+When              Source    What                                  Link
+2026-08-22        Calendar  brighton with ford and zaphod         calendar:d8h66
+2026-08-23 15:00  Calendar  ALBION V ASTON VILLA (Found in Mail)  calendar:265zp
+2026-08-03 22:59  iMessage  Ford Prefect · recent thread          imessage:97x8f
+2026-07-26 15:13  Telegram  the pub · grab yours and meet at pub  telegram:33zny
+2026-07-18 20:36  Notes     towel locations · hallway cupboard    notes:msvku
+2026-06-14 11:44  Money     -€42.00 · Magrathea Outfitting        money:42091
 
 Open: trawl open telegram:33zny
 === step ===
@@ -36,14 +35,15 @@ the pub
 Participants: Ford Prefect, Trillian, Zaphod, Marvin, +2
 
    time              from          message
-   2026-07-26 15:09  Marvin        I think you ought to know I'm feeling very depressed.
-→  2026-07-26 15:13  Ford Prefect  A towel is about the most massively useful thing an
-                                   interstellar hitchhiker can have. grab yours and meet at
-                                   the pub. six pints of bitter.
+   2026-07-26 15:09  Marvin        I think you ought to know I'm feeling
+                                   very depressed.
+→  2026-07-26 15:13  Ford Prefect  A towel is about the most massively useful
+                                   thing an interstellar hitchhiker can have.
+                                   grab yours and meet at the pub. six pints.
    2026-07-26 15:23  Trillian      picking up Zaphod on the way
-   2026-07-26 18:53  me            this must be Thursday. I never could get the hang of
-                                   Thursdays.
-   2026-07-26 20:26  Ford Prefect  Drink up, you've got three pints to get through.
+   2026-07-26 18:53  me            this must be Thursday. I never could get
+                                   the hang of Thursdays.
+   2026-07-26 20:26  Ford Prefect  Drink up, three pints to get through.
 
 Messages: trawl messages --conversation telegram:33zny
 === step ===
@@ -53,9 +53,9 @@ Here is everything for the Brighton trip with Ford:
 
 • Dates: 22–23 Aug with Ford Prefect and Zaphod, plus Albion v Aston Villa on
   23 Aug at 15:00 (calendar:d8h66, calendar:265zp).
-• Packing: You ordered 2× expedition linen towels from Magrathea Outfitting
+• Packing: You bought 2× expedition linen towels from Magrathea Outfitting
   for €42.00 from Everyday Account (gmail:42091, money:42091).
 • Where they are: Spare towel in hallway cupboard, green one in backpack,
   backup in the glovebox (notes:msvku).
-• Last chat with Ford: Asked you to grab your towel and meet at the pub with
+• Last chat with Ford: Told you to grab your towel and meet at the pub with
   Trillian and Zaphod (telegram:33zny).

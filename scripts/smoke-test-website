@@ -1,0 +1,417 @@
+#!/usr/bin/env node
+// Written by AI on 2026.11.23 by model gemini-3-1-pro.
+// Zero-dependency website smoke test driving local Google Chrome over CDP.
+//
+// Checks:
+//   1. scripts/render-website succeeds cleanly.
+//   2. /, /plugins.html, /security.html, /privacy.html, /llms.txt return HTTP 200.
+//   3. Zero horizontal overflow and zero broken <img> at 1800x1000, 1440x900, 1280x720, and 390x844.
+//   4. All 4 hero demo beats fit with zero horizontal terminal clipping at 1440x900 and 1280x720.
+//   5. Sticky-topbar anchors (#examples, #wiki, #pricing) land below the sticky bar.
+//   6. /plugins.html filter counts (19 / 13 / 6) match and no plugin command clips horizontally.
+//   7. Waitlist form validates empty input and handles preview submission without JS errors.
+//   8. Zero console errors or uncaught page exceptions across all pages.
+
+'use strict';
+
+const fs = require('node:fs');
+const http = require('node:http');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync, spawn } = require('node:child_process');
+
+const REPO_ROOT = path.resolve(__dirname, '..');
+const WEBSITE_DIR = path.join(REPO_ROOT, 'website');
+
+const CHROME_CANDIDATES = [
+  process.env.OPENTRAWL_CHROME_BIN,
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+].filter(Boolean);
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.ico': 'image/x-icon',
+};
+
+function findChrome() {
+  for (const bin of CHROME_CANDIDATES) {
+    if (fs.existsSync(bin)) return bin;
+  }
+  throw new Error('No Chrome/Chromium binary found (set OPENTRAWL_CHROME_BIN)');
+}
+
+function startStaticServer() {
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      const reqPath = decodeURIComponent((req.url || '/').split('?')[0]);
+      const rel = reqPath === '/' ? 'index.html' : reqPath.replace(/^\/+/, '');
+      const full = path.resolve(WEBSITE_DIR, rel);
+      if (!full.startsWith(WEBSITE_DIR) || !fs.existsSync(full) || fs.statSync(full).isDirectory()) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      const ext = path.extname(full).toLowerCase();
+      res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+      fs.createReadStream(full).pipe(res);
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      resolve({ server, baseUrl: `http://127.0.0.1:${port}` });
+    });
+  });
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function launchChrome(chromeBin) {
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opentrawl-smoke-chrome-'));
+  const proc = spawn(
+    chromeBin,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--remote-debugging-port=0',
+      `--user-data-dir=${userDataDir}`,
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'], detached: true },
+  );
+
+  let stderrBuf = '';
+  const wsUrl = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timed out waiting for Chrome DevTools URL. stderr:\n${stderrBuf}`));
+    }, 15000);
+    proc.stderr.on('data', (chunk) => {
+      stderrBuf += chunk.toString('utf8');
+      const m = stderrBuf.match(/DevTools listening on (ws:\/\/[^\s]+)/);
+      if (m) {
+        clearTimeout(timer);
+        resolve(m[1]);
+      }
+    });
+    proc.once('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`Chrome exited early (${code}). stderr:\n${stderrBuf}`));
+    });
+  });
+
+  const debugOrigin = new URL(wsUrl);
+  const targets = await fetch(`http://${debugOrigin.host}/json/list`).then((r) => r.json());
+  const pageTarget = targets.find((t) => t.type === 'page') || targets[0];
+  if (!pageTarget || !pageTarget.webSocketDebuggerUrl) {
+    throw new Error('Could not find Chrome page target');
+  }
+
+  return { proc, userDataDir, pageWsUrl: pageTarget.webSocketDebuggerUrl };
+}
+
+class CDPClient {
+  constructor(ws) {
+    this.ws = ws;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.listeners = new Map();
+    ws.addEventListener('message', (ev) => {
+      const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString('utf8'));
+      if (msg.id && this.pending.has(msg.id)) {
+        const { resolve, reject } = this.pending.get(msg.id);
+        this.pending.delete(msg.id);
+        if (msg.error) reject(new Error(msg.error.message || JSON.stringify(msg.error)));
+        else resolve(msg.result);
+      } else if (msg.method) {
+        for (const fn of this.listeners.get(msg.method) || []) fn(msg.params || {});
+      }
+    });
+  }
+
+  static async connect(url) {
+    const ws = new WebSocket(url);
+    await new Promise((resolve, reject) => {
+      ws.addEventListener('open', resolve, { once: true });
+      ws.addEventListener('error', reject, { once: true });
+    });
+    return new CDPClient(ws);
+  }
+
+  on(method, fn) {
+    if (!this.listeners.has(method)) this.listeners.set(method, []);
+    this.listeners.get(method).push(fn);
+  }
+
+  send(method, params = {}) {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.ws.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  async setViewport(width, height) {
+    await this.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height,
+      deviceScaleFactor: 2,
+      mobile: width <= 430,
+    });
+  }
+
+  async goto(url) {
+    const loaded = new Promise((resolve) => {
+      const handler = () => {
+        const arr = this.listeners.get('Page.loadEventFired') || [];
+        const idx = arr.indexOf(handler);
+        if (idx >= 0) arr.splice(idx, 1);
+        resolve();
+      };
+      this.on('Page.loadEventFired', handler);
+    });
+    await this.send('Page.navigate', { url });
+    await Promise.race([loaded, sleep(10000)]);
+    await sleep(150);
+  }
+
+  async evaluate(expression) {
+    const res = await this.send('Runtime.evaluate', {
+      expression: `(${expression})()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (res.exceptionDetails) {
+      throw new Error(res.exceptionDetails.text || JSON.stringify(res.exceptionDetails));
+    }
+    return res.result ? res.result.value : undefined;
+  }
+
+  async screenshot(outPath) {
+    const { data } = await this.send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync(outPath, Buffer.from(data, 'base64'));
+  }
+
+  close() {
+    try { this.ws.close(); } catch {}
+  }
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  let screenshotDir = null;
+  const idx = args.indexOf('--screenshots');
+  if (idx >= 0 && args[idx + 1]) {
+    screenshotDir = path.resolve(args[idx + 1]);
+    fs.mkdirSync(screenshotDir, { recursive: true });
+  }
+
+  execFileSync(path.join(REPO_ROOT, 'scripts/render-website'), { cwd: REPO_ROOT, stdio: 'inherit' });
+
+  const chromeBin = findChrome();
+  const { server, baseUrl } = await startStaticServer();
+  const failures = [];
+  const consoleErrors = [];
+  let chrome = null;
+  let cdp = null;
+
+  try {
+    // 1. HTTP 200 on every published endpoint
+    for (const p of ['/', '/plugins.html', '/security.html', '/privacy.html', '/llms.txt']) {
+      const r = await fetch(baseUrl + p);
+      if (r.status !== 200) failures.push(`${p}: HTTP ${r.status}`);
+    }
+
+    chrome = await launchChrome(chromeBin);
+    cdp = await CDPClient.connect(chrome.pageWsUrl);
+    await cdp.send('Page.enable');
+    await cdp.send('Runtime.enable');
+
+    cdp.on('Runtime.exceptionThrown', (ev) => {
+      const msg = ev.exceptionDetails?.exception?.description || ev.exceptionDetails?.text || 'uncaught exception';
+      consoleErrors.push(`pageerror: ${msg}`);
+    });
+    cdp.on('Runtime.consoleAPICalled', (ev) => {
+      if (ev.type === 'error') {
+        const text = (ev.args || []).map((a) => a.value ?? a.description ?? '').join(' ');
+        consoleErrors.push(`console.error: ${text}`);
+      }
+    });
+
+    // 2. Overflow + broken images across viewports & pages
+    const viewports = [
+      [1800, 1000],
+      [1440, 900],
+      [1280, 720],
+      [390, 844],
+    ];
+    for (const p of ['/', '/plugins.html', '/security.html']) {
+      for (const [w, h] of viewports) {
+        await cdp.setViewport(w, h);
+        await cdp.goto(baseUrl + p);
+        const m = await cdp.evaluate(() => {
+          const doc = document.documentElement;
+          const brokenImgs = Array.from(document.querySelectorAll('img'))
+            .filter((i) => !i.complete || i.naturalWidth === 0)
+            .map((i) => i.getAttribute('src'));
+          return {
+            overflowX: doc.scrollWidth > doc.clientWidth,
+            scrollW: doc.scrollWidth,
+            clientW: doc.clientWidth,
+            brokenImgs,
+          };
+        });
+        if (m.overflowX) {
+          failures.push(`${p} @${w}x${h}: horizontal overflow (${m.scrollW} > ${m.clientW})`);
+        }
+        if (m.brokenImgs.length > 0) {
+          failures.push(`${p} @${w}x${h}: broken images ${JSON.stringify(m.brokenImgs)}`);
+        }
+        if (screenshotDir && (w === 1440 || w === 390)) {
+          const slug = p === '/' ? 'home' : p.replace(/^\//, '').replace(/\.html$/, '');
+          await cdp.screenshot(path.join(screenshotDir, `${slug}-${w}x${h}.png`));
+        }
+      }
+    }
+
+    // 3. All 4 hero demo beats unclipped at 1440x900 and 1280x720
+    for (const [w, h] of [[1440, 900], [1280, 720]]) {
+      await cdp.setViewport(w, h);
+      await cdp.goto(baseUrl + '/');
+      for (let beat = 0; beat < 4; beat++) {
+        await cdp.evaluate(`() => {
+          const btn = document.querySelector('[data-beat="${beat}"]');
+          if (btn) btn.click();
+        }`);
+        await sleep(220);
+        const clip = await cdp.evaluate(() => {
+          const el = document.getElementById('termOutput');
+          return { over: el.scrollWidth > el.clientWidth + 1, sw: el.scrollWidth, cw: el.clientWidth };
+        });
+        if (clip.over) {
+          failures.push(`/ @${w}x${h} beat ${beat}: terminal clipped (${clip.sw} > ${clip.cw})`);
+        }
+      }
+    }
+
+    // 4. Sticky-topbar anchor clearance on #examples, #wiki, #pricing
+    await cdp.setViewport(1440, 900);
+    await cdp.goto(baseUrl + '/');
+    for (const href of ['#examples', '#wiki', '#pricing']) {
+      await cdp.evaluate(`() => {
+        document.documentElement.style.scrollBehavior = 'auto';
+        const link = document.querySelector('.nav a[href="${href}"]');
+        if (link) link.click();
+      }`);
+      await sleep(250);
+      const check = await cdp.evaluate(`() => {
+        const navBottom = document.querySelector('.topbar-outer').getBoundingClientRect().bottom;
+        const h2 = document.querySelector('${href} h2').getBoundingClientRect();
+        return { navBottom: Math.round(navBottom), h2Top: Math.round(h2.top) };
+      }`);
+      if (check.h2Top < check.navBottom + 4) {
+        failures.push(`anchor ${href}: heading clipped under sticky topbar (h2Top=${check.h2Top} < navBottom=${check.navBottom})`);
+      }
+    }
+
+    // 5. Waitlist form validation & honest preview-mode message
+    const wl = await cdp.evaluate(() => {
+      const form = document.getElementById('waitlist-form');
+      const email = document.getElementById('waitlist-email');
+      const status = document.getElementById('waitlist-status');
+      email.value = 'not-an-email';
+      form.dispatchEvent(new Event('submit', { cancelable: true }));
+      const invalidMsg = status.textContent;
+      email.value = 'test@example.com';
+      form.dispatchEvent(new Event('submit', { cancelable: true }));
+      const previewMsg = status.textContent;
+      return { invalidMsg, previewMsg };
+    });
+    if (!wl.invalidMsg || !wl.invalidMsg.toLowerCase().includes('type your email')) {
+      failures.push(`waitlist invalid email check unexpected: ${JSON.stringify(wl.invalidMsg)}`);
+    }
+    if (!wl.previewMsg || !wl.previewMsg.toLowerCase().includes('opentrawl.sh')) {
+      failures.push(`waitlist preview-mode notice unexpected: ${JSON.stringify(wl.previewMsg)}`);
+    }
+
+    // 6. /plugins.html filters (19 / 13 / 6) and zero clipped commands
+    await cdp.setViewport(1440, 900);
+    await cdp.goto(baseUrl + '/plugins.html');
+    for (const [flt, expected] of [['now', 13], ['soon', 6], ['all', 19]]) {
+      const visible = await cdp.evaluate(`() => {
+        document.querySelector('[data-filter="${flt}"]').click();
+        return document.querySelectorAll('.plugin-card:not(.hidden)').length;
+      }`);
+      if (visible !== expected) {
+        failures.push(`/plugins.html filter=${flt}: expected ${expected} cards, got ${visible}`);
+      }
+    }
+    const clippedCmds = await cdp.evaluate(() =>
+      Array.from(document.querySelectorAll('.pc-cmd-wrap'))
+        .filter((el) => el.scrollWidth > el.clientWidth + 1)
+        .map((el) => el.textContent.trim().slice(0, 40)),
+    );
+    if (clippedCmds.length > 0) {
+      failures.push(`/plugins.html: clipped plugin commands ${JSON.stringify(clippedCmds)}`);
+    }
+    if (screenshotDir) {
+      await cdp.evaluate(() => {
+        const cards = Array.from(document.querySelectorAll('.plugin-card'));
+        const beeper = cards.find((c) => c.textContent.includes('Beeper'));
+        if (beeper) beeper.scrollIntoView({ behavior: 'instant', block: 'start' });
+        window.scrollBy(0, -76);
+      });
+      await sleep(120);
+      await cdp.screenshot(path.join(screenshotDir, 'plugins-lower-1440x900.png'));
+    }
+
+    if (consoleErrors.length > 0) failures.push(...consoleErrors);
+  } finally {
+    if (cdp) {
+      try { await cdp.send('Browser.close'); } catch {}
+      cdp.close();
+    }
+    if (chrome) {
+      await new Promise((resolve) => {
+        if (chrome.proc.exitCode !== null) return resolve();
+        const timer = setTimeout(() => {
+          try { process.kill(-chrome.proc.pid, 'SIGKILL'); } catch {}
+          resolve();
+        }, 3000);
+        chrome.proc.once('exit', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+        try { process.kill(-chrome.proc.pid, 'SIGTERM'); } catch { resolve(); }
+      });
+      await sleep(150);
+      try {
+        fs.rmSync(chrome.userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      } catch {}
+    }
+    server.close();
+  }
+
+  if (failures.length > 0) {
+    console.error('website smoke test FAILED:');
+    for (const f of failures) console.error('  -', f);
+    process.exit(1);
+  }
+  console.log('website smoke test PASSED (all pages, viewports 1800/1440/1280/390, anchors, icons, demo beats, waitlist, and plugin filters ok)');
+}
+
+main().catch((err) => {
+  console.error('website smoke test ERROR:', err);
+  process.exit(1);
+});
