@@ -1,0 +1,217 @@
+<!-- written_by: ai -->
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>OpenTrawl Security &amp; Planned Cloud Model</title>
+<meta name="description" content="How OpenTrawl keeps local archives private today, and the planned security model for encrypted sync and cloud hosting.">
+<style>
+:root {
+  --white: #ffffff;
+  --paper: #f6f6f4;
+  --black: #101010;
+  --ink: #2b2b29;
+  --grey: #636360;
+  --hairline: #dfdfdb;
+  --red: #e63323;
+  --green: #146c43;
+  --font-sans: "Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --rule: 2px solid var(--black);
+  --hair: 1px solid var(--hairline);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--white);
+  color: var(--black);
+  font-family: var(--font-sans);
+  font-size: 15.5px;
+  line-height: 1.58;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--paper);
+  padding: 1px 5px;
+  border: 1px solid var(--hairline);
+}
+.wrap { width: 100%; max-width: 960px; margin: 0 auto; padding: 0 24px; }
+.topbar-outer { border-bottom: var(--rule); background: var(--white); }
+.topbar { display: flex; align-items: center; justify-content: space-between; height: 54px; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+.brand .mark { width: 21px; height: 21px; display: block; }
+.wordmark { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; text-transform: lowercase; }
+.wordmark span { color: var(--red); }
+.nav { display: flex; gap: 22px; font-size: 13.5px; color: var(--grey); }
+.nav a { text-decoration: none; }
+.nav a:hover, .nav a.active { color: var(--black); font-weight: 700; }
+
+h1 { margin-top: 44px; font-size: clamp(30px, 4.5vw, 44px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; }
+.lead { margin-top: 14px; font-size: 17px; color: var(--ink); max-width: 680px; }
+h2 { margin-top: 44px; padding-top: 18px; border-top: var(--rule); font-size: 22px; letter-spacing: -0.02em; }
+p { margin-top: 10px; max-width: 720px; color: var(--ink); }
+ul { margin: 12px 0 0 20px; max-width: 720px; color: var(--ink); display: flex; flex-direction: column; gap: 8px; }
+
+.table-scroll { margin-top: 18px; overflow-x: auto; border: 1px solid var(--black); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; text-align: left; min-width: 660px; }
+th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--grey);
+  background: var(--paper);
+  padding: 11px 13px;
+  border-bottom: var(--rule);
+  border-right: var(--hair);
+}
+th:last-child { border-right: none; }
+td { padding: 12px 13px; border-bottom: var(--hair); border-right: var(--hair); vertical-align: top; color: var(--ink); }
+td:last-child { border-right: none; }
+tr:last-child td { border-bottom: none; }
+td.mode { font-weight: 700; color: var(--black); white-space: nowrap; }
+td.mode span { display: block; font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--grey); margin-top: 2px; }
+.cant { color: var(--green); font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+
+.planned-box {
+  margin-top: 16px;
+  border: var(--hair);
+  border-left: 4px solid var(--black);
+  background: var(--paper);
+  padding: 16px 18px;
+  max-width: 760px;
+}
+.planned-box strong { color: var(--black); }
+
+footer {
+  margin: 56px 0 36px;
+  border-top: var(--rule);
+  padding-top: 14px;
+  font-size: 12.5px;
+  color: var(--grey);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+footer a { color: var(--black); text-decoration: none; border-bottom: 1px solid var(--hairline); }
+footer a:hover { color: var(--red); border-color: var(--red); }
+@media (max-width: 680px) { .nav { display: none; } .wrap { padding: 0 16px; } }
+</style>
+</head>
+<body>
+<header class="topbar-outer">
+  <div class="wrap topbar">
+    <a class="brand" href="index.html">
+      <svg class="mark" viewBox="0 0 1024 1024" aria-hidden="true">
+        <polygon points="292,196 56,428 270,428" fill="#f2634f"/>
+        <polygon points="292,196 732,196 754,428 270,428" fill="#ef5a48"/>
+        <polygon points="732,196 968,428 754,428" fill="#f2634f"/>
+        <polygon points="56,428 270,428 512,952" fill="#e63323"/>
+        <polygon points="270,428 754,428 512,952" fill="#d92c1c"/>
+        <polygon points="754,428 968,428 512,952" fill="#c22417"/>
+        <g stroke="#101010" stroke-width="52" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <path d="M292 196 L732 196 L968 428 L512 952 L56 428 Z"/>
+          <path d="M56 428 L968 428"/>
+          <path d="M292 196 L270 428 L512 952"/>
+          <path d="M732 196 L754 428 L512 952"/>
+        </g>
+        <g fill="#e63323" stroke="#101010" stroke-width="18">
+          <circle cx="292" cy="196" r="56"/>
+          <circle cx="732" cy="196" r="56"/>
+          <circle cx="56" cy="428" r="56"/>
+          <circle cx="968" cy="428" r="56"/>
+          <circle cx="512" cy="952" r="56"/>
+        </g>
+      </svg>
+      <span class="wordmark">open<span>trawl</span></span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="index.html">Home</a>
+      <a href="plugins.html">Plugins</a>
+      <a class="active" href="security.html">Security</a>
+      <a href="index.html#pricing">Pricing</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Security &amp; trust boundaries</h1>
+  <p class="lead">Today OpenTrawl runs 100% locally on your Mac with no servers, no accounts, and no telemetry. As we add optional encrypted sync and hosted search, you choose the exact boundary your data lives in.</p>
+
+  <h2>Who can read what across each tier</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Tier</th>
+          <th>Your devices</th>
+          <th>OpenTrawl servers</th>
+          <th>Cloud storage</th>
+          <th>Your chosen AI</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mode">Local ($0)<span>Available now</span></td>
+          <td>Full read &amp; search</td>
+          <td><span class="cant">Nothing uploaded</span></td>
+          <td><span class="cant">Nothing uploaded</span></td>
+          <td>Only what you search &amp; open</td>
+        </tr>
+        <tr>
+          <td class="mode">Blind Sync ($7/mo)<span>Planned</span></td>
+          <td>Full read &amp; Mac/iPhone sync</td>
+          <td><span class="cant">Cannot read</span><br>Keys stay on your devices</td>
+          <td>Encrypted blobs only</td>
+          <td>Only what you search &amp; open</td>
+        </tr>
+        <tr>
+          <td class="mode">Cloud Vault ($19/mo)<span>Planned</span></td>
+          <td>Full read + 24/7 cloud search</td>
+          <td><span class="cant">Cannot read</span><br>Hardware-locked memory; requires your agent's live key</td>
+          <td>Encrypted blobs only</td>
+          <td>Only the sources you grant that agent</td>
+        </tr>
+        <tr>
+          <td class="mode">Dedicated ($119/mo)<span>Planned</span></td>
+          <td>Full read + dedicated 24/7 search</td>
+          <td><span class="cant">Cannot read</span><br>Single-user hardware + manual version pin</td>
+          <td>Encrypted blobs only</td>
+          <td>Only the sources you grant that agent</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>What we cannot hide</h2>
+  <ul>
+    <li><strong>Your AI provider sees what your agent reads.</strong> When you let Claude, Codex, or another model open a conversation or email, that text goes to your AI provider under its privacy terms. Use <code>trawl connect --sources ...</code> to give each agent only the sources it needs.</li>
+    <li><strong>Cloud storage sees coarse metadata.</strong> On planned cloud tiers, storage servers cannot read your archive contents or source names, but they can still see padded file sizes and sync timestamps. Stay on Local if your threat model allows zero cloud contact.</li>
+    <li><strong>Compromised devices.</strong> If malware is running on your Mac or iPhone, local files and unlocked sessions are exposed.</li>
+  </ul>
+
+  <h2>Planned verifiable cloud builds</h2>
+  <div class="planned-box">
+    <strong>Status: Planned architecture (not live yet).</strong> When Cloud Vault ships, every enclave image will be built reproducibly from public GitHub commits, logged in a public 72-hour upgrade window before running enclaves accept it, and checkable from your terminal so you do not have to take our word for what is running on our servers.
+  </div>
+
+  <h2>Audit the Mac app today</h2>
+  <p>OpenTrawl is MIT open source on <a href="https://github.com/opentrawl/opentrawl">GitHub</a>. Inside the Mac app's setup flow, click <strong>Audit this build</strong> to copy a prompt pinned to the exact app bundle on your disk and its Git commit, then paste it into Claude or Codex before granting Full Disk Access.</p>
+
+  <footer>
+    <a href="index.html">Home</a>
+    <a href="plugins.html">Plugins</a>
+    <a href="privacy.html">Gmail privacy</a>
+    <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
+    <a href="llms.txt">llms.txt</a>
+  </footer>
+</main>
+</body>
+</html>

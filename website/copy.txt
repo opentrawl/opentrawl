@@ -9,70 +9,128 @@
 #   Lines starting with # are notes and never appear on the page.
 #   A line in [square brackets] names a slot. Everything under it is that
 #   slot's text, and line breaks in this file become single spaces.
-#   **like this** makes bold. [words](https://example.com) makes a link.
-#
-# The terminal demo is not in this file. Its commands and comments come from
-# the Mac app's onboarding, in app/Sources/Trawl/OperationalCopy.swift, and
-# both must stay identical.
+#   **like this** makes bold. *like this* makes italic. `code` makes code.
+#   [words](https://example.com) makes a link.
 
 [title]
-OpenTrawl: your entire digital life, searchable by your AI, on your machine
+OpenTrawl: Spotlight for the Agentic OS
+
+[meta.description]
+Give any AI searchable access to your messages, email, notes, photos, calendar, health, finances, and X history on your Mac.
+
+[card.line.1]
+Spotlight for the Agentic OS.
+
+[card.line.2]
+Local AI search for all your apps.
+
+[nav.examples]
+Examples
+
+[nav.wiki]
+Personal Wiki
+
+[nav.plugins]
+Plugins
+
+[nav.security]
+Security
+
+[nav.pricing]
+Pricing
+
+[button.download]
+Download for Mac
+
+[button.github]
+GitHub ↗
+
+[hero.headline]
+Spotlight for the Agentic OS.
 
 [hero.line1]
 Your AI can't search your
 
 [hero.cycle]
-iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Apple Health., Money., Twitter.
+iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Health., Money., Twitter.
 
 [hero.line2]
 OpenTrawl fixes this.
 
 [hero.sub]
-OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.
+OpenTrawl keeps a private, searchable copy of your apps on your Mac so any AI you use can answer questions from your real life and link straight back to the original message, email, note, or payment.
 
-[hero.privacy]
-Nothing leaves your machine, unless you want it to.
+[hero.trust]
+Nothing leaves your Mac, unless you want it to. Free and open source (MIT).
 
-[sources.today]
-**12 built-in sources:** iMessage, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Apple Health, Money, and Twitter (X).
+[hero.sources.note]
+12 built-in sources, plus sandboxed plugins.
 
-[sources.soon]
-**Plus sandboxed plugins & scoped MCP:** add any other app or export with `trawl plugin install`, or connect Claude, Codex, Cursor, OpenClaw, Hermes, and T3 Code with `trawl connect`.
+[hero.plugins.link]
+Browse plugins →
 
-[terminal.caption]
-I took my real archive and told Claude to anonymise it by LARPing as The
-Hitchhiker's Guide to the Galaxy. The data is real, the names aren't.
+[demo.question]
+"Pull up everything for the Brighton trip with Ford: dates, chats, and what I bought."
 
-[fact.1.title]
-Private by design
+[demo.caption]
+I took my real archive and told Claude to anonymise it by LARPing as The Hitchhiker's Guide to the Galaxy. The data is real, the names aren't.
 
-[fact.1.body]
-Your archives are just files on your Mac. Nothing is uploaded anywhere, we don't know who you are.
-If you want to point a (local) AI at your archives, *you're* in control - not a company.
+[ask.title]
+What you can ask your AI
 
-[fact.2.title]
-It just works
+[ask.lead]
+Every time you start a new chat or switch models, you re-explain who people are, paste old messages, and dig up receipts yourself. With OpenTrawl on your Mac, your AI looks up the answer directly.
 
-[fact.2.body]
-Install the Mac app. It builds local SQLite archives and unified search indexes, keeps them updated, and connects to your AI via CLI or scoped read-only MCP (`trawl connect`).
+[ask.q1]
+"What did I talk to Sam about across iMessage, WhatsApp, Telegram, and Gmail last month?"
 
-[fact.3.title]
-Open source
+[ask.q2]
+"Pull up everything from my trip in September: messages, emails, photos, calendar events, and what I spent."
 
-[fact.3.body]
-The code is on GitHub, MIT licensed. Take a look, see how it works. No secrets here.
+[ask.q3]
+"Find that note or X bookmark about home insurance. I do not remember the exact words."
 
-[fact.4.title]
-Sandboxed plugins
+[ask.q4]
+"Did I pay that invoice, and which account did it come from?"
 
-[fact.4.body]
-Want to search something we have not built yet? Hand our [plugin skill](https://github.com/opentrawl/opentrawl/blob/main/skills/build-trawl-plugin/SKILL.md) to your coding agent and install it under strict macOS sandboxing with `trawl plugin install`.
+[wiki.title]
+Build your personal wiki on Day 1
 
-[card.line.1]
-Local, private AI search
+[wiki.lead]
+Most AI memory waits months to learn who you are and traps that memory inside one chat app. OpenTrawl already has years of your messages, email, notes, and calendar on your Mac. Point your agent at `trawl` once and it compiles a plain Markdown personal wiki with links back to every source record.
 
-[card.line.2]
-for all your apps.
+[wiki.prompt.label]
+One-shot prompt for your AI
+
+[wiki.prompt.text]
+Use my local OpenTrawl archive via `/Applications/OpenTrawl.app/Contents/Helpers/trawl`. Search my last 12 months across messages, email, notes, and calendar, then build a Markdown personal wiki in `~/wiki/` covering key people, active projects, commitments, and decisions. Cite every fact with its exact `trawl open` link.
+
+[wiki.prompt.note]
+Re-run weekly as new messages and emails arrive. Your archives update in the background.
+
+[wiki.output.label]
+What your agent writes in ~/wiki/
+
+[wiki.output.note]
+Plain Markdown files you own in Obsidian or git. Switch AI models tomorrow and keep your whole wiki.
+
+[connect.title]
+Connect the AI you already use
+
+[connect.lead]
+Works with **Claude Code**, **Claude Desktop**, **Codex**, **OpenClaw**, **Hermes**, **Cursor**, **T3 Code**, and **executor.sh**. Start by pasting one prompt, or run `trawl connect` to preview exact config changes and choose which sources each agent can read.
+
+[connect.prompt.label]
+Paste into any AI that can run tools
+
+[connect.prompt.text]
+Use my local OpenTrawl archive at `/Applications/OpenTrawl.app/Contents/Helpers/trawl`. Start by running it with no arguments and with `--help`, then run a small read-only search and open one result to show me how it works. Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl more often (for example by adding a short instruction to my `AGENTS.md` or setting up a skill). Do not run `update`, install plugins, or change any files or configuration unless I ask.
+
+[connect.cli.label]
+Or connect installed agents in one step
+
+[connect.cli.note]
+`trawl connect` detects installed local agents, shows the exact config diff before touching any file, and lets you restrict an agent to specific sources (for example Notes and Calendar only).
 
 [app.line]
 The macOS app is cool too. But the agent terminal is cooler.
@@ -80,11 +138,80 @@ The macOS app is cool too. But the agent terminal is cooler.
 [app.why]
 We mostly made the app to manage the boring technical stuff (permissions, easy updates), so you can stay out of the terminal. That's about it. Claude made some cool animations though.
 
-[button.download]
-Download for Mac
+[privacy.title]
+Private by design
 
-[button.github]
-GitHub ↗
+[privacy.p1.title]
+Your data stays on your Mac
+
+[privacy.p1.body]
+Your archives are plain files in `~/.opentrawl`. Nothing is uploaded anywhere, and we do not know who you are.
+
+[privacy.p2.title]
+No servers, no account, no tracking
+
+[privacy.p2.body]
+OpenTrawl runs locally with zero telemetry. The code is on GitHub under the MIT licence. No secrets here.
+
+[privacy.p3.title]
+Read-only
+
+[privacy.p3.body]
+OpenTrawl copies your history so you and your AI can search it. It never sends messages, edits notes, or writes back to your apps.
+
+[privacy.p4.title]
+Your AI sees only what it opens
+
+[privacy.p4.body]
+Whatever records an agent reads go to your AI provider under its privacy terms. Limit exposure by granting each agent only the sources it needs.
+
+[privacy.fda.title]
+Check the app before granting Full Disk Access
+
+[privacy.fda.body]
+Reading Apple apps like Messages, Notes, and Mail on macOS requires Full Disk Access. Before you turn it on, click **Audit this build** inside the Mac app to have Claude or Codex inspect the exact signed app bundle on your disk against the public GitHub commit.
+
+[privacy.security.link]
+Read our planned cloud security model →
+
+[pricing.title]
+Free on your Mac. Planned cloud tiers for sync and remote agents.
+
+[pricing.lead]
+The Mac app, CLI, and all 12 built-in sources are free and open source. Paid tiers are planned next for encrypted Mac-to-iPhone sync and 24/7 remote search when your Mac is asleep.
+
+[pricing.t0.name]
+Local
+
+[pricing.t0.status]
+Available now
+
+[pricing.t1.name]
+Blind Sync
+
+[pricing.t1.status]
+Planned
+
+[pricing.t2.name]
+Cloud Vault
+
+[pricing.t2.status]
+Planned
+
+[pricing.t3.name]
+Dedicated
+
+[pricing.t3.status]
+Planned
+
+[pricing.t4.name]
+Teams
+
+[pricing.t4.status]
+Planned · $39 / seat / month (3-seat minimum)
+
+[pricing.t4.desc]
+Private personal archives plus a shared team archive, per-agent access controls, and dedicated team hardware.
 
 [footer.byline]
 Built by [Josh Palmer](https://x.com/jjpcodes) · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱

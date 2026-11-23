@@ -7,8 +7,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>OpenTrawl: your entire digital life, searchable by your AI, on your machine</title>
-<meta name="description" content="OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.">
+<title>OpenTrawl: Spotlight for the Agentic OS</title>
+<meta name="description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, health, finances, and X history on your Mac.">
 <link rel="canonical" href="https://opentrawl.sh/">
 <link rel="alternate" type="text/plain" href="llms.txt" title="LLMs.txt">
 
@@ -17,305 +17,1134 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="OpenTrawl">
 <meta property="og:url" content="https://opentrawl.sh/">
-<meta property="og:title" content="OpenTrawl: your entire digital life, searchable by your AI, on your machine">
-<meta property="og:description" content="OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.">
+<meta property="og:title" content="OpenTrawl: Spotlight for the Agentic OS">
+<meta property="og:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, health, finances, and X history on your Mac.">
 <meta property="og:image" content="https://opentrawl.sh/card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@opentrawl">
 <meta name="twitter:creator" content="@jjpcodes">
-<meta name="twitter:title" content="OpenTrawl: your entire digital life, searchable by your AI, on your machine">
-<meta name="twitter:description" content="OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.">
+<meta name="twitter:title" content="OpenTrawl: Spotlight for the Agentic OS">
+<meta name="twitter:description" content="Give any AI searchable access to your messages, email, notes, photos, calendar, health, finances, and X history on your Mac.">
 <meta name="twitter:image" content="https://opentrawl.sh/card.png">
-<meta name="twitter:image:alt" content="The OpenTrawl wordmark above the line: Your AI can't search your iMessage. OpenTrawl fixes this.">
+<meta name="twitter:image:alt" content="OpenTrawl: Spotlight for the Agentic OS. Local AI search for all your apps.">
 <style>
-/* ============================================================
-   opentrawl.sh design system
-   Every element on this page is built from these tokens.
-   Do not invent new colours, sizes, or box styles - add a token
-   or reuse a component class.
-   Components: .topbar .btn .btn-secondary
-               .terminal .facts .cta
-   ============================================================ */
 :root {
-  /* colour */
   --white: #ffffff;
-  --black: #101010;          /* ink, rules, seams */
-  --grey: #6f6f6f;           /* secondary text */
-  --hairline: #dcdcdc;
-  --red: #e63323;            /* the accent: wordmark "trawl", rotation, hovers */
-  --blue: #1c46d6;           /* the "With OpenTrawl" block only */
+  --paper: #f6f6f4;
+  --black: #101010;
+  --ink: #2b2b29;
+  --grey: #636360;
+  --hairline: #dfdfdb;
+  --red: #e63323;
+  --green: #146c43;
   --term-bg: #0b0e13;
+  --term-top: #12161f;
+  --term-line: rgba(255, 255, 255, 0.1);
 
-  /* type */
-  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
-  --fs-h1: clamp(30px, 4.6vw, 46px);
-  --fs-body: 16.5px;
-  --fs-small: 14px;
-  --fs-caption: 12.5px;
-  --fs-label: 12px;          /* uppercase section labels */
-  --fs-mono: 12px;
+  --font-sans: "Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
 
-  /* spacing scale: use these, nothing else */
-  --s1: 4px; --s2: 8px; --s3: 14px; --s4: 20px; --s5: 34px; --s6: 48px;
-
-  /* structure */
   --rule: 2px solid var(--black);
-  --page-max: 960px;
-  --measure: 700px;          /* one line length for hero body text */
+  --hair: 1px solid var(--hairline);
+  --page-max: 1180px;
+  --measure: 660px;
 }
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
-  background: var(--white); color: var(--black);
+  background: var(--white);
+  color: var(--black);
   font-family: var(--font-sans);
+  font-size: 15.5px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  display: flex; justify-content: center;
+}
+a { color: inherit; }
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--paper);
+  padding: 1px 5px;
+  border: 1px solid var(--hairline);
+}
+.dark code {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.wrap {
+  width: 100%;
+  max-width: calc(var(--page-max) + 48px);
+  margin: 0 auto;
   padding: 0 24px;
 }
-main { width: 100%; max-width: var(--page-max); }
 
-/* --- topbar ---------------------------------------------- */
-.topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: var(--s3) 0 12px;
+/* --- topbar ------------------------------------------------ */
+.topbar-outer {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-bottom: var(--rule);
 }
-.brand { display: flex; align-items: center; gap: 9px; }
-.brand .mark { width: 20px; height: 20px; display: block; transform: translateY(1px); }
-.wordmark { font-weight: 700; font-size: 16px; letter-spacing: -.01em; text-transform: lowercase; }
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 54px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  flex: none;
+}
+.brand .mark { width: 21px; height: 21px; display: block; }
+.wordmark {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
 .wordmark span { color: var(--red); }
-.topbar-buttons { display: flex; gap: 10px; align-items: center; }
 
-/* --- buttons: exactly two kinds -------------------------- */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--grey);
+}
+.nav a { text-decoration: none; }
+.nav a:hover, .nav a:focus-visible { color: var(--black); outline: none; }
+
+.topbar-buttons { display: flex; gap: 8px; align-items: center; flex: none; }
+
+/* --- buttons ----------------------------------------------- */
 .btn, .btn-secondary {
-  font-size: 13px; font-weight: 700;
-  border: var(--rule); border-radius: 0;
-  padding: 6px 14px; text-decoration: none; display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  border: var(--rule);
+  border-radius: 0;
+  padding: 6px 14px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 .btn { background: var(--black); color: var(--white); }
 .btn:hover, .btn:focus-visible { background: var(--red); border-color: var(--red); outline: none; }
-.btn-secondary { background: transparent; color: var(--black); }
+.btn-secondary { background: var(--white); color: var(--black); }
 .btn-secondary:hover, .btn-secondary:focus-visible { background: var(--black); color: var(--white); outline: none; }
-.btn-lg { font-size: 15px; padding: 12px 28px; }
-@media (max-width: 700px) {
-  .topbar-buttons { gap: 6px; }
-  .topbar .btn, .topbar .btn-secondary { font-size: 12px; padding: 5px 10px; }
+.btn-lg { font-size: 15px; padding: 11px 22px; }
+
+.copy-btn {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--white);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 4px 10px;
+  cursor: pointer;
 }
+.copy-btn:hover { background: var(--white); color: var(--black); }
+.copy-btn.copied { background: var(--green); border-color: var(--green); color: var(--white); }
 
-/* --- inline copy marks: **bold** *italic* `code` ---------- */
-code { font-family: 'SF Mono', ui-monospace, Menlo, monospace; font-size: .92em; }
-
-/* --- hero -------------------------------------------------- */
-h1 {
-  margin-top: 40px;
-  font-size: var(--fs-h1);
+/* --- hero: fits cleanly in one viewport on desktop --------- */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  gap: 36px;
+  align-items: center;
+  padding: 28px 0 36px;
+  min-height: calc(100svh - 56px);
+}
+.hero-copy h1 {
+  font-size: clamp(32px, 3.8vw, 48px);
   font-weight: 700;
-  letter-spacing: -.03em;
-  line-height: 1.08;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
 }
-h1 .cycle { color: var(--red); display: inline-block; text-align: left; perspective: 600px; }
-h1 .cycle .word {
+.hero-cycle-line {
+  margin-top: 14px;
+  font-size: clamp(19px, 2vw, 25px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.24;
+  color: var(--ink);
+}
+.hero-cycle-line .cycle {
+  color: var(--red);
+  display: inline-block;
+  text-align: left;
+  perspective: 600px;
+}
+.hero-cycle-line .cycle .word {
   display: inline-block;
   transform-origin: center 55%;
-  transition: transform .26s ease-in;
+  transition: transform 0.22s ease-in;
   backface-visibility: hidden;
 }
-.sub {
-  margin-top: var(--s4);
-  font-size: var(--fs-body); line-height: 1.45;
+.hero-sub {
+  margin-top: 16px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
+  max-width: 470px;
 }
-/* one measure, in px: em would give each block a different width because
-   em follows its own font size. */
-.sub, .privacy, .sources { max-width: var(--measure); }
-.privacy { margin-top: var(--s2); font-size: var(--fs-small); color: var(--grey); }
-.sources { margin-top: var(--s4); font-size: var(--fs-small); line-height: 1.7; }
-.sources b { font-weight: 700; }
-.sources .soon { color: var(--grey); }
-.hero-ctas { margin-top: var(--s4); display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-cta {
+  margin-top: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.inline-link {
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1.5px solid var(--black);
+  padding-bottom: 1px;
+}
+.inline-link:hover, .inline-link:focus-visible {
+  color: var(--red);
+  border-color: var(--red);
+  outline: none;
+}
+.hero-trust {
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--grey);
+}
 
-/* --- terminal demo (player reads demo-session.txt) -------- */
-.terminal {
-  margin-top: var(--s5);
+.icon-strip {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: var(--hair);
+}
+.icon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.app-icon {
+  width: 30px;
+  height: 30px;
+  display: block;
+  object-fit: contain;
+}
+.app-icon.square { border-radius: 7px; }
+.icon-more {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey);
+  padding: 4px 7px;
+  border: var(--hair);
+  background: var(--paper);
+}
+.icon-meta {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--grey);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: baseline;
+}
+
+/* --- right column: live agent + CLI demo ------------------- */
+.hero-demo { min-width: 0; }
+.agent-window {
   background: var(--term-bg);
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,.09);
-  display: flex; flex-direction: column;
+  color: var(--white);
+  border-radius: 12px;
+  border: 1px solid rgba(16, 16, 16, 0.2);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: clamp(460px, calc(100svh - 148px), 600px);
+  box-shadow: 0 14px 36px rgba(16, 16, 16, 0.09);
 }
-.term-header { display: flex; align-items: center; gap: 9px; height: 42px; padding: 0 14px; flex: none; }
-.term-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.term-dot.r { background: rgba(255,59,48,.9); }
-.term-dot.y { background: rgba(255,204,0,.9); }
-.term-dot.g { background: rgba(40,205,65,.9); }
-.term-title { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 12px; color: rgba(255,255,255,.54); }
-.term-spinner {
-  width: 12px; height: 12px; flex: none; margin-left: 16px; margin-right: 16px;
-  border: 1.5px solid rgba(255,255,255,.25); border-top-color: rgba(255,255,255,.7);
-  border-radius: 50%; opacity: 0;
-  animation: term-spin .7s linear infinite;
+.aw-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: 38px;
+  padding: 0 14px;
+  background: var(--term-top);
+  border-bottom: 1px solid var(--term-line);
+  flex: none;
 }
-.term-spinner.on { opacity: 1; }
-@keyframes term-spin { to { transform: rotate(360deg); } }
-.term-rule { height: 1px; background: rgba(255,255,255,.08); flex: none; }
-.term-body {
-  padding: 18px; flex: 1; min-height: 0;
-  display: flex; flex-direction: column; gap: 13px;
-  transition: opacity .22s ease;
+.aw-dots { display: flex; gap: 7px; }
+.aw-dot { width: 10px; height: 10px; border-radius: 50%; }
+.aw-dot.r { background: rgba(255, 59, 48, 0.9); }
+.aw-dot.y { background: rgba(255, 204, 0, 0.9); }
+.aw-dot.g { background: rgba(40, 205, 65, 0.9); }
+
+.beat-tabs { display: flex; gap: 4px; }
+.beat-tab {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+  cursor: pointer;
 }
-.term-body.fade { opacity: 0; }
-.term-comment, .term-command, .term-output { font-family: var(--font-mono); white-space: pre; margin: 0; }
-.term-comment { color: #7dc294; min-height: 16px; }
-.term-command { font-weight: 500; color: var(--white); min-height: 18px; }
-.term-output { line-height: 1.45; color: rgba(255,255,255,.68); flex: 1; overflow: hidden; }
-.emoji-cell { display: inline-block; width: 2ch; overflow: visible; text-align: left; }
-.term-caption { margin-top: var(--s2); font-size: var(--fs-caption); color: var(--grey); }
-@media (max-width: 680px) {
-  .terminal { margin-left: -24px; margin-right: -24px; border-radius: 0; }
-  .term-output { overflow-x: auto; }
+.beat-tab:hover { color: var(--white); }
+.beat-tab.active {
+  color: var(--white);
+  border-color: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* --- facts: treatment A (2-col grid) ----------------------- */
-.facts {
-  margin-top: var(--s5);
+.aw-question {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--term-line);
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.03);
+  flex: none;
+}
+.aw-question span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #ff7e72;
+  margin-right: 8px;
+  font-weight: 700;
+}
+
+.aw-body {
+  padding: 16px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  transition: opacity 0.18s ease;
+}
+.aw-body.fade { opacity: 0; }
+.term-comment {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #7dc294;
+  min-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.term-command {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white);
+  min-height: 18px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--term-line);
+}
+.term-output {
+  font-family: var(--font-mono);
+  font-size: 10.7px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+  white-space: pre;
+  overflow: auto;
+  flex: 1;
+}
+.term-output.answer-mode {
+  white-space: pre-wrap;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.58;
+  color: rgba(255, 255, 255, 0.92);
+}
+.cite-link {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #ff8e83;
+}
+.demo-caption {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--grey);
+}
+
+/* --- sections ---------------------------------------------- */
+.section {
+  margin-top: 72px;
   border-top: var(--rule);
-  padding-top: var(--s3);
-  display: grid; grid-template-columns: 1fr 1fr; gap: 16px 40px;
-  font-size: 14.5px; line-height: 1.45;
+  padding-top: 36px;
 }
-.facts p b { display: block; font-size: var(--fs-label); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 3px; }
-
-/* --- app window ------------------------------------------- */
-.app { margin-top: var(--s5); border-top: var(--rule); padding-top: var(--s3); }
-.app-line { font-size: var(--fs-body); font-weight: 700; max-width: var(--measure); }
-.app-shot { display: block; width: 100%; height: auto; margin-top: var(--s4); }
-.app-why { margin-top: var(--s3); font-size: var(--fs-small); color: var(--grey); max-width: var(--measure); }
-
-/* --- cta --------------------------------------------------- */
-/* a rule marks the start of a section. a call to action belongs to the
-   block above it, so it gets space instead of a rule. */
-.cta {
-  margin-top: var(--s4);
-  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+.section-head { max-width: var(--measure); }
+.section h2 {
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.14;
 }
+.section-lead {
+  margin-top: 12px;
+  font-size: 16px;
+  line-height: 1.52;
+  color: var(--ink);
+}
+
+/* --- what you can ask -------------------------------------- */
+.ask-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border: 1px solid var(--black);
+}
+.ask-card {
+  padding: 20px 22px;
+  border-right: var(--hair);
+  border-bottom: var(--hair);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--black);
+  background: var(--white);
+}
+.ask-card:nth-child(2n) { border-right: none; }
+.ask-card:nth-last-child(-n+2) { border-bottom: none; }
+.ask-card span {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--grey);
+}
+
+/* --- day-1 wiki -------------------------------------------- */
+.wiki-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 20px;
+}
+.dark-card {
+  background: var(--term-bg);
+  color: var(--white);
+  border: 1px solid var(--black);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+.card-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--term-line);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.65);
+}
+.card-text {
+  padding: 18px 16px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.9);
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.card-foot {
+  padding: 11px 16px;
+  border-top: 1px solid var(--term-line);
+  background: var(--term-top);
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.wiki-sheet {
+  border: var(--hair);
+  border-top: var(--rule);
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+.wiki-bar {
+  padding: 10px 16px;
+  border-bottom: var(--hair);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--grey);
+  display: flex;
+  justify-content: space-between;
+}
+.wiki-body {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 205px 1fr;
+  gap: 16px;
+  flex: 1;
+}
+.wiki-tree {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.8;
+  color: var(--grey);
+  border-right: var(--hair);
+  padding-right: 12px;
+  white-space: nowrap;
+}
+.wiki-tree .active { color: var(--black); font-weight: 700; }
+.wiki-preview h3 {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.wiki-facts {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.wiki-facts li { padding-left: 11px; border-left: 2px solid var(--hairline); }
+.wiki-cite {
+  display: inline-block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--red);
+  background: var(--white);
+  border: var(--hair);
+  padding: 1px 6px;
+}
+.wiki-foot {
+  padding: 11px 16px;
+  border-top: var(--hair);
+  background: var(--white);
+  font-size: 12.5px;
+  color: var(--grey);
+}
+
+/* --- connect your AI + mac app ----------------------------- */
+.connect-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 20px;
+}
+.cli-panel {
+  border: var(--hair);
+  border-top: var(--rule);
+  background: var(--paper);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+.cli-panel-label {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--grey);
+  font-weight: 700;
+}
+.cli-block {
+  background: var(--term-bg);
+  color: var(--white);
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-x: auto;
+  white-space: pre;
+}
+.cli-block .dim { color: rgba(255, 255, 255, 0.5); }
+.cli-block .ok { color: #7dc294; }
+.cli-note { font-size: 13.5px; color: var(--ink); }
+
+.app-band {
+  margin-top: 40px;
+  padding-top: 28px;
+  border-top: var(--hair);
+}
+.app-line { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; }
+.app-shot {
+  display: block;
+  width: 100%;
+  max-width: 960px;
+  height: auto;
+  margin-top: 16px;
+}
+.app-why {
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--grey);
+  max-width: var(--measure);
+}
+
+/* --- privacy ----------------------------------------------- */
+.privacy-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px 36px;
+}
+.privacy-item h3 { font-size: 15.5px; font-weight: 700; margin-bottom: 4px; }
+.privacy-item p { font-size: 14.5px; color: var(--ink); line-height: 1.5; }
+
+.fda-box {
+  margin-top: 24px;
+  border: var(--hair);
+  border-left: 4px solid var(--black);
+  background: var(--paper);
+  padding: 18px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.fda-box-copy { max-width: 720px; }
+.fda-box-copy h3 { font-size: 15.5px; font-weight: 700; }
+.fda-box-copy p { margin-top: 4px; font-size: 14px; color: var(--ink); }
+
+/* --- pricing ----------------------------------------------- */
+.tier-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--black);
+}
+.tier {
+  padding: 20px 18px;
+  border-right: var(--hair);
+  background: var(--white);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.tier:last-child { border-right: none; }
+.tier.live { background: var(--paper); box-shadow: inset 0 4px 0 var(--black); }
+.tier-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--grey);
+}
+.tier.live .tier-status { color: var(--green); }
+.tier-name { margin-top: 6px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.tier-price {
+  margin-top: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.tier-amount { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.tier-period { font-family: var(--font-mono); font-size: 12px; color: var(--grey); }
+.tier-list {
+  margin: 14px 0 18px;
+  padding-top: 12px;
+  border-top: var(--hair);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.tier-list li { padding-left: 13px; position: relative; }
+.tier-list li::before { content: "·"; position: absolute; left: 0; font-weight: 700; color: var(--grey); }
+.tier .btn { width: 100%; }
+.tier-planned-note {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--grey);
+  padding-top: 6px;
+}
+
+.teams-bar {
+  margin-top: 12px;
+  border: 1px solid var(--black);
+  padding: 16px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px 24px;
+}
+.teams-bar strong { font-size: 16px; margin-right: 10px; }
+.teams-bar .teams-status { font-family: var(--font-mono); font-size: 12px; color: var(--grey); }
+.teams-bar p { width: 100%; font-size: 14px; color: var(--ink); margin-top: 4px; }
+.pricing-foot { margin-top: 14px; font-size: 14px; }
 
 /* --- footer ------------------------------------------------ */
 footer {
-  margin: var(--s5) 0 28px;
+  margin: 64px 0 36px;
   border-top: var(--rule);
-  padding-top: 12px;
-  font-size: var(--fs-caption); color: var(--grey);
-  display: flex; flex-wrap: wrap; gap: 3px 22px;
+  padding-top: 14px;
+  font-size: 12.5px;
+  color: var(--grey);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
 }
-footer a { color: var(--black); text-decoration: none; border-bottom: 1px solid var(--black); }
+footer a {
+  color: var(--black);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline);
+}
 footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--red); outline: none; }
-.byline { width: 100%; }
+.byline { width: 100%; margin-top: 4px; }
+
+/* --- responsive -------------------------------------------- */
+@media (max-width: 1040px) {
+  .nav { display: none; }
+  .hero { grid-template-columns: 1fr; min-height: auto; padding: 32px 0 20px; gap: 28px; }
+  .agent-window { height: 470px; }
+  .wiki-grid, .connect-grid { grid-template-columns: 1fr; }
+  .tier-grid { grid-template-columns: repeat(2, 1fr); }
+  .tier { border-bottom: var(--hair); }
+  .tier:nth-child(2n) { border-right: none; }
+  .tier:nth-last-child(-n+2) { border-bottom: none; }
+}
 
 @media (max-width: 680px) {
-  .facts { grid-template-columns: 1fr; }
-}
-@media (prefers-reduced-motion: reduce) {
+  .wrap { padding: 0 16px; }
+  .topbar { height: 50px; }
+  .topbar .btn, .topbar .btn-secondary { font-size: 12px; padding: 5px 10px; }
+  .ask-grid, .privacy-grid, .tier-grid { grid-template-columns: 1fr; }
+  .ask-card { border-right: none; border-bottom: var(--hair); }
+  .ask-card:last-child { border-bottom: none; }
+  .tier { border-right: none; border-bottom: var(--hair); }
+  .tier:last-child { border-bottom: none; }
+  .wiki-body { grid-template-columns: 1fr; }
+  .wiki-tree { border-right: none; border-bottom: var(--hair); padding-right: 0; padding-bottom: 10px; }
+  .agent-window { height: 440px; border-radius: 8px; }
+  .section { margin-top: 52px; padding-top: 28px; }
 }
 </style>
 </head>
 <body>
-<main>
-  <div class="topbar">
-    <div class="brand"><svg class="mark" viewBox="0 0 1024 1024" aria-hidden="true">
-  <polygon points="292,196 56,428 270,428" fill="#f2634f"/>
-  <polygon points="292,196 732,196 754,428 270,428" fill="#ef5a48"/>
-  <polygon points="732,196 968,428 754,428" fill="#f2634f"/>
-  <polygon points="56,428 270,428 512,952" fill="#e63323"/>
-  <polygon points="270,428 754,428 512,952" fill="#d92c1c"/>
-  <polygon points="754,428 968,428 512,952" fill="#c22417"/>
-  <g stroke="#101010" stroke-width="52" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M292 196 L732 196 L968 428 L512 952 L56 428 Z"/>
-    <path d="M56 428 L968 428"/>
-    <path d="M292 196 L270 428 L512 952"/>
-    <path d="M732 196 L754 428 L512 952"/>
-  </g>
-  <g fill="#e63323" stroke="#101010" stroke-width="18">
-    <circle cx="292" cy="196" r="56"/>
-    <circle cx="732" cy="196" r="56"/>
-    <circle cx="56" cy="428" r="56"/>
-    <circle cx="968" cy="428" r="56"/>
-    <circle cx="512" cy="952" r="56"/>
-  </g>
-</svg>
-<div class="wordmark">open<span>trawl</span></div></div>
+
+<header class="topbar-outer">
+  <div class="wrap topbar">
+    <a class="brand" href="#">
+      <svg class="mark" viewBox="0 0 1024 1024" aria-hidden="true">
+        <polygon points="292,196 56,428 270,428" fill="#f2634f"/>
+        <polygon points="292,196 732,196 754,428 270,428" fill="#ef5a48"/>
+        <polygon points="732,196 968,428 754,428" fill="#f2634f"/>
+        <polygon points="56,428 270,428 512,952" fill="#e63323"/>
+        <polygon points="270,428 754,428 512,952" fill="#d92c1c"/>
+        <polygon points="754,428 968,428 512,952" fill="#c22417"/>
+        <g stroke="#101010" stroke-width="52" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <path d="M292 196 L732 196 L968 428 L512 952 L56 428 Z"/>
+          <path d="M56 428 L968 428"/>
+          <path d="M292 196 L270 428 L512 952"/>
+          <path d="M732 196 L754 428 L512 952"/>
+        </g>
+        <g fill="#e63323" stroke="#101010" stroke-width="18">
+          <circle cx="292" cy="196" r="56"/>
+          <circle cx="732" cy="196" r="56"/>
+          <circle cx="56" cy="428" r="56"/>
+          <circle cx="968" cy="428" r="56"/>
+          <circle cx="512" cy="952" r="56"/>
+        </g>
+      </svg>
+      <span class="wordmark">open<span>trawl</span></span>
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      <a href="#examples">Examples</a>
+      <a href="#wiki">Personal Wiki</a>
+      <a href="plugins.html">Plugins</a>
+      <a href="security.html">Security</a>
+      <a href="#pricing">Pricing</a>
+    </nav>
+
     <div class="topbar-buttons">
       <a class="btn-secondary" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
       <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
     </div>
   </div>
+</header>
 
-  <h1>Your AI can't search your <span class="cycle" id="cycle"><span class="word" id="cycleWord">iMessage.</span></span><br>OpenTrawl fixes this.</h1>
-  <script>
-    const words = "iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Apple Health., Money., Twitter.".split(", ");
-    let i = 0;
-    const slot = document.getElementById("cycle");
-    const word = document.getElementById("cycleWord");
-    function sizeSlot() {
-      let max = 0;
-      const probe = document.createElement("span");
-      probe.style.cssText = "visibility:hidden;position:absolute;white-space:nowrap";
-      slot.parentElement.appendChild(probe);
-      for (const w of words) { probe.textContent = w; max = Math.max(max, probe.offsetWidth); }
-      probe.remove();
-      slot.style.width = Math.ceil(max) + "px";
-    }
-    sizeSlot();
-    addEventListener("resize", sizeSlot);
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setInterval(() => {
-        word.style.transform = "rotateX(90deg)";
-        setTimeout(() => {
-          i = (i + 1) % words.length;
-          word.textContent = words[i];
-          word.style.transform = "rotateX(0deg)";
-        }, 270);
-      }, 2000);
-    }
-  </script>
+<main class="wrap">
 
-  <p class="sub"><span>OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.</span></p>
-  <p class="privacy">Nothing leaves your machine, unless you want it to.</p>
-  <p class="sources"><b>12 built-in sources:</b> iMessage, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Apple Health, Money, and Twitter (X).<br>
-  <span class="soon"><b>Plus sandboxed plugins &amp; scoped MCP:</b> add any other app or export with <code>trawl plugin install</code>, or connect Claude, Codex, Cursor, OpenClaw, Hermes, and T3 Code with <code>trawl connect</code>.</span></p>
-  <div class="hero-ctas">
-    <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
-    <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
-  </div>
+  <!-- HERO: ONE VIEWPORT -->
+  <section class="hero">
+    <div class="hero-copy">
+      <h1>Spotlight for the Agentic OS.</h1>
+      <p class="hero-cycle-line">
+        Your AI can't search your <span class="cycle" id="cycle"><span class="word" id="cycleWord">iMessage.</span></span><br>OpenTrawl fixes this.
+      </p>
+      <p class="hero-sub">OpenTrawl keeps a private, searchable copy of your apps on your Mac so any AI you use can answer questions from your real life and link straight back to the original message, email, note, or payment.</p>
 
-  <section class="terminal" id="terminal" aria-label="OpenTrawl command-line demo, played with data from Arthur Dent's archive">
-    <div class="term-header">
-      <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
-      <span class="term-title">trawl</span>
-      <span class="term-spinner" id="termSpinner"></span>
+      <div class="hero-cta">
+        <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
+        <a class="inline-link" href="https://github.com/opentrawl/opentrawl">Read the source on GitHub ↗</a>
+      </div>
+      <p class="hero-trust">Nothing leaves your Mac, unless you want it to. Free and open source (MIT).</p>
+
+      <div class="icon-strip">
+        <div class="icon-row" aria-label="Built-in Mac sources">
+          <img class="app-icon" src="icons/imessage.png" width="30" height="30" alt="iMessage">
+          <img class="app-icon" src="icons/whatsapp.png" width="30" height="30" alt="WhatsApp">
+          <img class="app-icon" src="icons/telegram.png" width="30" height="30" alt="Telegram">
+          <img class="app-icon square" src="icons/gmail.png" width="30" height="30" alt="Gmail">
+          <img class="app-icon" src="icons/notes.png" width="30" height="30" alt="Notes">
+          <img class="app-icon" src="icons/contacts.png" width="30" height="30" alt="Contacts">
+          <img class="app-icon" src="icons/calendar.png" width="30" height="30" alt="Calendar">
+          <img class="app-icon" src="icons/photos.png" width="30" height="30" alt="Photos">
+          <img class="app-icon square" src="icons/twitter.png" width="30" height="30" alt="Twitter">
+          <span class="icon-more">+ Mail, Health, Money</span>
+        </div>
+        <div class="icon-meta">
+          <span>12 built-in sources, plus sandboxed plugins.</span>
+          <a class="inline-link" href="plugins.html">Browse plugins →</a>
+        </div>
+      </div>
     </div>
-    <div class="term-rule"></div>
-    <div class="term-body" id="termBody">
-      <p class="term-comment" id="termComment">&nbsp;</p>
-      <p class="term-command" id="termCommand">❯&nbsp;</p>
-      <div class="term-rule"></div>
-      <pre class="term-output" id="termOutput"></pre>
+
+    <div class="hero-demo">
+      <div class="agent-window" id="agentWindow" aria-label="Live example of an AI using OpenTrawl to answer a personal question">
+        <div class="aw-chrome">
+          <div class="aw-dots">
+            <span class="aw-dot r"></span><span class="aw-dot y"></span><span class="aw-dot g"></span>
+          </div>
+          <div class="beat-tabs" role="tablist" aria-label="Demo steps">
+            <button class="beat-tab active" type="button" data-beat="0">1. search</button>
+            <button class="beat-tab" type="button" data-beat="1">2. around</button>
+            <button class="beat-tab" type="button" data-beat="2">3. open</button>
+            <button class="beat-tab" type="button" data-beat="3">4. answer</button>
+          </div>
+        </div>
+        <div class="aw-question"><span>YOU</span>"Pull up everything for the Brighton trip with Ford: dates, chats, and what I bought."</div>
+        <div class="aw-body" id="termBody">
+          <p class="term-comment" id="termComment">&nbsp;</p>
+          <p class="term-command" id="termCommand">❯&nbsp;</p>
+          <pre class="term-output" id="termOutput"></pre>
+        </div>
+      </div>
+      <p class="demo-caption">I took my real archive and told Claude to anonymise it by LARPing as The Hitchhiker's Guide to the Galaxy. The data is real, the names aren't.</p>
     </div>
   </section>
 
-  <script>
+  <!-- WHAT YOU CAN ASK -->
+  <section class="section" id="examples">
+    <div class="section-head">
+      <h2>What you can ask your AI</h2>
+      <p class="section-lead">Every time you start a new chat or switch models, you re-explain who people are, paste old messages, and dig up receipts yourself. With OpenTrawl on your Mac, your AI looks up the answer directly.</p>
+    </div>
+    <div class="ask-grid">
+      <div class="ask-card">"What did I talk to Sam about across iMessage, WhatsApp, Telegram, and Gmail last month?"<span>iMessage · WhatsApp · Telegram · Gmail</span></div>
+      <div class="ask-card">"Pull up everything from my trip in September: messages, emails, photos, calendar events, and what I spent."<span>trawl around --trip · messages, photos, calendar &amp; money</span></div>
+      <div class="ask-card">"Find that note or X bookmark about home insurance. I do not remember the exact words."<span>Local topic search on Apple Silicon · Notes &amp; X bookmarks</span></div>
+      <div class="ask-card">"Did I pay that invoice, and which account did it come from?"<span>Money &amp; Gmail receipts linked together</span></div>
+    </div>
+  </section>
+
+  <!-- DAY-1 PERSONAL WIKI -->
+  <section class="section" id="wiki">
+    <div class="section-head">
+      <h2>Build your personal wiki on Day 1</h2>
+      <p class="section-lead">Most AI memory waits months to learn who you are and traps that memory inside one chat app. OpenTrawl already has years of your messages, email, notes, and calendar on your Mac. Point your agent at <code>trawl</code> once and it compiles a plain Markdown personal wiki with links back to every source record.</p>
+    </div>
+
+    <div class="wiki-grid">
+      <div class="dark-card dark">
+        <div class="card-bar">
+          <span>One-shot prompt for your AI</span>
+          <button class="copy-btn" type="button" data-copy-target="wikiPromptText">Copy prompt</button>
+        </div>
+        <div class="card-text" id="wikiPromptText">Use my local OpenTrawl archive via <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>. Search my last 12 months across messages, email, notes, and calendar, then build a Markdown personal wiki in <code>~/wiki/</code> covering key people, active projects, commitments, and decisions. Cite every fact with its exact <code>trawl open</code> link.</div>
+        <div class="card-foot">Re-run weekly as new messages and emails arrive. Your archives update in the background.</div>
+      </div>
+
+      <div class="wiki-sheet">
+        <div class="wiki-bar">
+          <span>What your agent writes in ~/wiki/</span>
+          <span>Plain Markdown</span>
+        </div>
+        <div class="wiki-body">
+          <div class="wiki-tree" aria-label="Example personal wiki folder">
+            <div>~/wiki/</div>
+            <div>├── index.md</div>
+            <div>├── people/</div>
+            <div>│&nbsp;&nbsp;&nbsp;├── ford-prefect.md</div>
+            <div>│&nbsp;&nbsp;&nbsp;└── trillian.md</div>
+            <div>├── trips/</div>
+            <div class="active">│&nbsp;&nbsp;&nbsp;└── brighton.md</div>
+            <div>└── notes/</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;└── towel-locations.md</div>
+          </div>
+          <div class="wiki-preview">
+            <h3># brighton.md</h3>
+            <ul class="wiki-facts">
+              <li>
+                <strong>Dates:</strong> 22–23 Aug with Ford Prefect and Zaphod.<br>
+                <span class="wiki-cite">trawl open calendar:d8h66</span>
+              </li>
+              <li>
+                <strong>Towel locations:</strong> Spare in hallway cupboard, green in backpack, backup in glovebox.<br>
+                <span class="wiki-cite">trawl open notes:msvku</span>
+              </li>
+              <li>
+                <strong>Pub thread:</strong> Ford asked everyone to grab their towels and meet at the pub.<br>
+                <span class="wiki-cite">trawl open telegram:33zny</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="wiki-foot">Plain Markdown files you own in Obsidian or git. Switch AI models tomorrow and keep your whole wiki.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONNECT YOUR AI + MAC APP -->
+  <section class="section" id="connect">
+    <div class="section-head">
+      <h2>Connect the AI you already use</h2>
+      <p class="section-lead">Works with <b>Claude Code</b>, <b>Claude Desktop</b>, <b>Codex</b>, <b>OpenClaw</b>, <b>Hermes</b>, <b>Cursor</b>, <b>T3 Code</b>, and <b>executor.sh</b>. Start by pasting one prompt, or run <code>trawl connect</code> to preview exact config changes and choose which sources each agent can read.</p>
+    </div>
+
+    <div class="connect-grid">
+      <div class="dark-card dark">
+        <div class="card-bar">
+          <span>Paste into any AI that can run tools</span>
+          <button class="copy-btn" type="button" data-copy-target="connectPromptText">Copy prompt</button>
+        </div>
+        <div class="card-text" id="connectPromptText">Use my local OpenTrawl archive at <code>/Applications/OpenTrawl.app/Contents/Helpers/trawl</code>. Start by running it with no arguments and with <code>--help</code>, then run a small read-only search and open one result to show me how it works. Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl more often (for example by adding a short instruction to my <code>AGENTS.md</code> or setting up a skill). Do not run <code>update</code>, install plugins, or change any files or configuration unless I ask.</div>
+      </div>
+
+      <div class="cli-panel">
+        <div class="cli-panel-label">Or connect installed agents in one step</div>
+        <pre class="cli-block"><span class="dim"># preview exact config diffs first</span>
+$ trawl connect
+
+<span class="dim"># limit one agent to Notes and Calendar</span>
+$ trawl connect cursor --sources notes,calendar --write
+<span class="ok">Claude Code, Codex, Cursor, OpenClaw, Hermes, T3</span></pre>
+        <p class="cli-note"><code>trawl connect</code> detects installed local agents, shows the exact config diff before touching any file, and lets you restrict an agent to specific sources (for example Notes and Calendar only).</p>
+      </div>
+    </div>
+
+    <div class="app-band">
+      <p class="app-line">The macOS app is cool too. But the agent terminal is cooler.</p>
+      <img class="app-shot" src="app-window.png" width="2528" height="1872"
+           alt="The OpenTrawl Mac app window showing connected local sources in the constellation view">
+      <p class="app-why">We mostly made the app to manage the boring technical stuff (permissions, easy updates), so you can stay out of the terminal. That's about it. Claude made some cool animations though.</p>
+    </div>
+  </section>
+
+  <!-- PRIVACY -->
+  <section class="section" id="privacy">
+    <div class="section-head">
+      <h2>Private by design</h2>
+    </div>
+
+    <div class="privacy-grid">
+      <div class="privacy-item">
+        <h3>Your data stays on your Mac</h3>
+        <p>Your archives are plain files in <code>~/.opentrawl</code>. Nothing is uploaded anywhere, and we do not know who you are.</p>
+      </div>
+      <div class="privacy-item">
+        <h3>No servers, no account, no tracking</h3>
+        <p>OpenTrawl runs locally with zero telemetry. The code is on GitHub under the MIT licence. No secrets here.</p>
+      </div>
+      <div class="privacy-item">
+        <h3>Read-only</h3>
+        <p>OpenTrawl copies your history so you and your AI can search it. It never sends messages, edits notes, or writes back to your apps.</p>
+      </div>
+      <div class="privacy-item">
+        <h3>Your AI sees only what it opens</h3>
+        <p>Whatever records an agent reads go to your AI provider under its privacy terms. Limit exposure by granting each agent only the sources it needs.</p>
+      </div>
+    </div>
+
+    <div class="fda-box">
+      <div class="fda-box-copy">
+        <h3>Check the app before granting Full Disk Access</h3>
+        <p>Reading Apple apps like Messages, Notes, and Mail on macOS requires Full Disk Access. Before you turn it on, click <b>Audit this build</b> inside the Mac app to have Claude or Codex inspect the exact signed app bundle on your disk against the public GitHub commit.</p>
+      </div>
+      <a class="inline-link" href="security.html">Read our planned cloud security model →</a>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="section" id="pricing">
+    <div class="section-head">
+      <h2>Free on your Mac. Planned cloud tiers for sync and remote agents.</h2>
+      <p class="section-lead">The Mac app, CLI, and all 12 built-in sources are free and open source. Paid tiers are planned next for encrypted Mac-to-iPhone sync and 24/7 remote search when your Mac is asleep.</p>
+    </div>
+
+    <div class="tier-grid">
+      <article class="tier live">
+        <div>
+          <span class="tier-status">Available now</span>
+          <h3 class="tier-name">Local</h3>
+          <div class="tier-price"><span class="tier-amount">$0</span><span class="tier-period">/ forever</span></div>
+          <ul class="tier-list">
+            <li>Mac app &amp; <code>trawl</code> CLI (MIT)</li>
+            <li>All 12 built-in sources &amp; plugins</li>
+            <li>Everything stays on your Mac</li>
+          </ul>
+        </div>
+        <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
+      </article>
+
+      <article class="tier">
+        <div>
+          <span class="tier-status">Planned</span>
+          <h3 class="tier-name">Blind Sync</h3>
+          <div class="tier-price"><span class="tier-amount">$7</span><span class="tier-period">/ mo</span></div>
+          <ul class="tier-list">
+            <li>50 GB encrypted cloud backup</li>
+            <li>Mac and iPhone sync</li>
+            <li>Encryption keys stay on your devices</li>
+          </ul>
+        </div>
+        <div class="tier-planned-note">Planned next</div>
+      </article>
+
+      <article class="tier">
+        <div>
+          <span class="tier-status">Planned</span>
+          <h3 class="tier-name">Cloud Vault</h3>
+          <div class="tier-price"><span class="tier-amount">$19</span><span class="tier-period">/ mo</span></div>
+          <ul class="tier-list">
+            <li>Everything in Blind Sync</li>
+            <li>24/7 remote search for phone &amp; cloud agents</li>
+            <li>Hardware-locked memory we cannot read</li>
+          </ul>
+        </div>
+        <div class="tier-planned-note">Planned next</div>
+      </article>
+
+      <article class="tier">
+        <div>
+          <span class="tier-status">Planned</span>
+          <h3 class="tier-name">Dedicated</h3>
+          <div class="tier-price"><span class="tier-amount">$119</span><span class="tier-period">/ mo</span></div>
+          <ul class="tier-list">
+            <li>Dedicated single-user cloud hardware</li>
+            <li>250 GB encrypted storage</li>
+            <li>Manual approval before server updates</li>
+          </ul>
+        </div>
+        <div class="tier-planned-note">Planned next</div>
+      </article>
+    </div>
+
+    <div class="teams-bar">
+      <div>
+        <strong>Teams</strong>
+        <span class="teams-status">Planned · $39 / seat / month (3-seat minimum)</span>
+      </div>
+      <p>Private personal archives plus a shared team archive, per-agent access controls, and dedicated team hardware.</p>
+    </div>
+
+    <p class="pricing-foot">
+      <a class="inline-link" href="security.html">See who can read what across every tier →</a>
+    </p>
+  </section>
+
+  <footer>
+    <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
+    <a href="https://x.com/opentrawl">x.com/opentrawl</a>
+    <a href="plugins.html">Plugins</a>
+    <a href="security.html">Security</a>
+    <a href="privacy.html">Gmail privacy</a>
+    <a href="https://agent-keyring.jjpcodes.com/">Agent Keyring</a>
+    <a href="llms.txt">llms.txt</a>
+    <div class="byline"><span>Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱</span></div>
+  </footer>
+
+</main>
+
+<script>
+(() => {
+  // 1. Hero cycling word
+  const words = "iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Health., Money., Twitter.".split(", ");
+  let wordIdx = 0;
+  const slot = document.getElementById("cycle");
+  const wordEl = document.getElementById("cycleWord");
+  function sizeSlot() {
+    if (!slot || !wordEl) return;
+    let max = 0;
+    const probe = document.createElement("span");
+    probe.style.cssText = "visibility:hidden;position:absolute;white-space:nowrap;font:inherit";
+    slot.parentElement.appendChild(probe);
+    for (const w of words) { probe.textContent = w; max = Math.max(max, probe.offsetWidth); }
+    probe.remove();
+    slot.style.width = Math.ceil(max) + "px";
+  }
+  sizeSlot();
+  addEventListener("resize", sizeSlot);
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setInterval(() => {
+      wordEl.style.transform = "rotateX(90deg)";
+      setTimeout(() => {
+        wordIdx = (wordIdx + 1) % words.length;
+        wordEl.textContent = words[wordIdx];
+        wordEl.style.transform = "rotateX(0deg)";
+      }, 220);
+    }, 2100);
+  }
+
+  // 2. Copy buttons
+  document.querySelectorAll("[data-copy-target]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const el = document.getElementById(btn.dataset.copyTarget);
+      if (!el) return;
+      const orig = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(el.textContent.trim());
+        btn.textContent = "Copied";
+        btn.classList.add("copied");
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove("copied"); }, 1500);
+      } catch {
+        btn.textContent = "Select & copy";
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      }
+    });
+  });
+
+  // 3. Four-beat live agent demo player (reads website/demo-session.txt)
   (async () => {
     const commentEl = document.getElementById("termComment");
     const commandEl = document.getElementById("termCommand");
     const outputEl = document.getElementById("termOutput");
     const bodyEl = document.getElementById("termBody");
-    const spinnerEl = document.getElementById("termSpinner");
-    const terminalEl = document.getElementById("terminal");
+    const beatTabs = Array.from(document.querySelectorAll("[data-beat]"));
 
     let steps;
     try {
-      const sessionText = await (await fetch("demo-session.txt")).text();
-      steps = sessionText.split(/^=== step ===$/m).map(block => {
+      const raw = await (await fetch("demo-session.txt")).text();
+      steps = raw.split(/^=== step ===$/m).map(block => {
         const lines = block.replace(/^\n/, "").replace(/\n$/, "").split("\n");
         return {
           comment: lines[0].replace(/^# /, ""),
@@ -323,125 +1152,54 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           output: lines.slice(2).join("\n"),
         };
       });
-    } catch { terminalEl.remove(); return; }
+    } catch { return; }
 
-    // emoji regex: Extended_Pictographic with optional VS16/ZWJ sequences
-    const emojiRe = /\p{Extended_Pictographic}(?:\uFE0F)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F)?)*/gu;
     function escapeHtml(s) {
       return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
-    function renderOutput(text) {
-      return escapeHtml(text).replace(emojiRe, m => '<span class="emoji-cell">' + m + '</span>');
+    const linkRe = /\b(?:telegram|imessage|whatsapp|gmail|notes|calendar|money|contacts|photos|health|twitter):[a-z0-9]+\b/g;
+    function renderText(text) {
+      return escapeHtml(text).replace(linkRe, m => '<span class="cite-link">' + m + '</span>');
     }
 
-    // the app derives column count from terminal width and font advance;
-    // here the data is fixed at 100 columns, so derive the font size instead
-    // so that 100 columns exactly fills the terminal content width.
-    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch {} }
-    const DEMO_COLUMNS = 100;
-    function sizeTerminalFont() {
-      const probe = document.createElement("span");
-      probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:100px";
-      probe.textContent = "0".repeat(DEMO_COLUMNS);
-      document.body.appendChild(probe);
-      const advanceRatio = probe.getBoundingClientRect().width / (100 * DEMO_COLUMNS);
-      probe.remove();
-      const outputSize = Math.min(16, Math.floor(outputEl.clientWidth / (DEMO_COLUMNS * advanceRatio) * 10) / 10);
-      outputEl.style.fontSize = outputSize + "px";
-      commandEl.style.fontSize = outputSize + "px";
-      commentEl.style.fontSize = Math.round(outputSize * 0.89 * 10) / 10 + "px";
-    }
-    sizeTerminalFont();
-    let tallest = 0;
-    for (const step of steps) {
-      commentEl.textContent = "# " + step.comment;
-      commandEl.textContent = "❯ " + step.command;
-      outputEl.innerHTML = renderOutput(step.output);
-      tallest = Math.max(tallest, terminalEl.offsetHeight);
-    }
-    terminalEl.style.height = tallest + "px";
-    outputEl.innerHTML = ""; commentEl.textContent = "\u00a0"; commandEl.textContent = "❯\u00a0";
+    let current = 0;
+    let timer = null;
 
-    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const sleep = ms => new Promise(r => setTimeout(r, ms));
-    const CHAR_MS = 22, CHUNK_MS = 18, CHUNK_SIZE = 8, TRANSITION_MS = 220, RUN_MS = 400, CD_DWELL_MS = 700;
-    const dwellFor = output => {
-      const lineCount = Math.max(1, output.split("\n").length);
-      return Math.min(10000, Math.max(4000, 1500 + lineCount * 450));
-    };
-
-    for (let index = 0; ; index = (index + 1) % steps.length) {
-      const step = steps[index];
-      commentEl.textContent = "# " + step.comment;
-      commandEl.textContent = "❯\u00a0";
-      outputEl.innerHTML = "";
-
-      if (reducedMotion) {
-        commandEl.textContent = "❯ " + step.command;
-        outputEl.innerHTML = renderOutput(step.output);
-        await sleep(step.output ? dwellFor(step.output) : CD_DWELL_MS);
-      } else {
-        for (const character of step.command) {
-          commandEl.textContent = (commandEl.textContent === "❯\u00a0" ? "❯ " : commandEl.textContent) + character;
-          await sleep(CHAR_MS);
-        }
-        if (step.output) {
-          spinnerEl.classList.add("on");
-          await sleep(RUN_MS);
-          spinnerEl.classList.remove("on");
-          const codePoints = Array.from(step.output);
-          for (let end = CHUNK_SIZE; end < codePoints.length + CHUNK_SIZE; end += CHUNK_SIZE) {
-            outputEl.innerHTML = renderOutput(codePoints.slice(0, end).join(""));
-            await sleep(CHUNK_MS);
-          }
-          await sleep(dwellFor(step.output));
-        } else {
-          await sleep(CD_DWELL_MS);
-        }
-      }
-
+    function showBeat(idx, autoAdvance) {
+      current = idx % steps.length;
+      const step = steps[current];
+      beatTabs.forEach((b, i) => b.classList.toggle("active", i === current));
       bodyEl.classList.add("fade");
-      await sleep(TRANSITION_MS);
-      bodyEl.classList.remove("fade");
+      setTimeout(() => {
+        commentEl.textContent = "# " + step.comment;
+        const isAnswer = step.command === "answer";
+        commandEl.textContent = isAnswer ? "AI reply with cited links" : "❯ " + step.command;
+        outputEl.classList.toggle("answer-mode", isAnswer);
+        outputEl.innerHTML = renderText(step.output);
+        bodyEl.classList.remove("fade");
+      }, 140);
+      if (timer) clearTimeout(timer);
+      if (autoAdvance && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        timer = setTimeout(() => showBeat(current + 1, true), 5600);
+      }
+    }
+
+    beatTabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        showBeat(parseInt(tab.dataset.beat, 10), false);
+      });
+    });
+
+    // Render beat 0 immediately with zero blank frame
+    const first = steps[0];
+    commentEl.textContent = "# " + first.comment;
+    commandEl.textContent = "❯ " + first.command;
+    outputEl.innerHTML = renderText(first.output);
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      timer = setTimeout(() => showBeat(1, true), 5600);
     }
   })();
-  </script>
-  <p class="term-caption"><span>I took my real archive and told Claude to anonymise it by LARPing as The Hitchhiker's Guide to the Galaxy. The data is real, the names aren't.</span></p>
-
-  <section class="cta">
-    <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
-    <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
-  </section>
-
-  <section class="facts">
-    <p><b>Private by design</b>
-    <span>Your archives are just files on your Mac. Nothing is uploaded anywhere, we don't know who you are. If you want to point a (local) AI at your archives, <em>you're</em> in control - not a company.</span></p>
-    <p><b>It just works</b>
-    <span>Install the Mac app. It builds local SQLite archives and unified search indexes, keeps them updated, and connects to your AI via CLI or scoped read-only MCP (<code>trawl connect</code>).</span></p>
-    <p><b>Open source</b>
-    <span>The code is on GitHub, MIT licensed. Take a look, see how it works. No secrets here.</span></p>
-    <p><b>Sandboxed plugins</b>
-    <span>Want to search something we have not built yet? Hand our <a href="https://github.com/opentrawl/opentrawl/blob/main/skills/build-trawl-plugin/SKILL.md">plugin skill</a> to your coding agent and install it under strict macOS sandboxing with <code>trawl plugin install</code>.</span></p>
-  </section>
-
-  <section class="app">
-    <p class="app-line">The macOS app is cool too. But the agent terminal is cooler.</p>
-    <img class="app-shot" src="app-window.png" width="2528" height="1872"
-         alt="The OpenTrawl Mac app window showing connected local sources">
-    <p class="app-why">We mostly made the app to manage the boring technical stuff (permissions, easy updates), so you can stay out of the terminal. That's about it. Claude made some cool animations though.</p>
-  </section>
-
-  <section class="cta">
-    <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
-    <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
-  </section>
-
-  <footer>
-    <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
-    <a href="https://x.com/opentrawl">x.com/opentrawl</a>
-    <a href="llms.txt">llms.txt</a>
-    <div class="byline"><span>Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱</span></div>
-  </footer>
-</main>
+})();
+</script>
 </body>
 </html>
