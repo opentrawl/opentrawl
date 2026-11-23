@@ -132,7 +132,12 @@ Normal CLI commands do not include them.
 Shared provider-neutral Go mechanics live in [`trawlkit`](trawlkit). Archive
 schemas, authentication and import logic stay with their trawler.
 
-## Contributing safely
+## Contributing
+
+OpenTrawl is fully open source (MIT), but we maintain tight architectural
+control and **do not accept unsolicited feature or new-trawler pull requests**.
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR (if you want a new
+source, build an external plugin with `trawl plugin install`, or open an issue).
 
 Read [AGENTS.md](AGENTS.md) before changing the repository. It is public:
 never commit personal archives, real messages, contacts, locations, account
