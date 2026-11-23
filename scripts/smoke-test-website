@@ -198,8 +198,10 @@ class CDPClient {
     return res.result ? res.result.value : undefined;
   }
 
-  async screenshot(outPath) {
-    const { data } = await this.send('Page.captureScreenshot', { format: 'png' });
+  async screenshot(outPath, fullPage = false) {
+    const params = { format: 'png' };
+    if (fullPage) params.captureBeyondViewport = true;
+    const { data } = await this.send('Page.captureScreenshot', params);
     fs.writeFileSync(outPath, Buffer.from(data, 'base64'));
   }
 
@@ -297,6 +299,9 @@ async function main() {
         if (screenshotDir && (w === 1440 || w === 390)) {
           const slug = p === '/' ? 'home' : p.replace(/^\//, '').replace(/\.html$/, '');
           await cdp.screenshot(path.join(screenshotDir, `${slug}-${w}x${h}.png`));
+          if (w === 1440) {
+            await cdp.screenshot(path.join(screenshotDir, `${slug}-full-1440.png`), true);
+          }
         }
       }
     }

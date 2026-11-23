@@ -256,10 +256,12 @@ code {
   width: 32px;
   height: 32px;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(16, 16, 16, 0.09);
+  background: var(--white);
   transition: transform 0.12s ease;
 }
-.app-icon.square { border-radius: 7px; }
 .icon-tip:hover .app-icon,
 .icon-tip:focus-visible .app-icon {
   transform: translateY(-2px);
@@ -812,6 +814,8 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   :root { --nav-h: 86px; }
   .topbar .btn { font-size: 12px; padding: 5px 12px; white-space: nowrap; }
   .topbar .btn-secondary { display: none; }
+  .icon-row { gap: 6px; }
+  .app-icon { width: 27px; height: 27px; border-radius: 6.5px; }
   .term-output { font-size: 10px; line-height: 1.5; }
   .ask-grid, .privacy-grid, .tier-grid { grid-template-columns: minmax(0, 1fr); }
   .ask-card { border-right: none; border-bottom: var(--hair); }

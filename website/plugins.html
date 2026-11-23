@@ -161,8 +161,16 @@ code {
   gap: 10px;
 }
 .pc-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.pc-icon { width: 34px; height: 34px; object-fit: contain; display: block; flex: none; }
-.pc-icon.square { border-radius: 8px; }
+.pc-icon {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  display: block;
+  flex: none;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(16, 16, 16, 0.09);
+  background: var(--white);
+}
 .pc-name { font-size: 16px; font-weight: 700; letter-spacing: -0.015em; }
 .badge {
   font-family: var(--font-mono);
