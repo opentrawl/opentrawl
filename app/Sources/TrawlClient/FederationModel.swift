@@ -143,6 +143,38 @@ public enum ArchiveLiveSyncCredentialStatus: Sendable, Equatable {
   case notConnected
 }
 
+public struct ArchiveMonthlyRecordCount: Sendable, Equatable, Identifiable {
+  public let calendarYear: UInt32
+  public let calendarMonth: UInt32
+  public let recordCount: UInt64
+
+  public var id: UInt32 {
+    calendarYear * 100 + calendarMonth
+  }
+
+  public init(calendarYear: UInt32, calendarMonth: UInt32, recordCount: UInt64) {
+    self.calendarYear = calendarYear
+    self.calendarMonth = calendarMonth
+    self.recordCount = recordCount
+  }
+}
+
+public struct ArchiveMonthlyHistory: Sendable, Equatable {
+  public let oldestArchivedRecordTime: Date?
+  public let monthlyRecordCountsInChronologicalOrder: [ArchiveMonthlyRecordCount]
+  public let undatedRecordCount: UInt64
+
+  public init(
+    oldestArchivedRecordTime: Date?,
+    monthlyRecordCountsInChronologicalOrder: [ArchiveMonthlyRecordCount],
+    undatedRecordCount: UInt64
+  ) {
+    self.oldestArchivedRecordTime = oldestArchivedRecordTime
+    self.monthlyRecordCountsInChronologicalOrder = monthlyRecordCountsInChronologicalOrder
+    self.undatedRecordCount = undatedRecordCount
+  }
+}
+
 public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   public let registeredTrawlerManifest: RegisteredTrawlerManifest
   public let archiveContentCountsAfterLastSuccessfullyCompletedUpdate:
@@ -152,9 +184,32 @@ public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   public let trawlerArchiveCanAnswerCurrentCommands: Bool
   public let sourceAppSyncLiveness: SourceAppSyncLiveness
   public let archiveLiveSyncCredentialStatus: ArchiveLiveSyncCredentialStatus
+  public let archiveMonthlyHistory: ArchiveMonthlyHistory?
 
   public var id: RegisteredTrawlerIdentity {
     registeredTrawlerManifest.registeredTrawler
+  }
+
+  public init(
+    registeredTrawlerManifest: RegisteredTrawlerManifest,
+    archiveContentCountsAfterLastSuccessfullyCompletedUpdate:
+      [ArchiveContentCountAfterLastSuccessfullyCompletedUpdate],
+    lastSuccessfullyCompletedArchiveUpdateTime: Date?,
+    newestArchivedRecordTime: Date?,
+    trawlerArchiveCanAnswerCurrentCommands: Bool,
+    sourceAppSyncLiveness: SourceAppSyncLiveness,
+    archiveLiveSyncCredentialStatus: ArchiveLiveSyncCredentialStatus,
+    archiveMonthlyHistory: ArchiveMonthlyHistory? = nil
+  ) {
+    self.registeredTrawlerManifest = registeredTrawlerManifest
+    self.archiveContentCountsAfterLastSuccessfullyCompletedUpdate =
+      archiveContentCountsAfterLastSuccessfullyCompletedUpdate
+    self.lastSuccessfullyCompletedArchiveUpdateTime = lastSuccessfullyCompletedArchiveUpdateTime
+    self.newestArchivedRecordTime = newestArchivedRecordTime
+    self.trawlerArchiveCanAnswerCurrentCommands = trawlerArchiveCanAnswerCurrentCommands
+    self.sourceAppSyncLiveness = sourceAppSyncLiveness
+    self.archiveLiveSyncCredentialStatus = archiveLiveSyncCredentialStatus
+    self.archiveMonthlyHistory = archiveMonthlyHistory
   }
 }
 

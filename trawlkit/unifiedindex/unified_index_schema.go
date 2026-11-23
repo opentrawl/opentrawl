@@ -124,6 +124,20 @@ CREATE TABLE IF NOT EXISTS indexed_archive_metadata (
 	value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS indexed_trawler_monthly_counts (
+	trawler        TEXT NOT NULL,
+	calendar_year  INTEGER NOT NULL,
+	calendar_month INTEGER NOT NULL,
+	record_count   INTEGER NOT NULL,
+	PRIMARY KEY (trawler, calendar_year, calendar_month)
+);
+
+CREATE TABLE IF NOT EXISTS indexed_trawler_history_summary (
+	trawler              TEXT PRIMARY KEY,
+	oldest_occurred_unix INTEGER,
+	undated_record_count INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_records_trawler_time ON indexed_archive_records(trawler, occurred_unix DESC);
 CREATE INDEX IF NOT EXISTS idx_records_time ON indexed_archive_records(occurred_unix DESC);
 CREATE INDEX IF NOT EXISTS idx_records_conversation ON indexed_archive_records(trawler, conversation_key);
@@ -141,6 +155,9 @@ func EnsureUnifiedIndexSchema(ctx context.Context, db *sql.DB) error {
 	}
 	if _, err := db.ExecContext(ctx, unifiedIndexSchemaSQL); err != nil {
 		return fmt.Errorf("ensure unified index schema: %w", err)
+	}
+	if err := backfillMissingTrawlerMonthlyHistories(ctx, db); err != nil {
+		return fmt.Errorf("backfill unified index monthly histories: %w", err)
 	}
 	return nil
 }

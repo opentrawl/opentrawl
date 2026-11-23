@@ -28,6 +28,18 @@ enum ArchiveLiveSyncCredentialStatus {
   ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_CONNECTED = 4;
 }
 
+message ArchiveMonthlyRecordCount {
+  uint32 calendar_year = 1;
+  uint32 calendar_month = 2;
+  uint64 record_count = 3;
+}
+
+message ArchiveMonthlyHistory {
+  google.protobuf.Timestamp oldest_archived_record_time = 1;
+  repeated ArchiveMonthlyRecordCount monthly_record_counts_in_chronological_order = 2;
+  uint64 undated_record_count = 3;
+}
+
 message TrawlerArchiveStatus {
   repeated ArchiveContentCountAfterLastSuccessfullyCompletedUpdate archive_content_counts_after_last_successfully_completed_update = 1;
   google.protobuf.Timestamp last_successfully_completed_archive_update_time = 2;
@@ -35,6 +47,7 @@ message TrawlerArchiveStatus {
   google.protobuf.Timestamp newest_archived_record_time = 4;
   SourceAppSyncLiveness source_app_sync_liveness = 5;
   ArchiveLiveSyncCredentialStatus archive_live_sync_credential_status = 6;
+  ArchiveMonthlyHistory archive_monthly_history = 7;
 }
 
 message TrawlerStatusResponse {

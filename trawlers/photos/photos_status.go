@@ -37,6 +37,10 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if err != nil {
 		return nil, err
 	}
+	monthlyHistory, err := archive.ReadCurrentAppleLibraryPhotoMonthlyHistory(ctx)
+	if err != nil {
+		return nil, err
+	}
 	archiveStatus.ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate = []*status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{{
 		ArchiveContentKindName: "apple_library_photos",
 		ArchiveContentCount:    currentAppleLibraryPhotoCount,
@@ -44,6 +48,25 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	archiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
 	if !newestCaptureTime.IsZero() {
 		archiveStatus.NewestArchivedRecordTime = timestamppb.New(newestCaptureTime)
+	}
+	if currentAppleLibraryPhotoCount > 0 || len(monthlyHistory.MonthlyCounts) > 0 || monthlyHistory.UndatedPhotoCount > 0 {
+		protoHistory := &status.ArchiveMonthlyHistory{
+			UndatedRecordCount: monthlyHistory.UndatedPhotoCount,
+		}
+		if !monthlyHistory.OldestCaptureTimeUTC.IsZero() {
+			protoHistory.OldestArchivedRecordTime = timestamppb.New(monthlyHistory.OldestCaptureTimeUTC)
+		}
+		for _, bucket := range monthlyHistory.MonthlyCounts {
+			protoHistory.MonthlyRecordCountsInChronologicalOrder = append(
+				protoHistory.MonthlyRecordCountsInChronologicalOrder,
+				&status.ArchiveMonthlyRecordCount{
+					CalendarYear:  bucket.CalendarYear,
+					CalendarMonth: bucket.CalendarMonth,
+					RecordCount:   bucket.RecordCount,
+				},
+			)
+		}
+		archiveStatus.ArchiveMonthlyHistory = protoHistory
 	}
 	lastAppleLibraryRead := lastRuns[photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY]
 	if lastAppleLibraryRead.LastRunStopReason == photosstep.PhotosStepRunStopReason_PHOTOS_STEP_RUN_STOP_REASON_NOTHING_PENDING {

@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
@@ -41,13 +42,15 @@ highlight(apple_library_photo_search,4,char(57344),char(57345)),
 highlight(apple_library_photo_search,5,char(57344),char(57345)),
 highlight(apple_library_photo_search,6,char(57344),char(57345))`
 	}
-	if !query.After.IsZero() {
-		where += " and p.capture_time_utc >= ?"
-		arguments = append(arguments, formatArchiveTime(query.After))
-	}
-	if !query.Before.IsZero() {
-		where += " and p.capture_time_utc < ?"
-		arguments = append(arguments, formatArchiveTime(query.Before))
+	var timeClauses []string
+	flags.NewInclusiveTimeRange(query.After, query.Before).AppendFormattedTimeSQLClauses(
+		"p.capture_time_utc",
+		formatArchiveTime,
+		&timeClauses,
+		&arguments,
+	)
+	for _, clause := range timeClauses {
+		where += " and " + clause
 	}
 	personFilterIsSet := query.PersonFilter.UnresolvedPersonFilterText() != "" || query.PersonFilter.ResolvedPersonFilter() != nil
 	var total uint64

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	personcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
@@ -170,7 +171,14 @@ func SearchSemanticIndex(
 
 	queryTokens := unifiedindex.TokenizeSearchWords(queryText)
 	if indexDB != nil {
-		resolveBestSessionMemberRecords(ctx, semStore.DB(), indexDB, scored, queryTokens)
+		resolveBestSessionMemberRecords(
+			ctx,
+			semStore.DB(),
+			indexDB,
+			scored,
+			queryTokens,
+			flags.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix),
+		)
 	}
 
 	aliasesByTrawlerRef, err := resolveSemanticShortLinks(ctx, indexDB, scored)
@@ -363,14 +371,8 @@ func buildSemanticFilterSQL(q SemanticSearchQuery) ([]string, []any) {
 			args = append(args, strings.ToLower(strings.TrimSpace(t)))
 		}
 	}
-	if q.AfterUnix != nil {
-		where = append(where, `occurred_unix >= ?`)
-		args = append(args, *q.AfterUnix)
-	}
-	if q.BeforeUnix != nil {
-		where = append(where, `occurred_unix <= ?`)
-		args = append(args, *q.BeforeUnix)
-	}
+	flags.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix).
+		AppendUnixSQLClauses("occurred_unix", &where, &args)
 	if len(q.PersonFilterTerms) > 0 {
 		var parts []string
 		for _, term := range q.PersonFilterTerms {
@@ -517,6 +519,7 @@ func resolveBestSessionMemberRecords(
 	indexDB *sql.DB,
 	chunks []scoredSemanticChunk,
 	queryTokens []string,
+	timeRange flags.InclusiveTimeRange,
 ) {
 	if semDB == nil || indexDB == nil || len(chunks) == 0 {
 		return
@@ -628,6 +631,9 @@ func resolveBestSessionMemberRecords(
 		for _, mr := range members {
 			m, ok := memberData[mr.trawler+"\x00"+mr.canonicalRef]
 			if !ok || strings.TrimSpace(m.resolvedRef) == "" {
+				continue
+			}
+			if !timeRange.ContainsUnixSeconds(m.occurredUnix) {
 				continue
 			}
 			score := 0

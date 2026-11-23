@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	federationcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	identity "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/identity"
 	personcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
@@ -151,14 +152,8 @@ func fetchRankedCandidates(
 			args = append(args, strings.TrimSpace(t))
 		}
 	}
-	if q.AfterUnix != nil {
-		whereClauses = append(whereClauses, `r.occurred_unix >= ?`)
-		args = append(args, *q.AfterUnix)
-	}
-	if q.BeforeUnix != nil {
-		whereClauses = append(whereClauses, `r.occurred_unix <= ?`)
-		args = append(args, *q.BeforeUnix)
-	}
+	flags.InclusiveTimeRangeFromUnixBounds(q.AfterUnix, q.BeforeUnix).
+		AppendUnixSQLClauses("r.occurred_unix", &whereClauses, &args)
 	if clause, pArgs := buildPersonFilterSQLClause(q.PersonFilterTerms); clause != "" {
 		whereClauses = append(whereClauses, clause)
 		args = append(args, pArgs...)

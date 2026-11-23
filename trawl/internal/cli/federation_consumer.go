@@ -12,6 +12,7 @@ import (
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/unifiedindex"
 )
 
 type canonicalConsumerObserver interface {
@@ -61,10 +62,47 @@ func (r *Runtime) canonicalStatus(trawlers []InstalledTrawler) *federationcontra
 	adapters := r.federationStatusTrawlers(trawlers)
 	response := federation.Status(r.ctx, adapters)
 	response.KeepSourceAppsRunningForAutomaticUpdates = r.keepSourceAppsRunningForAutomaticUpdates()
+	r.attachIndexedMonthlyHistoriesToStatus(r.ctx, response)
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeStatus(adapters, response)
 	}
 	return response
+}
+
+func (r *Runtime) attachIndexedMonthlyHistoriesToStatus(
+	ctx context.Context,
+	response *federationcontract.FederatedTrawlerStatusOperation,
+) {
+	if response == nil || len(response.GetTrawlerStatusResults()) == 0 {
+		return
+	}
+	stateRoot, err := trawlkit.ResolveStateRoot(r.stateRoot)
+	if err != nil {
+		return
+	}
+	indexStore, err := unifiedindex.OpenUnifiedIndexReadOnly(ctx, stateRoot, false)
+	if err != nil || indexStore == nil {
+		return
+	}
+	defer func() { _ = indexStore.Close() }()
+
+	histories, err := unifiedindex.ReadAllTrawlerMonthlyHistories(ctx, indexStore.DB())
+	if err != nil || len(histories) == 0 {
+		return
+	}
+	for _, trawlerStatusResult := range response.GetTrawlerStatusResults() {
+		if trawlerStatusResult == nil {
+			continue
+		}
+		archiveStatus := trawlerStatusResult.GetTrawlerStatusResponse().GetTrawlerArchiveStatus()
+		if archiveStatus == nil || archiveStatus.GetArchiveMonthlyHistory() != nil {
+			continue
+		}
+		trawlerID := trawlkit.RegisteredTrawlerIdentityText(trawlerStatusResult.GetRegisteredTrawler())
+		if history, ok := histories[trawlerID]; ok && history != nil {
+			archiveStatus.ArchiveMonthlyHistory = history
+		}
+	}
 }
 
 func (r *Runtime) canonicalSearch(trawlers []federation.SearchTrawler, query trawlkit.Query, limit int) *federationcontract.FederatedTrawlerSearchOperation {

@@ -190,6 +190,126 @@ func (x *ArchiveContentCountAfterLastSuccessfullyCompletedUpdate) GetArchiveCont
 	return 0
 }
 
+type ArchiveMonthlyRecordCount struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CalendarYear  uint32                 `protobuf:"varint,1,opt,name=calendar_year,json=calendarYear,proto3" json:"calendar_year,omitempty"`
+	CalendarMonth uint32                 `protobuf:"varint,2,opt,name=calendar_month,json=calendarMonth,proto3" json:"calendar_month,omitempty"`
+	RecordCount   uint64                 `protobuf:"varint,3,opt,name=record_count,json=recordCount,proto3" json:"record_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ArchiveMonthlyRecordCount) Reset() {
+	*x = ArchiveMonthlyRecordCount{}
+	mi := &file_trawl_status_status_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArchiveMonthlyRecordCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArchiveMonthlyRecordCount) ProtoMessage() {}
+
+func (x *ArchiveMonthlyRecordCount) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_status_status_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArchiveMonthlyRecordCount.ProtoReflect.Descriptor instead.
+func (*ArchiveMonthlyRecordCount) Descriptor() ([]byte, []int) {
+	return file_trawl_status_status_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ArchiveMonthlyRecordCount) GetCalendarYear() uint32 {
+	if x != nil {
+		return x.CalendarYear
+	}
+	return 0
+}
+
+func (x *ArchiveMonthlyRecordCount) GetCalendarMonth() uint32 {
+	if x != nil {
+		return x.CalendarMonth
+	}
+	return 0
+}
+
+func (x *ArchiveMonthlyRecordCount) GetRecordCount() uint64 {
+	if x != nil {
+		return x.RecordCount
+	}
+	return 0
+}
+
+type ArchiveMonthlyHistory struct {
+	state                                   protoimpl.MessageState       `protogen:"open.v1"`
+	OldestArchivedRecordTime                *timestamppb.Timestamp       `protobuf:"bytes,1,opt,name=oldest_archived_record_time,json=oldestArchivedRecordTime,proto3" json:"oldest_archived_record_time,omitempty"`
+	MonthlyRecordCountsInChronologicalOrder []*ArchiveMonthlyRecordCount `protobuf:"bytes,2,rep,name=monthly_record_counts_in_chronological_order,json=monthlyRecordCountsInChronologicalOrder,proto3" json:"monthly_record_counts_in_chronological_order,omitempty"`
+	UndatedRecordCount                      uint64                       `protobuf:"varint,3,opt,name=undated_record_count,json=undatedRecordCount,proto3" json:"undated_record_count,omitempty"`
+	unknownFields                           protoimpl.UnknownFields
+	sizeCache                               protoimpl.SizeCache
+}
+
+func (x *ArchiveMonthlyHistory) Reset() {
+	*x = ArchiveMonthlyHistory{}
+	mi := &file_trawl_status_status_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArchiveMonthlyHistory) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArchiveMonthlyHistory) ProtoMessage() {}
+
+func (x *ArchiveMonthlyHistory) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_status_status_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArchiveMonthlyHistory.ProtoReflect.Descriptor instead.
+func (*ArchiveMonthlyHistory) Descriptor() ([]byte, []int) {
+	return file_trawl_status_status_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ArchiveMonthlyHistory) GetOldestArchivedRecordTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OldestArchivedRecordTime
+	}
+	return nil
+}
+
+func (x *ArchiveMonthlyHistory) GetMonthlyRecordCountsInChronologicalOrder() []*ArchiveMonthlyRecordCount {
+	if x != nil {
+		return x.MonthlyRecordCountsInChronologicalOrder
+	}
+	return nil
+}
+
+func (x *ArchiveMonthlyHistory) GetUndatedRecordCount() uint64 {
+	if x != nil {
+		return x.UndatedRecordCount
+	}
+	return 0
+}
+
 type TrawlerArchiveStatus struct {
 	state                                                    protoimpl.MessageState                                     `protogen:"open.v1"`
 	ArchiveContentCountsAfterLastSuccessfullyCompletedUpdate []*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate `protobuf:"bytes,1,rep,name=archive_content_counts_after_last_successfully_completed_update,json=archiveContentCountsAfterLastSuccessfullyCompletedUpdate,proto3" json:"archive_content_counts_after_last_successfully_completed_update,omitempty"`
@@ -198,13 +318,14 @@ type TrawlerArchiveStatus struct {
 	NewestArchivedRecordTime                                 *timestamppb.Timestamp                                     `protobuf:"bytes,4,opt,name=newest_archived_record_time,json=newestArchivedRecordTime,proto3" json:"newest_archived_record_time,omitempty"`
 	SourceAppSyncLiveness                                    SourceAppSyncLiveness                                      `protobuf:"varint,5,opt,name=source_app_sync_liveness,json=sourceAppSyncLiveness,proto3,enum=trawl.status.SourceAppSyncLiveness" json:"source_app_sync_liveness,omitempty"`
 	ArchiveLiveSyncCredentialStatus                          ArchiveLiveSyncCredentialStatus                            `protobuf:"varint,6,opt,name=archive_live_sync_credential_status,json=archiveLiveSyncCredentialStatus,proto3,enum=trawl.status.ArchiveLiveSyncCredentialStatus" json:"archive_live_sync_credential_status,omitempty"`
+	ArchiveMonthlyHistory                                    *ArchiveMonthlyHistory                                     `protobuf:"bytes,7,opt,name=archive_monthly_history,json=archiveMonthlyHistory,proto3" json:"archive_monthly_history,omitempty"`
 	unknownFields                                            protoimpl.UnknownFields
 	sizeCache                                                protoimpl.SizeCache
 }
 
 func (x *TrawlerArchiveStatus) Reset() {
 	*x = TrawlerArchiveStatus{}
-	mi := &file_trawl_status_status_proto_msgTypes[1]
+	mi := &file_trawl_status_status_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -216,7 +337,7 @@ func (x *TrawlerArchiveStatus) String() string {
 func (*TrawlerArchiveStatus) ProtoMessage() {}
 
 func (x *TrawlerArchiveStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_status_status_proto_msgTypes[1]
+	mi := &file_trawl_status_status_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -229,7 +350,7 @@ func (x *TrawlerArchiveStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrawlerArchiveStatus.ProtoReflect.Descriptor instead.
 func (*TrawlerArchiveStatus) Descriptor() ([]byte, []int) {
-	return file_trawl_status_status_proto_rawDescGZIP(), []int{1}
+	return file_trawl_status_status_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *TrawlerArchiveStatus) GetArchiveContentCountsAfterLastSuccessfullyCompletedUpdate() []*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate {
@@ -274,6 +395,13 @@ func (x *TrawlerArchiveStatus) GetArchiveLiveSyncCredentialStatus() ArchiveLiveS
 	return ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_UNSPECIFIED
 }
 
+func (x *TrawlerArchiveStatus) GetArchiveMonthlyHistory() *ArchiveMonthlyHistory {
+	if x != nil {
+		return x.ArchiveMonthlyHistory
+	}
+	return nil
+}
+
 type TrawlerStatusResponse struct {
 	state                protoimpl.MessageState     `protogen:"open.v1"`
 	TrawlerArchiveStatus *TrawlerArchiveStatus      `protobuf:"bytes,1,opt,name=trawler_archive_status,json=trawlerArchiveStatus,proto3" json:"trawler_archive_status,omitempty"`
@@ -284,7 +412,7 @@ type TrawlerStatusResponse struct {
 
 func (x *TrawlerStatusResponse) Reset() {
 	*x = TrawlerStatusResponse{}
-	mi := &file_trawl_status_status_proto_msgTypes[2]
+	mi := &file_trawl_status_status_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -296,7 +424,7 @@ func (x *TrawlerStatusResponse) String() string {
 func (*TrawlerStatusResponse) ProtoMessage() {}
 
 func (x *TrawlerStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_status_status_proto_msgTypes[2]
+	mi := &file_trawl_status_status_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -309,7 +437,7 @@ func (x *TrawlerStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrawlerStatusResponse.ProtoReflect.Descriptor instead.
 func (*TrawlerStatusResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_status_status_proto_rawDescGZIP(), []int{2}
+	return file_trawl_status_status_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *TrawlerStatusResponse) GetTrawlerArchiveStatus() *TrawlerArchiveStatus {
@@ -334,14 +462,23 @@ const file_trawl_status_status_proto_rawDesc = "" +
 	"7ArchiveContentCountAfterLastSuccessfullyCompletedUpdate\x129\n" +
 	"\x19archive_content_kind_name\x18\x01 \x01(\tR\x16archiveContentKindName\x12H\n" +
 	"!archive_content_kind_display_name\x18\x02 \x01(\tR\x1darchiveContentKindDisplayName\x122\n" +
-	"\x15archive_content_count\x18\x03 \x01(\x04R\x13archiveContentCount\"\xf5\x05\n" +
+	"\x15archive_content_count\x18\x03 \x01(\x04R\x13archiveContentCount\"\x8a\x01\n" +
+	"\x19ArchiveMonthlyRecordCount\x12#\n" +
+	"\rcalendar_year\x18\x01 \x01(\rR\fcalendarYear\x12%\n" +
+	"\x0ecalendar_month\x18\x02 \x01(\rR\rcalendarMonth\x12!\n" +
+	"\frecord_count\x18\x03 \x01(\x04R\vrecordCount\"\xad\x02\n" +
+	"\x15ArchiveMonthlyHistory\x12Y\n" +
+	"\x1boldest_archived_record_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x18oldestArchivedRecordTime\x12\x86\x01\n" +
+	",monthly_record_counts_in_chronological_order\x18\x02 \x03(\v2'.trawl.status.ArchiveMonthlyRecordCountR'monthlyRecordCountsInChronologicalOrder\x120\n" +
+	"\x14undated_record_count\x18\x03 \x01(\x04R\x12undatedRecordCount\"\xd2\x06\n" +
 	"\x14TrawlerArchiveStatus\x12\xc8\x01\n" +
 	"?archive_content_counts_after_last_successfully_completed_update\x18\x01 \x03(\v2E.trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdateR8archiveContentCountsAfterLastSuccessfullyCompletedUpdate\x12\x7f\n" +
 	"/last_successfully_completed_archive_update_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR*lastSuccessfullyCompletedArchiveUpdateTime\x12[\n" +
 	"+trawler_archive_can_answer_current_commands\x18\x03 \x01(\bR&trawlerArchiveCanAnswerCurrentCommands\x12Y\n" +
 	"\x1bnewest_archived_record_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x18newestArchivedRecordTime\x12\\\n" +
 	"\x18source_app_sync_liveness\x18\x05 \x01(\x0e2#.trawl.status.SourceAppSyncLivenessR\x15sourceAppSyncLiveness\x12{\n" +
-	"#archive_live_sync_credential_status\x18\x06 \x01(\x0e2-.trawl.status.ArchiveLiveSyncCredentialStatusR\x1farchiveLiveSyncCredentialStatus\"\xd0\x01\n" +
+	"#archive_live_sync_credential_status\x18\x06 \x01(\x0e2-.trawl.status.ArchiveLiveSyncCredentialStatusR\x1farchiveLiveSyncCredentialStatus\x12[\n" +
+	"\x17archive_monthly_history\x18\a \x01(\v2#.trawl.status.ArchiveMonthlyHistoryR\x15archiveMonthlyHistory\"\xd0\x01\n" +
 	"\x15TrawlerStatusResponse\x12X\n" +
 	"\x16trawler_archive_status\x18\x01 \x01(\v2\".trawl.status.TrawlerArchiveStatusR\x14trawlerArchiveStatus\x12]\n" +
 	"\x16photos_pipeline_status\x18\x02 \x01(\v2'.trawl.photos.step.PhotosPipelineStatusR\x14photosPipelineStatus*\xd4\x01\n" +
@@ -370,29 +507,34 @@ func file_trawl_status_status_proto_rawDescGZIP() []byte {
 }
 
 var file_trawl_status_status_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_trawl_status_status_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_trawl_status_status_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_trawl_status_status_proto_goTypes = []any{
 	(SourceAppSyncLiveness)(0),                                      // 0: trawl.status.SourceAppSyncLiveness
 	(ArchiveLiveSyncCredentialStatus)(0),                            // 1: trawl.status.ArchiveLiveSyncCredentialStatus
 	(*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate)(nil), // 2: trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
-	(*TrawlerArchiveStatus)(nil),                                    // 3: trawl.status.TrawlerArchiveStatus
-	(*TrawlerStatusResponse)(nil),                                   // 4: trawl.status.TrawlerStatusResponse
-	(*timestamppb.Timestamp)(nil),                                   // 5: google.protobuf.Timestamp
-	(*step.PhotosPipelineStatus)(nil),                               // 6: trawl.photos.step.PhotosPipelineStatus
+	(*ArchiveMonthlyRecordCount)(nil),                               // 3: trawl.status.ArchiveMonthlyRecordCount
+	(*ArchiveMonthlyHistory)(nil),                                   // 4: trawl.status.ArchiveMonthlyHistory
+	(*TrawlerArchiveStatus)(nil),                                    // 5: trawl.status.TrawlerArchiveStatus
+	(*TrawlerStatusResponse)(nil),                                   // 6: trawl.status.TrawlerStatusResponse
+	(*timestamppb.Timestamp)(nil),                                   // 7: google.protobuf.Timestamp
+	(*step.PhotosPipelineStatus)(nil),                               // 8: trawl.photos.step.PhotosPipelineStatus
 }
 var file_trawl_status_status_proto_depIdxs = []int32{
-	2, // 0: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_update:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
-	5, // 1: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_update_time:type_name -> google.protobuf.Timestamp
-	5, // 2: trawl.status.TrawlerArchiveStatus.newest_archived_record_time:type_name -> google.protobuf.Timestamp
-	0, // 3: trawl.status.TrawlerArchiveStatus.source_app_sync_liveness:type_name -> trawl.status.SourceAppSyncLiveness
-	1, // 4: trawl.status.TrawlerArchiveStatus.archive_live_sync_credential_status:type_name -> trawl.status.ArchiveLiveSyncCredentialStatus
-	3, // 5: trawl.status.TrawlerStatusResponse.trawler_archive_status:type_name -> trawl.status.TrawlerArchiveStatus
-	6, // 6: trawl.status.TrawlerStatusResponse.photos_pipeline_status:type_name -> trawl.photos.step.PhotosPipelineStatus
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	7,  // 0: trawl.status.ArchiveMonthlyHistory.oldest_archived_record_time:type_name -> google.protobuf.Timestamp
+	3,  // 1: trawl.status.ArchiveMonthlyHistory.monthly_record_counts_in_chronological_order:type_name -> trawl.status.ArchiveMonthlyRecordCount
+	2,  // 2: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_update:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
+	7,  // 3: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_update_time:type_name -> google.protobuf.Timestamp
+	7,  // 4: trawl.status.TrawlerArchiveStatus.newest_archived_record_time:type_name -> google.protobuf.Timestamp
+	0,  // 5: trawl.status.TrawlerArchiveStatus.source_app_sync_liveness:type_name -> trawl.status.SourceAppSyncLiveness
+	1,  // 6: trawl.status.TrawlerArchiveStatus.archive_live_sync_credential_status:type_name -> trawl.status.ArchiveLiveSyncCredentialStatus
+	4,  // 7: trawl.status.TrawlerArchiveStatus.archive_monthly_history:type_name -> trawl.status.ArchiveMonthlyHistory
+	5,  // 8: trawl.status.TrawlerStatusResponse.trawler_archive_status:type_name -> trawl.status.TrawlerArchiveStatus
+	8,  // 9: trawl.status.TrawlerStatusResponse.photos_pipeline_status:type_name -> trawl.photos.step.PhotosPipelineStatus
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_trawl_status_status_proto_init() }
@@ -406,7 +548,7 @@ func file_trawl_status_status_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_status_status_proto_rawDesc), len(file_trawl_status_status_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

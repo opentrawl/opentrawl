@@ -124,6 +124,47 @@ public nonisolated struct Trawl_Status_ArchiveContentCountAfterLastSuccessfullyC
   public init() {}
 }
 
+public nonisolated struct Trawl_Status_ArchiveMonthlyRecordCount: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var calendarYear: UInt32 = 0
+
+  public var calendarMonth: UInt32 = 0
+
+  public var recordCount: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Status_ArchiveMonthlyHistory: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var oldestArchivedRecordTime: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_oldestArchivedRecordTime ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_oldestArchivedRecordTime = newValue}
+  }
+  /// Returns true if `oldestArchivedRecordTime` has been explicitly set.
+  public var hasOldestArchivedRecordTime: Bool {self._oldestArchivedRecordTime != nil}
+  /// Clears the value of `oldestArchivedRecordTime`. Subsequent reads from it will return its default value.
+  public mutating func clearOldestArchivedRecordTime() {self._oldestArchivedRecordTime = nil}
+
+  public var monthlyRecordCountsInChronologicalOrder: [Trawl_Status_ArchiveMonthlyRecordCount] = []
+
+  public var undatedRecordCount: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _oldestArchivedRecordTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+}
+
 public nonisolated struct Trawl_Status_TrawlerArchiveStatus: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -155,12 +196,22 @@ public nonisolated struct Trawl_Status_TrawlerArchiveStatus: Sendable {
 
   public var archiveLiveSyncCredentialStatus: Trawl_Status_ArchiveLiveSyncCredentialStatus = .unspecified
 
+  public var archiveMonthlyHistory: Trawl_Status_ArchiveMonthlyHistory {
+    get {_archiveMonthlyHistory ?? Trawl_Status_ArchiveMonthlyHistory()}
+    set {_archiveMonthlyHistory = newValue}
+  }
+  /// Returns true if `archiveMonthlyHistory` has been explicitly set.
+  public var hasArchiveMonthlyHistory: Bool {self._archiveMonthlyHistory != nil}
+  /// Clears the value of `archiveMonthlyHistory`. Subsequent reads from it will return its default value.
+  public mutating func clearArchiveMonthlyHistory() {self._archiveMonthlyHistory = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _lastSuccessfullyCompletedArchiveUpdateTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
   fileprivate var _newestArchivedRecordTime: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _archiveMonthlyHistory: Trawl_Status_ArchiveMonthlyHistory? = nil
 }
 
 public nonisolated struct Trawl_Status_TrawlerStatusResponse: Sendable {
@@ -246,9 +297,93 @@ nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompl
   }
 }
 
+nonisolated extension Trawl_Status_ArchiveMonthlyRecordCount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ArchiveMonthlyRecordCount"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}calendar_year\0\u{3}calendar_month\0\u{3}record_count\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.calendarYear) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.calendarMonth) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.recordCount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.calendarYear != 0 {
+      try visitor.visitSingularUInt32Field(value: self.calendarYear, fieldNumber: 1)
+    }
+    if self.calendarMonth != 0 {
+      try visitor.visitSingularUInt32Field(value: self.calendarMonth, fieldNumber: 2)
+    }
+    if self.recordCount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.recordCount, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Status_ArchiveMonthlyRecordCount, rhs: Trawl_Status_ArchiveMonthlyRecordCount) -> Bool {
+    if lhs.calendarYear != rhs.calendarYear {return false}
+    if lhs.calendarMonth != rhs.calendarMonth {return false}
+    if lhs.recordCount != rhs.recordCount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Status_ArchiveMonthlyHistory: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ArchiveMonthlyHistory"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}oldest_archived_record_time\0\u{3}monthly_record_counts_in_chronological_order\0\u{3}undated_record_count\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._oldestArchivedRecordTime) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.monthlyRecordCountsInChronologicalOrder) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.undatedRecordCount) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._oldestArchivedRecordTime {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.monthlyRecordCountsInChronologicalOrder.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.monthlyRecordCountsInChronologicalOrder, fieldNumber: 2)
+    }
+    if self.undatedRecordCount != 0 {
+      try visitor.visitSingularUInt64Field(value: self.undatedRecordCount, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Status_ArchiveMonthlyHistory, rhs: Trawl_Status_ArchiveMonthlyHistory) -> Bool {
+    if lhs._oldestArchivedRecordTime != rhs._oldestArchivedRecordTime {return false}
+    if lhs.monthlyRecordCountsInChronologicalOrder != rhs.monthlyRecordCountsInChronologicalOrder {return false}
+    if lhs.undatedRecordCount != rhs.undatedRecordCount {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0\u{3}newest_archived_record_time\0\u{3}source_app_sync_liveness\0\u{3}archive_live_sync_credential_status\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0\u{3}newest_archived_record_time\0\u{3}source_app_sync_liveness\0\u{3}archive_live_sync_credential_status\0\u{3}archive_monthly_history\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -262,6 +397,7 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
       case 4: try { try decoder.decodeSingularMessageField(value: &self._newestArchivedRecordTime) }()
       case 5: try { try decoder.decodeSingularEnumField(value: &self.sourceAppSyncLiveness) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.archiveLiveSyncCredentialStatus) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._archiveMonthlyHistory) }()
       default: break
       }
     }
@@ -290,6 +426,9 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     if self.archiveLiveSyncCredentialStatus != .unspecified {
       try visitor.visitSingularEnumField(value: self.archiveLiveSyncCredentialStatus, fieldNumber: 6)
     }
+    try { if let v = self._archiveMonthlyHistory {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -300,6 +439,7 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     if lhs._newestArchivedRecordTime != rhs._newestArchivedRecordTime {return false}
     if lhs.sourceAppSyncLiveness != rhs.sourceAppSyncLiveness {return false}
     if lhs.archiveLiveSyncCredentialStatus != rhs.archiveLiveSyncCredentialStatus {return false}
+    if lhs._archiveMonthlyHistory != rhs._archiveMonthlyHistory {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -229,6 +229,22 @@ extension Trawl_Federation_RegisteredTrawlerCatalogEntry {
   }
 }
 
+extension Trawl_Status_ArchiveMonthlyHistory {
+  fileprivate func decodedArchiveMonthlyHistory() -> ArchiveMonthlyHistory {
+    ArchiveMonthlyHistory(
+      oldestArchivedRecordTime:
+        hasOldestArchivedRecordTime ? oldestArchivedRecordTime.date : nil,
+      monthlyRecordCountsInChronologicalOrder:
+        monthlyRecordCountsInChronologicalOrder.map {
+          ArchiveMonthlyRecordCount(
+            calendarYear: $0.calendarYear,
+            calendarMonth: $0.calendarMonth,
+            recordCount: $0.recordCount)
+        },
+      undatedRecordCount: undatedRecordCount)
+  }
+}
+
 extension Trawl_Federation_FederatedTrawlerStatusOperation {
   func decodedFederatedTrawlerStatusOperation() throws -> FederatedTrawlerStatusOperation {
     let registeredTrawlerCatalog = try self.registeredTrawlerCatalog.map {
@@ -272,7 +288,10 @@ extension Trawl_Federation_FederatedTrawlerStatusOperation {
           try trawlerArchiveStatus.sourceAppSyncLiveness.decodedSourceAppSyncLiveness(),
         archiveLiveSyncCredentialStatus:
           trawlerArchiveStatus.archiveLiveSyncCredentialStatus
-          .decodedArchiveLiveSyncCredentialStatus())
+          .decodedArchiveLiveSyncCredentialStatus(),
+        archiveMonthlyHistory:
+          trawlerArchiveStatus.hasArchiveMonthlyHistory
+          ? trawlerArchiveStatus.archiveMonthlyHistory.decodedArchiveMonthlyHistory() : nil)
     }
     return FederatedTrawlerStatusOperation(
       trawlerStatuses: trawlerStatuses,

@@ -369,6 +369,9 @@ on conflict(key) do update set value = excluded.value
 `, nowUTC); err != nil {
 		return fmt.Errorf("update unified index metadata: %w", err)
 	}
+	if err := refreshTrawlerMonthlyHistoryInsideTx(ctx, tx, trawler); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -377,6 +380,8 @@ func clearTrawlerIndexedRows(ctx context.Context, tx *sql.Tx, trawler string) er
 		`delete from indexed_record_anchors where doc_id in (select doc_id from indexed_archive_records where trawler = ?)`,
 		`delete from indexed_money_movements where trawler = ?`,
 		`delete from indexed_time_windows where trawler = ?`,
+		`delete from indexed_trawler_monthly_counts where trawler = ?`,
+		`delete from indexed_trawler_history_summary where trawler = ?`,
 		`delete from indexed_archive_records where trawler = ?`,
 	}
 	for _, q := range stmts {
