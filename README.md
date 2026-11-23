@@ -1,152 +1,92 @@
----
-written_by: ai
----
-
 # OpenTrawl
 
-One searchable archive of your digital life, on your machine.
+**Spotlight for the Agentic OS.** Give any AI you use searchable access to your messages, emails, notes, photos, calendar, contacts, finances, and X history, without handing your life to a cloud vendor.
 
-OpenTrawl copies history from the apps you use into separate, local SQLite
-archives, then searches them through one `trawl` command. A person or an agent
-can find a message, conversation, note, person or calendar event and open its
-surrounding context without querying each app again.
+Your AI does not know your history. Every time you switch models or start a new chat, you re-explain who people are, paste old messages, and dig up receipts yourself.
 
-App access and archives stay local. Read commands do not change the original
-apps. A trawler that uses a remote service must state what leaves the Mac and
-send only the input needed for that operation.
+OpenTrawl fixes that. It keeps a private, searchable archive of your apps on your Mac so any AI you use can answer questions from your real life and link straight back to the original message, email, note, or transaction.
 
-## Build OpenTrawl
+## Get started on Mac
 
-The development environment uses [devenv](https://devenv.sh). Install Nix,
-devenv and [direnv](https://direnv.net), then run:
+1. **Download [OpenTrawl for Mac](https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg)** and drag it to Applications.
+2. **Open the app and grant Full Disk Access.** Guided setup walks you through turning on Full Disk Access so OpenTrawl can read your local Apple apps, then indexes your archive in the background. Before granting access, you can use the app's built-in audit prompt to have an AI inspect the exact app bundle on your disk. You can also search and read everything directly inside the Mac app window.
+3. **Hand it to your AI.** Click **Copy prompt to connect your AI** inside the app and paste it into Claude Code, Codex, OpenClaw, Hermes, or any agent that can run tools.
 
-```sh
-git clone https://github.com/opentrawl/opentrawl
-cd opentrawl
-direnv allow                 # or: devenv shell
-scripts/dev-bin              # builds the CLI and trawlers into .dev/bin
-```
+Or paste this directly into your AI:
 
-The installed Mac app includes the complete CLI at
-`/Applications/OpenTrawl.app/Contents/Helpers/trawl`. That path links to the Mac
-app executable. The app code is under `app/`. For development, build the CLI and
-trawlers from the checkout or use `app/scripts/swift-with-trawl build` and
-`app/scripts/swift-with-trawl test` in the development shell to link the Go CLI
-into the Swift build.
+> Use my local OpenTrawl archive at `/Applications/OpenTrawl.app/Contents/Helpers/trawl`. Start by running it with no arguments and with `--help`, then run a small read-only search and open one result. Use normal text output and do not run `update`, install plugins, or change any files or configuration unless I ask.
 
-Build a signed development app with a name that describes the candidate:
+Your agent inspects `trawl` on its own and starts answering questions with links back to the original records.
 
-```sh
-app/scripts/dev-run --candidate onboarding
-```
+## What you can ask your AI
 
-The app is published at
-`~/Library/Developer/OpenTrawl/Builds/onboarding/OpenTrawl Dev.app`. Each candidate
-name is used once, and OpenTrawl keeps the three newest candidates. Development
-apps use the separate `OpenTrawl Dev` identity and never replace the installed
-app at `/Applications/OpenTrawl.app`.
+- *"What did I talk to Sam about across iMessage, WhatsApp, Telegram, and Gmail last month?"*
+- *"Pull up everything from my trip in September: messages, emails, photos, calendar events, and what I spent."*
+- *"Find that note or X bookmark about home insurance. I do not remember the exact words."* (Turn on local topic search on Apple Silicon Macs; it runs privately on your Mac and uses no memory when idle.)
+- *"Did I pay that invoice, and which account did it come from?"*
 
-To test first-run onboarding with an existing candidate, run:
+Because your archive stays on your disk in standard SQLite files, you can point Claude, Codex, Gemini, OpenClaw, Hermes, or a local model at the same history anytime.
 
-```sh
-app/scripts/cold-run --candidate onboarding
-```
+## What it connects to
 
-This resets onboarding and Full Disk Access for `OpenTrawl Dev` only.
+### 11 built-in sources
 
-## Use OpenTrawl with an agent
-
-OpenTrawl gives a coding agent searchable access to the local archive of your
-messages, notes, contacts and calendar events. Give an agent this instruction:
-
-> My intent is for you to answer my questions from my local OpenTrawl archives.
-> Use `/Applications/OpenTrawl.app/Contents/Helpers/trawl` as the `trawl` CLI.
-> Start by running it with no arguments and with `--help`. You may use the
-> read-only `status`, `search`, `who`, `conversations`, `messages`, `open` and
-> trawler commands. Use the normal text output. Do not run `update`, import or
-> install anything, or change my agent configuration or `PATH`, unless I ask.
-> Check `trawl money accounts` before concluding a payment was not made; a
-> missing search match does not establish that the account and period were
-> collected.
-
-## Use the archive
-
-Set `TRAWL` for the current terminal, then run it with no arguments to see what
-you can search. Use the installed helper or the development build:
-
-```sh
-TRAWL=/Applications/OpenTrawl.app/Contents/Helpers/trawl
-# TRAWL=./.dev/bin/trawl
-
-"$TRAWL"
-"$TRAWL" --help
-"$TRAWL" status
-"$TRAWL" search "boat trip"
-"$TRAWL" who "Avery"
-"$TRAWL" conversations --with "Avery"
-"$TRAWL" messages --conversation LINK
-"$TRAWL" open LINK
-"$TRAWL" contacts people
-"$TRAWL" calendar events
-"$TRAWL" update imessage telegram
-```
-
-All commands except `update` use the existing local archives. `update` gets new
-items from the selected apps. Normal text is the interface for people and agents.
-The Mac app uses the same typed protobuf contract.
-
-Root commands use stable exit statuses: `0` means complete, `1` means failed,
-`2` means the command was used incorrectly, and `3` means the result is partial
-but stdout is still usable. On a partial result, stderr names the trawlers that
-did not complete.
-
-Search and list results show a stable link. Use that link directly with
-`"$TRAWL" open LINK`; you do not need to add a trawler name. Internal record
-identities stay inside the typed and storage contracts.
-
-## Available trawlers
-
-One Go registry decides which trawlers every CLI and Mac app operation can use:
-
-| Trawler | Directory | Archive input |
+| Source | What OpenTrawl archives | What it needs from you |
 | --- | --- | --- |
-| iMessage | [`trawlers/imessage`](trawlers/imessage) | Apple Messages |
-| WhatsApp | [`trawlers/whatsapp`](trawlers/whatsapp) | WhatsApp Desktop |
-| Telegram | [`trawlers/telegram`](trawlers/telegram) | Telegram for macOS |
-| Notes | [`trawlers/notes`](trawlers/notes) | Apple Notes |
-| Contacts | [`trawlers/contacts`](trawlers/contacts) | Apple Contacts and identities found by messaging trawlers |
-| Calendar | [`trawlers/calendar`](trawlers/calendar) | Apple Calendar |
+| [iMessage](trawlers/imessage) | Apple Messages conversations and messages | Full Disk Access (guided setup) |
+| [WhatsApp](trawlers/whatsapp) | WhatsApp Desktop chats, groups, messages, and media details | WhatsApp Desktop + Full Disk Access (guided setup) |
+| [Telegram](trawlers/telegram) | Telegram for macOS chats and messages | Telegram for macOS + Full Disk Access (guided setup) |
+| [Apple Mail](trawlers/mail) | iCloud Mail and any other account in Apple Mail | Full Disk Access (guided setup) |
+| [Notes](trawlers/notes) | Apple Notes folders, notes, attachments, and past versions | Full Disk Access (guided setup) |
+| [Contacts](trawlers/contacts) | Apple Contacts and people resolved across your messaging apps | Full Disk Access (guided setup) |
+| [Calendar](trawlers/calendar) | Apple Calendar events, calendars, and attendees | Full Disk Access (guided setup) |
+| [Photos](trawlers/photos) | Apple Photos dates, places, albums, cameras, people tags, and favourites | Full Disk Access (nearby-place lookups and photo descriptions are not enabled yet) |
+| [Gmail](trawlers/gmail) | Your Gmail mailbox (direct from your Mac to Google) | Read-only Google sign-in via your agent (`trawl gmail connect`) |
+| [Money](trawlers/money) | Bank accounts, balances, and transactions (ING and Wise) | Your own Enable Banking app registration, or import files written by an agent |
+| [Twitter (X)](trawlers/twitter) | Your posts, bookmarks, likes, mentions, and direct messages | Pasted X web session cookies, an exported X archive, or an X API key |
 
-The Mac app catalogue marks Gmail, Photos and Twitter (X) as coming soon.
-Normal CLI commands do not include them.
+### Plugins for everything else
 
-## Product contracts
+Want to index an app or export OpenTrawl does not ship with? Paste this into your coding agent:
 
-- [Vision](docs/vision.md) explains the enduring product direction and design
-  boundaries.
-- [Trawler control contract](docs/contract.md) defines the shared typed seam.
-- [Mac app contract](docs/mac-app.md) defines search and open behaviour in the
-  human interface.
-- Trawler READMEs document app access, storage and commands.
+> Read `https://raw.githubusercontent.com/opentrawl/opentrawl/main/skills/build-trawl-plugin/SKILL.md` and build me a standalone OpenTrawl plugin for [APP OR EXPORT]. Show me every website, folder, and secret it needs and ask for my approval before installing it.
 
-Shared provider-neutral Go mechanics live in [`trawlkit`](trawlkit). Archive
-schemas, authentication and import logic stay with their trawler.
+Plugins run in a strict macOS sandbox. You approve the exact folders, websites, and Keychain secrets each plugin may touch, and a plugin can never read another source's archive or browse your home folder.
+
+## Privacy and security
+
+- **Everything stays on your Mac today.** Your archives live in `~/.opentrawl` as plain SQLite files. OpenTrawl runs no servers, requires no account, and collects no telemetry.
+- **Read-only by design.** OpenTrawl copies your history so you and your AI can search it. It never sends messages, edits notes, or writes back to your apps.
+- **What goes to your AI.** Whatever your agent reads from your archive (including full conversations, notes, or emails you ask it to open) goes to your AI provider under its privacy terms. Your full archive stays on your machine rather than being uploaded upfront.
+- **Open source and auditable.** Inspect the code yourself, or use the Mac app's audit prompt to have an AI check the exact app bundle before you grant permissions.
+
+## Where OpenTrawl is going
+
+OpenTrawl runs locally on macOS today. Here is what we are building next so your archive works across every device and every agent:
+
+- **Simpler Mac setup without Full Disk Access:** Connect messaging and cloud apps directly so Full Disk Access becomes an optional toggle only if you want Apple-locked apps like iMessage and Apple Notes.
+- **Phone and Linux:** iPhone and Android apps (for Apple Health, mobile photos, contacts, and messaging) plus Linux and Docker support for always-on agent servers.
+- **One-click agent connections (MCP):** Connect agents like Claude, Codex, OpenClaw, Hermes, and T3 Code directly and choose which sources each agent can see (for example, let a coding agent search your notes without seeing your bank history).
+- **Optional encrypted sync and paid private hosting:** Sync across your Mac, phone, and Linux machines while servers store only data they cannot decrypt, plus optional paid cloud hosting so your phone and cloud agents can search your archive at any hour, encrypted so that we cannot read it.
+- **More sources:** Apple Health, Signal, and community-maintained plugins.
+
+## The OpenTrawl suite
+
+- **OpenTrawl** (this repo): Spotlight for the Agentic OS. Give any AI searchable access to your messages, emails, notes, photos, calendar, contacts, finances, and X history.
+- **[Agent Keyring](https://agent-keyring.jjpcodes.com/)**: 1Password for the Agentic OS. Let your AI agents sign in as you anywhere you work, using the passwords you already keep in Apple Passwords, approved on your Mac, iPhone, or Apple Watch.
+
+## For agents and developers
+
+- **Agent CLI:** Run `/Applications/OpenTrawl.app/Contents/Helpers/trawl` with no arguments and with `--help` for the complete command reference and exit codes (`0` complete, `1` failed, `2` bad usage, `3` partial result).
+- **Build from source:** Install Nix, [devenv](https://devenv.sh), and [direnv](https://direnv.net), then run `direnv allow` and `scripts/dev-bin` (or `app/scripts/dev-run --candidate <name>` for a separate signed `OpenTrawl Dev.app`, and `app/scripts/cold-run --candidate <name>` to reset dev onboarding).
+- **Architecture docs:** [Vision](docs/vision.md), [Trawler control contract](docs/contract.md), [Mac app contract](docs/mac-app.md), shared packages in [`trawlkit/`](trawlkit/), and per-source docs under [`trawlers/`](trawlers/).
 
 ## Contributing
 
-OpenTrawl is fully open source (MIT), but we maintain tight architectural
-control and **do not accept unsolicited feature or new-trawler pull requests**.
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR (if you want a new
-source, build an external plugin with `trawl plugin install`, or open an issue).
+OpenTrawl is open source (MIT). We keep tight architectural control and **do not accept unsolicited feature or new-source pull requests**. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR. To add a new source, hand [`skills/build-trawl-plugin/SKILL.md`](skills/build-trawl-plugin/SKILL.md) to your coding agent to build an external plugin, or open an issue.
 
-Read [AGENTS.md](AGENTS.md) before changing the repository. It is public:
-never commit personal archives, real messages, contacts, locations, account
-identifiers or archive-derived counts. Real archive proof stays outside this
-repository. Do not replace it with synthetic archive data, fixtures or examples.
-
-Run `scripts/check-clean` before every commit.
+Read [AGENTS.md](AGENTS.md) before editing this repository. This repo is public: never commit personal archives, real messages, contacts, locations, account identifiers, archive-derived counts, or synthetic archive fixtures. Run `scripts/check-clean` before every commit.
 
 ## Licence
 
-The monorepo is MIT licensed; see [LICENSE](LICENSE). Forked trawler directories
-retain their upstream licences and copyright notices.
+MIT; see [LICENSE](LICENSE). Forked source directories retain their upstream licences and copyright notices.
