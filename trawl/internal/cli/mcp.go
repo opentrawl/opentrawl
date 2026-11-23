@@ -81,10 +81,18 @@ type mcpToolInputSchema struct {
 	Properties map[string]mcpToolJSONSchemaProperty `json:"properties"`
 }
 
+type mcpToolAnnotations struct {
+	ReadOnlyHint    bool `json:"readOnlyHint"`
+	DestructiveHint bool `json:"destructiveHint"`
+	IdempotentHint  bool `json:"idempotentHint"`
+	OpenWorldHint   bool `json:"openWorldHint"`
+}
+
 type mcpToolDefinition struct {
 	Name        string             `json:"name"`
 	Description string             `json:"description"`
 	InputSchema mcpToolInputSchema `json:"inputSchema"`
+	Annotations mcpToolAnnotations `json:"annotations"`
 }
 
 type mcpInitializeCapabilities struct {
@@ -150,6 +158,12 @@ func mcpStringProperty(description string) mcpToolJSONSchemaProperty {
 
 func mcpToolDefinitions() []mcpToolDefinition {
 	limitProperty := mcpToolJSONSchemaProperty{Type: "integer", Minimum: 1, Description: "Maximum number of results."}
+	readOnlyArchiveAnnotations := mcpToolAnnotations{
+		ReadOnlyHint:    true,
+		DestructiveHint: false,
+		IdempotentHint:  true,
+		OpenWorldHint:   false,
+	}
 	return []mcpToolDefinition{
 		{
 			Name:        "trawl_search",
@@ -165,6 +179,7 @@ func mcpToolDefinitions() []mcpToolDefinition {
 					"who":     mcpStringProperty("Results that involve this person."),
 				},
 			},
+			Annotations: readOnlyArchiveAnnotations,
 		},
 		{
 			Name:        "trawl_open",
@@ -176,6 +191,7 @@ func mcpToolDefinitions() []mcpToolDefinition {
 					"link": mcpStringProperty("Link from trawl_search, such as gmail:abc123."),
 				},
 			},
+			Annotations: readOnlyArchiveAnnotations,
 		},
 		{
 			Name:        "trawl_around",
@@ -190,6 +206,7 @@ func mcpToolDefinitions() []mcpToolDefinition {
 					"limit":   limitProperty,
 				},
 			},
+			Annotations: readOnlyArchiveAnnotations,
 		},
 		{
 			Name:        "trawl_status",
@@ -200,6 +217,7 @@ func mcpToolDefinitions() []mcpToolDefinition {
 					"trawler": mcpStringProperty("One source name."),
 				},
 			},
+			Annotations: readOnlyArchiveAnnotations,
 		},
 		{
 			Name:        "trawl_who",
@@ -212,6 +230,7 @@ func mcpToolDefinitions() []mcpToolDefinition {
 					"limit": limitProperty,
 				},
 			},
+			Annotations: readOnlyArchiveAnnotations,
 		},
 	}
 }

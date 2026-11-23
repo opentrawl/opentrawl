@@ -558,13 +558,31 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 		return
 	}
 
-	// Valid one-time code: consume both pairing window and CSRF consent session.
+	allowedSources := make([]string, 0, len(selectedSources))
+	for _, candidate := range selectedSources {
+		if slices.Contains(server.availableSources, candidate) && !slices.Contains(allowedSources, candidate) {
+			allowedSources = append(allowedSources, candidate)
+		}
+	}
+	if len(allowedSources) == 0 {
+		server.mu.Unlock()
+		renderConsentHTML(response, http.StatusOK, remoteMCPOAuthConsentView{
+			ClientName:   pending.ClientName,
+			RedirectHost: pending.RedirectHost,
+			CSRFToken:    pending.CSRFToken,
+			Sources:      server.availableSources,
+			ErrorMessage: "Select at least one source to share.",
+		})
+		return
+	}
+
+	// Valid one-time code and source selection: consume both pairing window and CSRF consent session.
 	server.pairing.ConsumedOrClosed = true
 	delete(server.pendingConsents, csrfToken)
 
 	allowedSourcesText := agentAccessAllSourcesKeyword
-	if len(selectedSources) > 0 && len(selectedSources) < len(server.availableSources) {
-		allowedSourcesText = strings.Join(selectedSources, ",")
+	if len(allowedSources) < len(server.availableSources) {
+		allowedSourcesText = strings.Join(allowedSources, ",")
 	}
 	authCodeBytes := make([]byte, 32)
 	if _, err := rand.Read(authCodeBytes); err != nil {
@@ -1075,7 +1093,10 @@ func renderConsentHTML(response http.ResponseWriter, statusCode int, view remote
 	response.Header().Set("Content-Type", "text/html; charset=utf-8")
 	response.Header().Set("Cache-Control", "no-store")
 	response.Header().Set("X-Frame-Options", "DENY")
-	response.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
+	// Omit form-action: Chromium enforces form-action on the 302 redirect chain
+	// following the consent form POST, which would block the cross-origin OAuth
+	// callback to the client's redirect_uri.
+	response.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
 	response.WriteHeader(statusCode)
 	_ = remoteMCPOAuthConsentHTMLTemplate.Execute(response, view)
 }
