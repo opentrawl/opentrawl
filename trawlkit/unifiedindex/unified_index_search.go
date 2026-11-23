@@ -34,11 +34,12 @@ type UnifiedSearchQuery struct {
 // UnifiedSearchOutput holds ranked FederatedSearchMatch records ready for both
 // the CLI renderer and the Mac app protobuf bridge.
 type UnifiedSearchOutput struct {
-	Matches             []*federationcontract.FederatedSearchMatch
-	TotalRawMatches     uint64
-	MoreMatchesExist    bool
-	IndexedTrawlerNames []string
-	Elapsed             time.Duration
+	Matches               []*federationcontract.FederatedSearchMatch
+	TotalRawMatches       uint64
+	TotalMatchesByTrawler map[string]uint64
+	MoreMatchesExist      bool
+	IndexedTrawlerNames   []string
+	Elapsed               time.Duration
 }
 
 type indexedRecordCandidate struct {
@@ -79,14 +80,15 @@ func SearchUnifiedIndex(ctx context.Context, db *sql.DB, q UnifiedSearchQuery) (
 	}
 	nowUnix := time.Now().Unix()
 
-	candidates, totalRaw, err := fetchRankedCandidates(ctx, db, q, limit, nowUnix)
+	candidates, totalRaw, totalsByTrawler, err := fetchRankedCandidates(ctx, db, q, limit, nowUnix)
 	if err != nil {
 		return UnifiedSearchOutput{}, err
 	}
 	if len(candidates) == 0 {
 		return UnifiedSearchOutput{
-			TotalRawMatches: totalRaw,
-			Elapsed:         time.Since(started),
+			TotalRawMatches:       totalRaw,
+			TotalMatchesByTrawler: totalsByTrawler,
+			Elapsed:               time.Since(started),
 		}, nil
 	}
 
@@ -113,10 +115,11 @@ func SearchUnifiedIndex(ctx context.Context, db *sql.DB, q UnifiedSearchQuery) (
 	}
 
 	return UnifiedSearchOutput{
-		Matches:          matches,
-		TotalRawMatches:  totalRaw,
-		MoreMatchesExist: moreExist,
-		Elapsed:          time.Since(started),
+		Matches:               matches,
+		TotalRawMatches:       totalRaw,
+		TotalMatchesByTrawler: totalsByTrawler,
+		MoreMatchesExist:      moreExist,
+		Elapsed:               time.Since(started),
 	}, nil
 }
 
@@ -126,7 +129,7 @@ func fetchRankedCandidates(
 	q UnifiedSearchQuery,
 	limit int,
 	nowUnix int64,
-) ([]indexedRecordCandidate, uint64, error) {
+) ([]indexedRecordCandidate, uint64, map[string]uint64, error) {
 	ftsExpr := buildFTS5QueryExpression(q.QueryText)
 	poolSize := max(limit*12, 240)
 	if poolSize > 1200 {
@@ -195,7 +198,7 @@ func fetchRankedCandidates(
 	queryArgs := append(append([]any(nil), args...), poolSize)
 	rows, err := db.QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("query unified search index: %w", err)
+		return nil, 0, nil, fmt.Errorf("query unified search index: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -210,13 +213,13 @@ func fetchRankedCandidates(
 			&c.moneyDecimal, &c.moneyCurrency, &c.moneyPending,
 			&c.rawBM25,
 		); err != nil {
-			return nil, 0, fmt.Errorf("scan unified search candidate: %w", err)
+			return nil, 0, nil, fmt.Errorf("scan unified search candidate: %w", err)
 		}
 		c.finalScore = scoreCandidate(c, ftsExpr != "", nowUnix)
 		candidates = append(candidates, c)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	_ = rows.Close()
 
@@ -227,18 +230,35 @@ func fetchRankedCandidates(
 		return candidates[i].occurredUnix.Int64 > candidates[j].occurredUnix.Int64
 	})
 
+	totalsByTrawler := make(map[string]uint64, 8)
+	for _, c := range candidates {
+		totalsByTrawler[c.trawler]++
+	}
 	totalRaw := uint64(len(candidates))
 	if len(candidates) >= poolSize {
-		countSQL := `SELECT count(*) FROM indexed_archive_records r` + whereSQL
+		countSQL := `SELECT r.trawler, count(*) FROM indexed_archive_records r` + whereSQL + ` GROUP BY r.trawler`
 		if ftsExpr != "" {
-			countSQL = `SELECT count(*) FROM indexed_archive_records_fts JOIN indexed_archive_records r ON r.doc_id = indexed_archive_records_fts.rowid` + whereSQL
+			countSQL = `SELECT r.trawler, count(*) FROM indexed_archive_records_fts JOIN indexed_archive_records r ON r.doc_id = indexed_archive_records_fts.rowid` + whereSQL + ` GROUP BY r.trawler`
 		}
-		var exact uint64
-		if err := db.QueryRowContext(ctx, countSQL, args...).Scan(&exact); err == nil && exact > totalRaw {
-			totalRaw = exact
+		if countRows, countErr := db.QueryContext(ctx, countSQL, args...); countErr == nil {
+			grouped := make(map[string]uint64, 8)
+			var exact uint64
+			for countRows.Next() {
+				var trawlerID string
+				var n uint64
+				if scanErr := countRows.Scan(&trawlerID, &n); scanErr == nil && trawlerID != "" {
+					grouped[trawlerID] = n
+					exact += n
+				}
+			}
+			_ = countRows.Close()
+			if exact >= totalRaw && len(grouped) > 0 {
+				totalRaw = exact
+				totalsByTrawler = grouped
+			}
 		}
 	}
-	return candidates, totalRaw, nil
+	return candidates, totalRaw, totalsByTrawler, nil
 }
 
 func buildPersonFilterSQLClause(terms []string) (string, []any) {
@@ -453,7 +473,7 @@ func candidateToFederatedSearchMatch(
 	}
 	anchorText := strings.TrimSpace(c.recordAnchor)
 	if anchorText == "" {
-		anchorText = DefaultRecordAnchorForIndexedRecord(c.trawler, c.recordKind)
+		anchorText = DefaultRecordAnchorForIndexedRecord(c.trawler, c.recordKind, strings.TrimSpace(c.bodyText) != "")
 	}
 	return &federationcontract.FederatedSearchMatch{
 		RecordAnchor:            &identity.RecordAnchorIdentifier{RecordAnchorIdentifier: anchorText},
@@ -465,9 +485,12 @@ func candidateToFederatedSearchMatch(
 // DefaultRecordAnchorForIndexedRecord returns the canonical non-empty record
 // anchor expected by OpenCanonicalRecord when an indexed row did not store an
 // explicit field-level anchor.
-func DefaultRecordAnchorForIndexedRecord(trawlerID, recordKind string) string {
+func DefaultRecordAnchorForIndexedRecord(trawlerID, recordKind string, hasBodyEvidence bool) string {
 	switch strings.ToLower(strings.TrimSpace(trawlerID)) {
 	case "gmail", "mail":
+		if hasBodyEvidence {
+			return "body"
+		}
 		return "subject"
 	case "notes":
 		return "body"
@@ -484,6 +507,9 @@ func DefaultRecordAnchorForIndexedRecord(trawlerID, recordKind string) string {
 	}
 	switch strings.ToLower(strings.TrimSpace(recordKind)) {
 	case "email":
+		if hasBodyEvidence {
+			return "body"
+		}
 		return "subject"
 	case "note":
 		return "body"

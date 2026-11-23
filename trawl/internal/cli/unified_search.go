@@ -364,12 +364,12 @@ func mergeUnifiedAndFallbackSearchOperations(
 		(fallbackResp != nil && fallbackResp.GetMoreSearchMatchesExist()) ||
 		totalCandidatesBeforeCap > len(matches)
 
-	// Record one TrawlerSearchResult per indexed trawler that contributed matches
-	// (or the queried trawler when empty) so display names and match counts stay
-	// truthful across both the CLI and Mac app.
+	// Record one TrawlerSearchResult per indexed trawler that matched using its
+	// own source-specific count so per-app totals and more-matches flags stay
+	// consistent between all-app and single-app searches.
 	if len(exporterTrawlers) > 0 {
 		matchesByTrawler := make(map[string][]*federationcontract.FederatedSearchMatch, len(exporterTrawlers))
-		for _, match := range unifiedOut.Matches {
+		for _, match := range matches {
 			link := strings.TrimSpace(match.GetTrawlLink().GetGloballyRoutableTrawlLink())
 			if trawlerID, _, ok := strings.Cut(link, ":"); ok && trawlerID != "" {
 				matchesByTrawler[trawlerID] = append(matchesByTrawler[trawlerID], match)
@@ -378,7 +378,7 @@ func mergeUnifiedAndFallbackSearchOperations(
 		var contributing []InstalledTrawler
 		for _, t := range exporterTrawlers {
 			id := installedTrawlerIdentityText(t)
-			if len(matchesByTrawler[id]) > 0 {
+			if len(matchesByTrawler[id]) > 0 || unifiedOut.TotalMatchesByTrawler[id] > 0 {
 				contributing = append(contributing, t)
 			}
 		}
@@ -387,33 +387,28 @@ func mergeUnifiedAndFallbackSearchOperations(
 			op.TrawlerSearchResults = append(op.TrawlerSearchResults, &federationcontract.TrawlerSearchResult{
 				RegisteredTrawler:              first.RegisteredTrawlerManifest.GetRegisteredTrawler(),
 				RegisteredTrawlerDisplayName:   trawlerHumanName(first),
-				TotalSearchMatches:             unifiedOut.TotalRawMatches,
-				MoreSearchMatchesExist:         unifiedOut.MoreMatchesExist,
+				TotalSearchMatches:             0,
+				MoreSearchMatchesExist:         false,
 				TotalSearchMatchesIsLowerBound: false,
 			})
 		} else {
-			displayedUnifiedTotal := uint64(0)
 			for _, t := range contributing {
-				displayedUnifiedTotal += uint64(len(matchesByTrawler[installedTrawlerIdentityText(t)]))
-			}
-			extraUnifiedTotal := uint64(0)
-			if unifiedOut.TotalRawMatches > displayedUnifiedTotal {
-				extraUnifiedTotal = unifiedOut.TotalRawMatches - displayedUnifiedTotal
-			}
-			for index, t := range contributing {
 				id := installedTrawlerIdentityText(t)
 				trawlerMatches := matchesByTrawler[id]
-				trawlerTotal := uint64(len(trawlerMatches))
-				if index == 0 {
-					trawlerTotal += extraUnifiedTotal
+				observedTotal := unifiedOut.TotalMatchesByTrawler[id]
+				isLowerBound := false
+				if uint64(len(trawlerMatches)) > observedTotal {
+					// Semantic fusion added hits beyond the lexical count for this trawler.
+					observedTotal = uint64(len(trawlerMatches))
+					isLowerBound = true
 				}
 				op.TrawlerSearchResults = append(op.TrawlerSearchResults, &federationcontract.TrawlerSearchResult{
 					RegisteredTrawler:                      t.RegisteredTrawlerManifest.GetRegisteredTrawler(),
 					RegisteredTrawlerDisplayName:           trawlerHumanName(t),
 					SearchMatchesFromTrawlerInDisplayOrder: trawlerMatches,
-					TotalSearchMatches:                     trawlerTotal,
-					MoreSearchMatchesExist:                 unifiedOut.MoreMatchesExist,
-					TotalSearchMatchesIsLowerBound:         false,
+					TotalSearchMatches:                     observedTotal,
+					MoreSearchMatchesExist:                 observedTotal > uint64(len(trawlerMatches)),
+					TotalSearchMatchesIsLowerBound:         isLowerBound,
 				})
 			}
 		}

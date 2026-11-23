@@ -27,6 +27,7 @@ struct RootView: View {
   @State private var searchScope: RestingTrawler?
   @State private var searchQuery = ""
   @State private var searchWorkspaceVisibility: SearchWorkspaceVisibility = .notCreated
+  @State private var searchFocusRequestToken = 0
   @State private var constellationActivity: ConstellationActivity = .idle
   @State private var constellationTrafficEvent: ConstellationTrafficEvent?
   @State private var trafficClearTask: Task<Void, Never>?
@@ -79,6 +80,7 @@ struct RootView: View {
                 featureFlags.includes($0.id)
               },
               availableTrawlers: searchableHomeTrawlers,
+              focusRequestToken: searchFocusRequestToken,
               onTrafficChange: presentTraffic,
               onQueryChange: { searchQuery = $0 },
               onDismiss: dismissSearch
@@ -305,6 +307,7 @@ struct RootView: View {
   private func showSearch(scope: RestingTrawler?) {
     searchScope = scope
     searchWorkspaceVisibility = .presented
+    searchFocusRequestToken &+= 1
   }
 
   private func finishOnboarding() {

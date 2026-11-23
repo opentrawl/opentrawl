@@ -8,6 +8,7 @@ struct BuildStep: View {
   let appInstallations: MacAppInstallations
   let aiInstruction: String
   let hasCopiedAIInstructions: Bool
+  var skippedFullDiskAccess = false
   let onCopyAIInstructions: () -> Void
   let onBack: () -> Void
   let onRetryApp: (RegisteredTrawlerIdentity) -> Void
@@ -18,7 +19,8 @@ struct BuildStep: View {
 
   private var canFinishSetup: Bool {
     !appModel.isUpdating
-      && (hasSearchableArchive || (!hasGlobalPermissionFailure && hasNoAvailableApps))
+      && (hasSearchableArchive || skippedFullDiskAccess
+        || (!hasGlobalPermissionFailure && hasNoAvailableApps))
   }
 
   private var hasSearchableArchive: Bool {

@@ -8,6 +8,7 @@ struct SearchOverlay: View {
   let onQueryChange: (String) -> Void
   private let trawlerStatuses: [TrawlerStatus]
   private let availableTrawlers: [RestingTrawler]
+  private let focusRequestToken: Int
 
   private enum SearchRecordPresentationState: Equatable {
     case hidden
@@ -29,6 +30,7 @@ struct SearchOverlay: View {
     initialQuery: String = "",
     trawlerStatuses: [TrawlerStatus] = [],
     availableTrawlers: [RestingTrawler] = [],
+    focusRequestToken: Int = 0,
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
       _, _ in
     },
@@ -41,6 +43,7 @@ struct SearchOverlay: View {
       initialQuery: initialQuery,
       trawlerStatuses: trawlerStatuses,
       availableTrawlers: availableTrawlers,
+      focusRequestToken: focusRequestToken,
       onTrafficChange: onTrafficChange,
       onQueryChange: onQueryChange,
       onDismiss: onDismiss
@@ -53,6 +56,7 @@ struct SearchOverlay: View {
     initialQuery: String = "",
     trawlerStatuses: [TrawlerStatus] = [],
     availableTrawlers: [RestingTrawler] = [],
+    focusRequestToken: Int = 0,
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
       _, _ in
     },
@@ -64,6 +68,7 @@ struct SearchOverlay: View {
     self.onQueryChange = onQueryChange
     self.trawlerStatuses = trawlerStatuses
     self.availableTrawlers = availableTrawlers
+    self.focusRequestToken = focusRequestToken
     _scope = scope
     _model = State(initialValue: model)
     let interaction = SearchInteraction(
@@ -121,6 +126,9 @@ struct SearchOverlay: View {
       Task { @MainActor in
         focus = .field
       }
+    }
+    .onChange(of: focusRequestToken) { _, _ in
+      fieldState.requestFocus()
     }
     .onChange(of: trawlerStatuses) { _, statuses in
       trawlerResolver.replace(with: statuses)

@@ -149,11 +149,17 @@ func ValidateRequestedAnchor(
 		) {
 			return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
-	case *open.OpenRecord_CalendarEventRecord,
-		*open.OpenRecord_CalendarRecord,
-		*open.OpenRecord_ConversationRecord:
-		if !ValidAnchorID(requestedAnchorIdentifier) {
-			return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
+	case *open.OpenRecord_CalendarEventRecord:
+		if !calendarEventRecordContainsAnchor(typedOpenedRecord.CalendarEventRecord, requestedAnchorIdentifier) {
+			return fmt.Errorf("calendar event record does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
+	case *open.OpenRecord_CalendarRecord:
+		if requestedAnchorIdentifier != "summary" && requestedAnchorIdentifier != "calendar" {
+			return fmt.Errorf("calendar record does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
+	case *open.OpenRecord_ConversationRecord:
+		if requestedAnchorIdentifier != "match" && requestedAnchorIdentifier != "conversation" {
+			return fmt.Errorf("conversation record does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
 	default:
 		return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
@@ -396,6 +402,30 @@ func validateCalendarEventRecord(
 		canonicalCalendarEventRecordReference,
 		"canonical calendar event record reference",
 	)
+}
+
+func calendarEventRecordContainsAnchor(
+	event *calendarevent.CalendarEventRecord,
+	requestedAnchorIdentifier string,
+) bool {
+	if event == nil {
+		return false
+	}
+	switch requestedAnchorIdentifier {
+	case "summary":
+		return true
+	case "description":
+		return strings.TrimSpace(event.GetCalendarEventDescription()) != ""
+	case "location":
+		loc := event.GetCalendarEventLocation()
+		return loc != nil &&
+			(strings.TrimSpace(loc.GetCalendarEventLocationDisplayName()) != "" ||
+				strings.TrimSpace(loc.GetCalendarEventLocationAddress()) != "")
+	case "participant":
+		return event.GetCalendarEventOrganizer() != nil || len(event.GetCalendarEventAttendees()) > 0
+	default:
+		return false
+	}
 }
 
 func validateTrawlerSpecificOpenedRecordPresentation(openedRecord *open.TrawlerSpecificOpenedRecordPresentation) error {

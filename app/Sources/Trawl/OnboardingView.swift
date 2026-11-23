@@ -56,6 +56,7 @@ struct OnboardingView: View {
         appInstallations: appInstallations,
         aiInstruction: aiInstruction,
         hasCopiedAIInstructions: onboarding.hasCopiedAIInstructions,
+        skippedFullDiskAccess: onboarding.skippedFullDiskAccess,
         onCopyAIInstructions: onboarding.didCopyAIInstructions,
         onBack: { onboarding.showPermission(appModel: appModel) },
         onRetryApp: {

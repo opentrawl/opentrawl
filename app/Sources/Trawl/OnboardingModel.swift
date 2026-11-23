@@ -48,6 +48,8 @@ final class OnboardingModel {
   private(set) var hasCopiedAIInstructions = false
   /// The docked guide is showing in System Settings, holding the app tile.
   private(set) var permissionGuideIsOpen = false
+  /// The person explicitly chose to continue without Full Disk Access for now.
+  private(set) var skippedFullDiskAccess = false
 
   var stage: OnboardingStage {
     switch flowState {
@@ -233,6 +235,7 @@ final class OnboardingModel {
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
     guard case .permission(checkState: .confirmed, _, _) = flowState else { return }
+    skippedFullDiskAccess = false
     continueAfterVerifiedAccess(
       appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
@@ -242,6 +245,7 @@ final class OnboardingModel {
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
     guard case .permission = flowState else { return }
+    skippedFullDiskAccess = true
     FullDiskAccessGuide.dismiss()
     continueAfterVerifiedAccess(
       appModel: appModel, registeredTrawlers: registeredTrawlers)
@@ -335,6 +339,7 @@ final class OnboardingModel {
     updateTask = nil
     hasCopiedAIInstructions = false
     permissionGuideIsOpen = false
+    skippedFullDiskAccess = false
     defaults.removeObject(forKey: Self.completionKey)
     defaults.removeObject(forKey: Self.checkpointKey)
     defaults.removeObject(forKey: Self.checkpointOwnerKey)

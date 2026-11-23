@@ -491,7 +491,11 @@ func buildSemanticFederatedMatch(
 	}
 	return &federationcontract.FederatedSearchMatch{
 		RecordAnchor: &identity.RecordAnchorIdentifier{
-			RecordAnchorIdentifier: unifiedindex.DefaultRecordAnchorForIndexedRecord(s.trawler, s.recordKind),
+			RecordAnchorIdentifier: unifiedindex.DefaultRecordAnchorForIndexedRecord(
+				s.trawler,
+				s.recordKind,
+				strings.TrimSpace(s.bodyPreview) != "",
+			),
 		},
 		SearchMatchPresentation: pres,
 		TrawlLink:               &identity.GloballyRoutableTrawlLink{GloballyRoutableTrawlLink: link},

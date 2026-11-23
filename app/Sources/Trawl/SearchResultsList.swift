@@ -230,19 +230,35 @@ private struct SearchResultRow: View {
   }
 
   private var peopleRelatedToMatchingRecordText: String {
-    var seen: [String] = []
-    for personRelatedToMatchingRecord in searchMatch.searchMatchPresentation
-      .peopleRelatedToMatchingRecord
-    {
-      let personDisplayName =
-        personRelatedToMatchingRecord.personDisplayName
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !personDisplayName.isEmpty else { continue }
-      if !seen.contains(where: { $0.localizedCaseInsensitiveCompare(personDisplayName) == .orderedSame }) {
-        seen.append(personDisplayName)
+    var senders: [String] = []
+    var recipients: [String] = []
+    var others: [String] = []
+    for person in searchMatch.searchMatchPresentation.peopleRelatedToMatchingRecord {
+      let name = person.personDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !name.isEmpty else { continue }
+      switch person.personRoleInArchiveRecord {
+      case .sender:
+        senders.append(name)
+      case .recipient:
+        recipients.append(name)
+      case .organizer:
+        others.append("Organizer: \(name)")
+      case .attendee:
+        others.append("Attendee: \(name)")
+      case .author, .participant, nil:
+        others.append(name)
       }
     }
-    return seen.joined(separator: " · ")
+    var segments: [String] = []
+    if !senders.isEmpty && !recipients.isEmpty {
+      segments.append("\(senders.joined(separator: ", ")) → \(recipients.joined(separator: ", "))")
+    } else if !senders.isEmpty {
+      segments.append(senders.joined(separator: ", "))
+    } else if !recipients.isEmpty {
+      segments.append("To \(recipients.joined(separator: ", "))")
+    }
+    segments.append(contentsOf: others)
+    return segments.joined(separator: " · ")
   }
 
   private var physicalPlaceNamesSpecificToBroadestText: String {
@@ -279,23 +295,12 @@ private struct SearchResultRow: View {
     }
   }
 
-  private static let genericEvidenceFieldNames: Set<String> = [
-    "message", "body", "title", "description", "text", "health", "snippet",
-  ]
-
-  private func displayedFieldName(for rawFieldName: String) -> String {
-    let trimmed = rawFieldName.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty,
-      !Self.genericEvidenceFieldNames.contains(trimmed.lowercased())
-    else { return "" }
-    return trimmed
-  }
-
   private func fieldLabelledSearchMatchTextEvidence(
     _ searchMatchTextField: SearchMatchTextField
   ) -> Text? {
-    let searchMatchTextFieldName = displayedFieldName(
-      for: searchMatchTextField.searchMatchTextFieldName)
+    let searchMatchTextFieldName =
+      searchMatchTextField.searchMatchTextFieldName
+      .trimmingCharacters(in: .whitespacesAndNewlines)
     let nonEmptySearchMatchTextFragments =
       searchMatchTextField.searchMatchTextFragmentsInDisplayOrder
       .filter { !$0.searchMatchTextFragmentContent.isEmpty }
@@ -307,7 +312,9 @@ private struct SearchResultRow: View {
       fieldLabelledSearchMatchTextEvidence = Text(
         nonEmptySearchMatchTextFragments.isEmpty
           ? searchMatchTextFieldName
-          : "\(searchMatchTextFieldName): ")
+          : "\(searchMatchTextFieldName): "
+      )
+      .foregroundStyle(.tertiary)
     }
     for searchMatchTextFragment in nonEmptySearchMatchTextFragments {
       var searchMatchTextFragmentText = Text(

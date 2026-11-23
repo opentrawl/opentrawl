@@ -26,8 +26,32 @@ public enum OpenedRecordContent: Sendable, Equatable {
         || openedNoteRecord.openedNoteBodyAnchor == wantedAnchor
     case .trawlerSpecificRecordPresentation(let openedRecord):
       openedRecord.detailPresentation.containsAnchor(wantedAnchor)
-    case .conversation, .calendarEvent, .calendar:
-      true
+    case .calendarEvent(let calendarEventRecord):
+      switch wantedAnchor.recordAnchorIdentifier {
+      case "summary":
+        true
+      case "description":
+        !calendarEventRecord.calendarEventDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+          .isEmpty
+      case "location":
+        calendarEventRecord.calendarEventLocation.map {
+          !$0.calendarEventLocationDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
+            || !$0.calendarEventLocationAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+              .isEmpty
+        } ?? false
+      case "participant":
+        calendarEventRecord.calendarEventOrganizer != nil
+          || !calendarEventRecord.calendarEventAttendees.isEmpty
+      default:
+        false
+      }
+    case .calendar:
+      wantedAnchor.recordAnchorIdentifier == "summary"
+        || wantedAnchor.recordAnchorIdentifier == "calendar"
+    case .conversation:
+      wantedAnchor.recordAnchorIdentifier == "match"
+        || wantedAnchor.recordAnchorIdentifier == "conversation"
     }
   }
 }
