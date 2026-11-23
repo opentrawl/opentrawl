@@ -43,9 +43,8 @@ highlight(apple_library_photo_search,5,char(57344),char(57345)),
 highlight(apple_library_photo_search,6,char(57344),char(57345))`
 	}
 	var timeClauses []string
-	flags.NewInclusiveTimeRange(query.After, query.Before).AppendFormattedTimeSQLClauses(
+	flags.NewInclusiveTimeRange(query.After, query.Before).AppendRFC3339UTCSQLClauses(
 		"p.capture_time_utc",
-		formatArchiveTime,
 		&timeClauses,
 		&arguments,
 	)

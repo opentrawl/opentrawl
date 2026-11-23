@@ -75,18 +75,35 @@ func (r InclusiveTimeRange) AppendUnixSQLClauses(column string, where *[]string,
 	}
 }
 
-func (r InclusiveTimeRange) AppendFormattedTimeSQLClauses(
+const fixedNanosecondUTCFormat = "2006-01-02T15:04:05.000000000"
+const wholeSecondUTCFormat = "2006-01-02T15:04:05"
+
+func normalizedRFC3339UTCColumnExpression(column string) string {
+	return "substr(case when instr(" + column + ", '.') > 0 then rtrim(" + column + ", 'Z') else rtrim(" + column + ", 'Z') || '.' end || '000000000', 1, 29)"
+}
+
+// AppendRFC3339UTCSQLClauses appends both an indexable coarse string bound and
+// an exact nanosecond-padded chronological bound for SQLite columns storing
+// RFC3339 / RFC3339Nano UTC strings (where raw string comparison fails because
+// '.' sorts before 'Z').
+func (r InclusiveTimeRange) AppendRFC3339UTCSQLClauses(
 	column string,
-	format func(time.Time) string,
 	where *[]string,
 	args *[]any,
 ) {
+	normalizedExpr := normalizedRFC3339UTCColumnExpression(column)
 	if !r.After.IsZero() {
+		afterUTC := r.After.UTC()
 		*where = append(*where, column+" >= ?")
-		*args = append(*args, format(r.After))
+		*args = append(*args, afterUTC.Format(wholeSecondUTCFormat))
+		*where = append(*where, normalizedExpr+" >= ?")
+		*args = append(*args, afterUTC.Format(fixedNanosecondUTCFormat))
 	}
 	if !r.Before.IsZero() {
+		beforeUTC := r.Before.UTC()
 		*where = append(*where, column+" <= ?")
-		*args = append(*args, format(r.Before))
+		*args = append(*args, beforeUTC.Format(wholeSecondUTCFormat)+"Z")
+		*where = append(*where, normalizedExpr+" <= ?")
+		*args = append(*args, beforeUTC.Format(fixedNanosecondUTCFormat))
 	}
 }
