@@ -18,8 +18,7 @@ struct BuildStep: View {
 
   private var canFinishSetup: Bool {
     !appModel.isUpdating
-      && !hasGlobalPermissionFailure
-      && (hasSearchableArchive || hasNoAvailableApps)
+      && (hasSearchableArchive || hasNoAvailableApps || !appModel.zeroFullDiskAccessTrawlers.isEmpty)
   }
 
   private var hasSearchableArchive: Bool {
@@ -115,17 +114,23 @@ private struct ArchiveBuildStatus: View {
   let onPermissionRecovery: () -> Void
 
   var body: some View {
-    if hasGlobalPermissionFailure {
-      PermissionRecoveryBanner(action: onPermissionRecovery)
-    } else if appModel.blockingFailureMessage != nil, appModel.displayedTrawlers.isEmpty {
-      InitialLoadRecovery(action: onRetryInitialLoad)
-    } else {
-      ArchiveTrawlerSummary(
-        appModel: appModel,
-        appInstallations: appInstallations,
-        comingSoonEntries: comingSoonEntries,
-        onRetryApp: onRetryApp
-      )
+    VStack(alignment: .leading, spacing: 14) {
+      if hasGlobalPermissionFailure {
+        OptionalFullDiskAccessCard(
+          fdaAppNames: appModel.fullDiskAccessOptionalTrawlers.map(\.registeredTrawlerDisplayName),
+          onUnlock: onPermissionRecovery
+        )
+      }
+      if appModel.blockingFailureMessage != nil, appModel.displayedTrawlers.isEmpty {
+        InitialLoadRecovery(action: onRetryInitialLoad)
+      } else {
+        ArchiveTrawlerSummary(
+          appModel: appModel,
+          appInstallations: appInstallations,
+          comingSoonEntries: comingSoonEntries,
+          onRetryApp: onRetryApp
+        )
+      }
     }
   }
 }

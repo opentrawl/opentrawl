@@ -42,6 +42,12 @@ struct OnboardingView: View {
             appModel: appModel,
             registeredTrawlers: refreshedTrawlersToUpdate
           )
+        },
+        onSkipForNow: {
+          onboarding.continueWithoutFullDiskAccess(
+            appModel: appModel,
+            registeredTrawlers: refreshedTrawlersToUpdate
+          )
         }
       )
     case .building:

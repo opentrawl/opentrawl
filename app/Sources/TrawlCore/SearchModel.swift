@@ -110,7 +110,7 @@ public final class SearchModel {
 
   public init(
     client: any TrawlClient,
-    debounce: Duration = .milliseconds(300),
+    debounce: Duration = .milliseconds(200),
     waitLimit: Duration = .seconds(SearchModel.defaultWaitSeconds),
     observe: @escaping @Sendable (SearchStateEvent) -> Void = { _ in }
   ) {

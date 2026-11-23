@@ -14,6 +14,7 @@ struct PermissionStep: View {
   let onOpenSettings: () -> Void
   let onCheckAgain: () -> Void
   let onContinue: () -> Void
+  var onSkipForNow: (() -> Void)? = nil
 
   var body: some View {
     TrawlFlowScaffold(
@@ -24,7 +25,8 @@ struct PermissionStep: View {
         OnboardingProse(
           title: HumanCopy.FullDiskAccess.title,
           lede: HumanCopy.FullDiskAccess.body,
-          statement: HumanCopy.FullDiskAccess.purpose
+          statement: HumanCopy.FullDiskAccess.purpose,
+          note: OperationalCopy.FullDiskAccess.optionalOnboardingNote
         )
       } task: {
         VStack(alignment: .leading, spacing: 20) {
@@ -51,8 +53,9 @@ struct PermissionStep: View {
     } actions: {
       OnboardingActionRow(
         backAction: onBack,
-        secondaryTitle: nil,
-        secondaryAction: nil,
+        secondaryTitle: permissionCheck == .confirmed
+          ? nil : OperationalCopy.SharedAction.skipForNow,
+        secondaryAction: permissionCheck == .confirmed ? nil : onSkipForNow,
         primaryTitle: permissionCheck == .confirmed
           ? OperationalCopy.SharedAction.continueAction
           : HumanCopy.FullDiskAccess.openAction,

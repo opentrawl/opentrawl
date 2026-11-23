@@ -55,7 +55,8 @@ public final class AppModel {
     let runtimeTrawlers = TrawlerRestingCopy.trawlers(
       from: trawlerStatuses,
       failures: statusOperationFailures,
-      trawlersSkippedFromOperation: trawlersSkippedFromStatus
+      trawlersSkippedFromOperation: trawlersSkippedFromStatus,
+      catalog: registeredTrawlerCatalog
     )
     let byID = Dictionary(uniqueKeysWithValues: runtimeTrawlers.map { ($0.id, $0) })
     return displayedTrawlers.compactMap { byID[$0] }
@@ -65,13 +66,41 @@ public final class AppModel {
     let runtimeByID = Dictionary(uniqueKeysWithValues: restingTrawlers.map { ($0.id, $0) })
     return displayedTrawlers.compactMap { registeredTrawler in
       if let runtime = runtimeByID[registeredTrawler] { return runtime }
-      guard
-        let entry = catalogEntry(for: registeredTrawler),
-        entry.registeredTrawlerReleaseState == .comingSoon
-      else {
+      guard let entry = catalogEntry(for: registeredTrawler) else {
         return nil
       }
-      return RestingTrawler(comingSoon: entry)
+      if entry.registeredTrawlerReleaseState == .comingSoon {
+        return RestingTrawler(comingSoon: entry)
+      }
+      return RestingTrawler(unloadedAvailable: entry)
+    }
+  }
+
+  public var totalArchivedRecordCount: UInt64 {
+    restingTrawlers.reduce(UInt64(0)) { partial, trawler in
+      partial &+ trawler.totalRecordCount
+    }
+  }
+
+  public var searchableTrawlerCount: Int {
+    restingTrawlers.count { $0.state == .ok && $0.totalRecordCount > 0 }
+  }
+
+  public var latestArchiveUpdateTime: Date? {
+    let statusTimes = trawlerStatuses.compactMap(\.lastSuccessfullyCompletedArchiveUpdateTime)
+    let allTimes = statusTimes + [lastSuccessfullyCompletedArchiveUpdateTime].compactMap { $0 }
+    return allTimes.max()
+  }
+
+  public var zeroFullDiskAccessTrawlers: [RestingTrawler] {
+    homeTrawlers.filter {
+      $0.state != .comingSoon && $0.accessModel == .zeroFullDiskAccess
+    }
+  }
+
+  public var fullDiskAccessOptionalTrawlers: [RestingTrawler] {
+    homeTrawlers.filter {
+      $0.state != .comingSoon && $0.accessModel == .requiresMacFullDiskAccess
     }
   }
 
@@ -223,10 +252,9 @@ public final class AppModel {
     trigger: TrawlerArchiveUpdateTrigger = .manual
   ) async {
     guard !isUpdating else { return }
-    if checkDiskAccess() == .denied {
-      updateMessage = "Full Disk Access is required."
-      return
-    }
+    // Zero-FDA apps update immediately even when Full Disk Access is denied.
+    // Record disk access state so FDA-locked apps can show an optional unlock card.
+    _ = checkDiskAccess()
     isUpdating = true
     let previousUpdateMessage = updateMessage
     let previousUpdateResults = trawlerArchiveUpdateResults

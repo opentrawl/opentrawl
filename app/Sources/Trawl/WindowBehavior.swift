@@ -41,25 +41,35 @@ struct WindowBehavior: NSViewRepresentable {
       }
 
       window.level = .normal
-      window.styleMask.remove(.resizable)
-      window.contentMinSize = TrawlDesign.defaultWindow
-      window.contentMaxSize = TrawlDesign.defaultWindow
-      window.collectionBehavior.remove(.fullScreenPrimary)
-      window.collectionBehavior.remove(.fullScreenAuxiliary)
-      window.collectionBehavior.insert(.fullScreenNone)
       window.tabbingMode = .disallowed
 
       let zoomButton = window.standardWindowButton(.zoomButton)
-      zoomButton?.isEnabled = false
-      zoomButton?.isHidden = true
 
       if isOnboarding {
+        window.styleMask.remove(.resizable)
+        window.contentMinSize = TrawlDesign.onboardingWindow
+        window.contentMaxSize = TrawlDesign.onboardingWindow
+        window.collectionBehavior.remove(.fullScreenPrimary)
+        window.collectionBehavior.remove(.fullScreenAuxiliary)
+        window.collectionBehavior.insert(.fullScreenNone)
+        zoomButton?.isEnabled = false
+        zoomButton?.isHidden = true
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbar?.isVisible = false
         window.standardWindowButton(.toolbarButton)?.isHidden = true
         window.standardWindowButton(.documentIconButton)?.isHidden = true
+        if changedMode || window.contentView?.frame.size != TrawlDesign.onboardingWindow {
+          window.setContentSize(TrawlDesign.onboardingWindow)
+        }
       } else {
+        window.styleMask.insert(.resizable)
+        window.contentMinSize = TrawlDesign.minimumWindow
+        window.contentMaxSize = TrawlDesign.maximumWindow
+        window.collectionBehavior.remove(.fullScreenNone)
+        window.collectionBehavior.insert(.fullScreenPrimary)
+        zoomButton?.isEnabled = true
+        zoomButton?.isHidden = false
         window.titleVisibility = defaultTitleVisibility ?? .visible
         window.titlebarAppearsTransparent = defaultTitlebarAppearsTransparent ?? false
         if let defaultToolbarVisibility {
@@ -67,10 +77,9 @@ struct WindowBehavior: NSViewRepresentable {
         }
         window.standardWindowButton(.toolbarButton)?.isHidden = false
         window.standardWindowButton(.documentIconButton)?.isHidden = false
-      }
-
-      if changedMode || window.contentView?.frame.size != TrawlDesign.defaultWindow {
-        window.setContentSize(TrawlDesign.defaultWindow)
+        if changedMode {
+          window.setContentSize(TrawlDesign.defaultWindow)
+        }
       }
     }
   }
