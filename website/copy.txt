@@ -157,7 +157,7 @@ Point a local coding agent running Ollama or MLX on Apple Silicon at OpenTrawl a
 End-to-end encrypted sync & cloud (planned)
 
 [privacy.p3.body]
-Our planned sync and cloud tiers are designed to encrypt your archive on your device before upload and run remote search inside hardware-locked memory (confidential VMs) that requires your live session key.
+On Apple devices, planned iCloud sync uses your own iCloud as an encrypted dropbox with keys in iCloud Keychain: Apple can't read it, we can't read it, nobody can read it. Only you can read it. Paid cloud tiers run on Azure Blob Storage and Azure Confidential Containers (AMD SEV-SNP) requiring your live session key.
 
 [privacy.p4.title]
 Read-only, never sends or edits
@@ -178,7 +178,7 @@ How encryption and hardware-locked memory work →
 Free on your Mac forever. Encrypted sync and cloud tiers coming next.
 
 [pricing.lead]
-The Mac app, CLI, and built-in sources are free and MIT open source. Planned paid tiers add end-to-end encrypted Mac-to-iPhone sync and 24/7 remote search in hardware-locked memory so OpenTrawl cannot read your data.
+The Mac app, CLI, and built-in sources are free and MIT open source, with free encrypted Mac-to-iPhone iCloud sync planned (keys in iCloud Keychain: Apple can't read it, we can't read it, only you can). Paid tiers add cross-platform encrypted sync on Azure and 24/7 remote search in hardware-locked memory.
 
 [pricing.t0.name]
 Local

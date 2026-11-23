@@ -1078,7 +1078,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
       </div>
       <div class="privacy-item">
         <h3>End-to-end encrypted sync &amp; cloud (planned)</h3>
-        <p>Our planned sync and cloud tiers are designed to encrypt your archive on your device before upload and run remote search inside hardware-locked memory (confidential VMs) that requires your live session key.</p>
+        <p>On Apple devices, planned iCloud sync uses your own iCloud as an encrypted dropbox with keys in iCloud Keychain: Apple can't read it, we can't read it, nobody can read it. Only you can read it. Paid cloud tiers run on Azure Blob Storage and Azure Confidential Containers (AMD SEV-SNP) requiring your live session key.</p>
       </div>
       <div class="privacy-item">
         <h3>Read-only, never sends or edits</h3>
@@ -1099,7 +1099,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   <section class="section" id="pricing">
     <div class="section-head">
       <h2>Free on your Mac forever. Encrypted sync and cloud tiers coming next.</h2>
-      <p class="section-lead">The Mac app, CLI, and built-in sources are free and MIT open source. Planned paid tiers add end-to-end encrypted Mac-to-iPhone sync and 24/7 remote search in hardware-locked memory so OpenTrawl cannot read your data.</p>
+      <p class="section-lead">The Mac app, CLI, and built-in sources are free and MIT open source, with free encrypted Mac-to-iPhone iCloud sync planned (keys in iCloud Keychain: Apple can't read it, we can't read it, only you can). Paid tiers add cross-platform encrypted sync on Azure and 24/7 remote search in hardware-locked memory.</p>
     </div>
 
     <div class="tier-grid">
@@ -1112,6 +1112,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
             <li>Mac app &amp; <code>trawl</code> CLI (MIT)</li>
             <li>Built-in sources &amp; local plugins</li>
             <li>Works with cloud or local models</li>
+            <li>Planned: free encrypted Mac/iPhone sync via your own iCloud (keys in iCloud Keychain)</li>
           </ul>
         </div>
         <a class="btn" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
@@ -1123,8 +1124,8 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           <h3 class="tier-name">Encrypted Sync</h3>
           <div class="tier-price"><span class="tier-amount">$7</span><span class="tier-period">/ mo</span></div>
           <ul class="tier-list">
-            <li>50 GB end-to-end encrypted backup</li>
-            <li>Mac and iPhone sync</li>
+            <li>50 GB end-to-end encrypted backup (Azure Blob Storage)</li>
+            <li>Cross-platform sync (Mac, iPhone, Linux, Windows)</li>
             <li>Encryption keys stay on your devices</li>
           </ul>
         </div>
@@ -1139,7 +1140,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
           <ul class="tier-list">
             <li>Everything in Encrypted Sync</li>
             <li>24/7 remote search for phone &amp; cloud AI</li>
-            <li>Hardware-locked memory even we cannot read</li>
+            <li>Hardware-locked memory (Azure AMD SEV-SNP) even we cannot read</li>
           </ul>
         </div>
         <a class="btn-secondary" href="#waitlist" data-pick-tier="Encrypted Cloud ($19/mo)">Join waitlist</a>
