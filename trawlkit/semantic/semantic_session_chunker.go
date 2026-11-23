@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -15,11 +16,12 @@ import (
 )
 
 const (
-	chatSessionGapSeconds         = int64(2 * 3600)
-	chatSessionMaximumMessages    = 24
-	chatSessionMaximumChars       = 1800
-	singleRecordMaximumChars      = 1600
-	embedBatchSizeForIndexBuilder = 32
+	chatSessionGapSeconds          = int64(2 * 3600)
+	chatSessionMaximumMessages     = 24
+	chatSessionMaximumChars        = 1800
+	singleRecordMaximumChars       = 1600
+	embedBatchSizeForIndexBuilder  = 32
+	commitBatchSizeForIndexBuilder = 256
 )
 
 // SemanticBuildOptions controls incremental or bounded semantic index builds.
@@ -164,8 +166,19 @@ func BuildOrUpdateSemanticIndex(
 		}
 	}
 
+	// Embed newest chunks first and commit in checkpoints so recent history
+	// becomes searchable within seconds and an interrupted backfill resumes
+	// without losing prior work.
+	sort.Slice(toEmbed, func(i, j int) bool {
+		if toEmbed[i].occurredUnix != toEmbed[j].occurredUnix {
+			return toEmbed[i].occurredUnix > toEmbed[j].occurredUnix
+		}
+		return toEmbed[i].chunkKey < toEmbed[j].chunkKey
+	})
+
 	helper := NewSemanticHelperClient(stateRoot)
-	embeddedVectors := make([][]byte, len(toEmbed))
+	pendingCandidates := make([]semanticChunkCandidate, 0, commitBatchSizeForIndexBuilder)
+	pendingVectors := make([][]byte, 0, commitBatchSizeForIndexBuilder)
 	for start := 0; start < len(toEmbed); start += embedBatchSizeForIndexBuilder {
 		end := min(start+embedBatchSizeForIndexBuilder, len(toEmbed))
 		batchTexts := make([]string, 0, end-start)
@@ -185,11 +198,19 @@ func BuildOrUpdateSemanticIndex(
 			return SemanticBuildReport{}, embedErr
 		}
 		for i := range vecs {
-			embeddedVectors[start+i] = vecs[i]
+			pendingCandidates = append(pendingCandidates, toEmbed[start+i])
+			pendingVectors = append(pendingVectors, vecs[i])
+		}
+		if len(pendingCandidates) >= commitBatchSizeForIndexBuilder {
+			if err := commitSemanticChunkChanges(ctx, semStore.DB(), pendingCandidates, pendingVectors, nil, opts.WindowDuration); err != nil {
+				return SemanticBuildReport{}, err
+			}
+			pendingCandidates = pendingCandidates[:0]
+			pendingVectors = pendingVectors[:0]
 		}
 	}
 
-	if err := commitSemanticChunkChanges(ctx, semStore.DB(), toEmbed, embeddedVectors, staleKeys, opts.WindowDuration); err != nil {
+	if err := commitSemanticChunkChanges(ctx, semStore.DB(), pendingCandidates, pendingVectors, staleKeys, opts.WindowDuration); err != nil {
 		return SemanticBuildReport{}, err
 	}
 	_ = semStore.Close()

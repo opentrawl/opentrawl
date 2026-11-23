@@ -181,8 +181,8 @@ func scanBundledPluginDirectory(dir string) []string {
 		if !strings.HasPrefix(name, pluginExecutablePrefix) || strings.HasSuffix(name, ".dSYM") {
 			continue
 		}
-		// Never treat c-archive helper binaries or test runners as trawler plugins.
-		if name == "trawl-clib" || strings.HasSuffix(name, ".test") {
+		// Never treat internal helper binaries or test runners as trawler plugins.
+		if name == "trawl-clib" || name == "trawl-embed" || strings.HasSuffix(name, ".test") {
 			continue
 		}
 		fullPath := filepath.Join(dir, name)
