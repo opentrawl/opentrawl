@@ -1,60 +1,55 @@
-# Search across messages and notes for towel
-❯ trawl search towel --limit 5
-Search "towel": showing 5 of 127.
-More: trawl search towel --limit 10
-
-when              match                      who            link
-2026-07-26 15:13  A <towel> is about the     Ford Prefect   telegram:33zny
-                  most massively useful…
-2026-07-18 20:36  Title: <towel> locations   Notes          notes:msvku
-2026-05-13 10:41  have you seen my <towel>?  me -> Trillian telegram:qq9v9
-2026-04-28 13:19  grab your <towel>, we're   Ford Prefect   telegram:2ccvd
-                  leaving. don't panic
-2026-03-15 12:21  …still knows where his     Ford Prefect   imessage:7cg2c
-                  <towel> is, is clearly…
+# Check calendar events for the Brighton trip
+❯ trawl calendar events --limit 4
+when               event                         link
+2026-08-20         Earth demolition: express     calendar:87mtn
+                   route (Found in Mail)
+2026-08-22..23     brighton with ford & zaphod   calendar:d8h66
+                   (all day, Arthur)
+2026-08-23 15:00   ALBION V ASTON VILLA          calendar:265zp
+                   (Found in Mail)
 === step ===
-# Open the matching Telegram thread in full
-❯ trawl open telegram:33zny
-the pub
-Participants: Ford Prefect, Trillian, Zaphod, Marvin, +2
+# Search messages and notes mentioning Ford or towels
+❯ trawl search towel --limit 4
+Search "towel": showing 4 of 127.
 
-   when              who       message
-   2026-07-27 13:34  me        what's all this about the world ending?
-   2026-07-26 20:26  Ford      Drink up, you've got three pints to get
-                               through.
-   2026-07-26 18:53  me        this must be Thursday. I never could get
-                               the hang of Thursdays.
-   2026-07-26 15:23  Trillian  picking up Zaphod on the way
--> 2026-07-26 15:13  Ford      A towel is about the most massively useful
-                               thing an interstellar hitchhiker can have.
-                               grab yours and meet at the pub.
+when        match                      who       link
+2026-07-26  A <towel> is about the     Ford      telegram:33zny
+            most massively useful…
+2026-07-18  Title: <towel> locations   Notes     notes:msvku
+2026-05-13  have you seen my <towel>?  Trillian  telegram:qq9v9
+2026-03-15  …still knows where his     Ford      imessage:7cg2c
+            <towel> is…
+=== step ===
+# Open Ford's Telegram thread in full
+❯ trawl open telegram:33zny
+the pub (Ford Prefect, Trillian, Zaphod, Marvin, +2)
+
+   when        who       message
+   2026-07-27  me        what's all this about the
+                         world ending?
+   2026-07-26  Ford      Drink up, three pints left.
+   2026-07-26  me        I never could get the hang
+                         of Thursdays.
+   2026-07-26  Trillian  picking up Zaphod on the way
+-> 2026-07-26  Ford      A towel is about the most
+                         massively useful thing an
+                         interstellar hitchhiker can
+                         have. meet at the pub.
 
 Messages: trawl messages --conversation telegram:33zny
-=== step ===
-# Check upcoming calendar events for the Brighton trip
-❯ trawl calendar events --limit 4
-when                        event                           link
-2026-08-20 (all day)        Earth demolition: hyperspatial  calendar:87mtn
-                            express route (Found in Mail)
-2026-08-22 to 2026-08-23    brighton with ford and zaphod   calendar:d8h66
-                            (all day, Arthur)
-2026-08-23 15:00 to 17:00   ALBION V ASTON VILLA            calendar:265zp
-                            (Found in Mail)
-
-More: trawl calendar events --limit 20
 === step ===
 # Your AI answers with verifiable links back to every source
 ❯ answer
 Here is everything I found for your Brighton trip with Ford:
 
-• Dates: 22 to 23 Aug, "brighton with ford and zaphod" (calendar:d8h66),
-  plus Albion v Aston Villa on Sunday 23 Aug at 15:00 (calendar:265zp).
+• Dates: 22 to 23 Aug, "brighton with ford and zaphod"
+  (calendar:d8h66), plus Albion v Aston Villa on Sunday
+  23 Aug at 15:00 (calendar:265zp).
 
-• Messages: Ford asked everyone to grab their towels and meet at the pub
-  in Telegram (telegram:33zny), and Trillian offered to pick up Zaphod.
+• Messages: Ford asked everyone to grab their towels and
+  meet at the pub in Telegram (telegram:33zny), and Trillian
+  offered to pick up Zaphod.
 
-• Notes: You have a "towel locations" note in Apple Notes (notes:msvku)
-  alongside earlier chats with Trillian (telegram:qq9v9) and Ford
-  (imessage:7cg2c).
-
-Want me to open your towel locations note next?
+• Notes: You have a "towel locations" note in Apple Notes
+  (notes:msvku) plus earlier chats (telegram:qq9v9,
+  imessage:7cg2c).

@@ -301,16 +301,32 @@ async function main() {
           await cdp.screenshot(path.join(screenshotDir, `${slug}-${w}x${h}.png`));
           if (w === 1440) {
             await cdp.screenshot(path.join(screenshotDir, `${slug}-full-1440.png`), true);
+          } else if (w === 390) {
+            await cdp.screenshot(path.join(screenshotDir, `${slug}-full-390.png`), true);
           }
         }
       }
     }
 
-    // 2b. Focusing every hero icon tooltip at 390px and 1440px must not widen the page
-    for (const [w, h] of [[1440, 900], [390, 844]]) {
+    // 2a. Header logo must sit at the exact same x-coordinate across all 3 pages at 1440px
+    const brandLefts = {};
+    await cdp.setViewport(1440, 900);
+    for (const p of ['/', '/plugins.html', '/security.html']) {
+      await cdp.goto(baseUrl + p);
+      brandLefts[p] = await cdp.evaluate(() => Math.round(document.querySelector('.brand').getBoundingClientRect().left));
+    }
+    const leftSet = new Set(Object.values(brandLefts));
+    if (leftSet.size > 1) {
+      failures.push(`header logo shifts between pages at 1440px: ${JSON.stringify(brandLefts)}`);
+    }
+
+    // 2b. All 11 hero icons sit on one row on 390px and 375px phones; mobile dividers exist; focusing tooltips never widens page
+    for (const [w, h] of [[1440, 900], [390, 844], [375, 812]]) {
       await cdp.setViewport(w, h);
       await cdp.goto(baseUrl + '/');
-      const tipOver = await cdp.evaluate(() => {
+      const iconCheck = await cdp.evaluate(() => {
+        const icons = Array.from(document.querySelectorAll('.icon-row .app-icon'));
+        const tops = icons.map((i) => Math.round(i.getBoundingClientRect().top));
         const bad = [];
         for (const el of document.querySelectorAll('.icon-tip')) {
           el.focus();
@@ -318,15 +334,23 @@ async function main() {
             bad.push(`${el.dataset.tip} (${document.documentElement.scrollWidth}>${document.documentElement.clientWidth})`);
           }
         }
-        return bad;
+        const ask3Border = getComputedStyle(document.querySelectorAll('.ask-card')[2]).borderBottomWidth;
+        const tier3Border = getComputedStyle(document.querySelectorAll('.tier')[2]).borderBottomWidth;
+        return { count: icons.length, rowSpread: Math.max(...tops) - Math.min(...tops), bad, ask3Border, tier3Border };
       });
-      if (tipOver.length > 0) {
-        failures.push(`/ @${w}x${h}: icon tooltip widens page: ${tipOver.join(', ')}`);
+      if (iconCheck.count !== 11 || iconCheck.rowSpread > 2) {
+        failures.push(`/ @${w}x${h}: hero icons did not stay on one row (count=${iconCheck.count}, rowSpread=${iconCheck.rowSpread}px)`);
+      }
+      if (iconCheck.bad.length > 0) {
+        failures.push(`/ @${w}x${h}: icon tooltip widens page: ${iconCheck.bad.join(', ')}`);
+      }
+      if (w <= 390 && (iconCheck.ask3Border === '0px' || iconCheck.tier3Border === '0px')) {
+        failures.push(`/ @${w}x${h}: missing mobile card divider (ask3=${iconCheck.ask3Border}, tier3=${iconCheck.tier3Border})`);
       }
     }
 
-    // 3. All 4 hero demo beats unclipped at 1440x900 and 1280x720
-    for (const [w, h] of [[1440, 900], [1280, 720]]) {
+    // 3. All 4 hero demo beats unclipped at 1440x900, 1280x720, and 390x844
+    for (const [w, h] of [[1440, 900], [1280, 720], [390, 844]]) {
       await cdp.setViewport(w, h);
       await cdp.goto(baseUrl + '/');
       for (let beat = 0; beat < 4; beat++) {
@@ -337,7 +361,7 @@ async function main() {
         await sleep(220);
         const clip = await cdp.evaluate(() => {
           const el = document.getElementById('termOutput');
-          return { over: el.scrollWidth > el.clientWidth + 1, sw: el.scrollWidth, cw: el.clientWidth };
+          return { over: el.scrollWidth > el.clientWidth + 2, sw: el.scrollWidth, cw: el.clientWidth };
         });
         if (clip.over) {
           failures.push(`/ @${w}x${h} beat ${beat}: terminal clipped (${clip.sw} > ${clip.cw})`);

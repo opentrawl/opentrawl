@@ -49,7 +49,7 @@ code {
 }
 .wrap {
   width: 100%;
-  max-width: 1320px;
+  max-width: 1384px;
   margin: 0 auto;
   padding: 0 clamp(16px, 3vw, 32px);
 }
@@ -183,7 +183,7 @@ code {
 .badge.now { color: var(--green); background: var(--green-tint); border-color: rgba(20, 108, 67, 0.35); }
 .badge.soon { color: var(--grey); background: var(--paper); border-color: var(--hairline); }
 
-.pc-desc { font-size: 13.5px; color: var(--ink); line-height: 1.48; }
+.pc-desc { margin-top: 10px; font-size: 13.5px; color: var(--ink); line-height: 1.48; }
 .pc-perm {
   padding-top: 10px;
   border-top: var(--hair);
@@ -200,6 +200,21 @@ code {
   display: block;
   margin-bottom: 2px;
 }
+.pc-perm strong code { text-transform: none; letter-spacing: 0; font-size: 11px; }
+.pc-install {
+  margin-top: 10px;
+  border-top: var(--hair);
+  padding-top: 8px;
+}
+.pc-install summary {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--black);
+  cursor: pointer;
+  user-select: none;
+}
+.pc-install summary:hover { color: var(--red); }
 .pc-cmd-wrap {
   margin-top: 10px;
   background: var(--term-bg);
@@ -383,21 +398,6 @@ footer a:hover { color: var(--red); border-color: var(--red); }
     <p>Search 11 built-in apps today, add standalone plugins for more, or let your coding agent build one for any app or export you use.</p>
   </section>
 
-  <section class="security-strip" aria-label="External plugin security model">
-    <div class="sec-cell">
-      <strong>No access by default</strong>
-      External plugins run inside a macOS sandbox with zero network, folder, or Keychain access until you approve each permission explicitly.
-    </div>
-    <div class="sec-cell">
-      <strong>Isolated per app</strong>
-      A plugin writes only to its own archive folder and can never read your messages, mail, or any other OpenTrawl archive.
-    </div>
-    <div class="sec-cell">
-      <strong>Hash-pinned binaries</strong>
-      OpenTrawl pins each installed plugin's SHA-256 hash. If an update changes the binary or asks for new access, it stops and asks you again.
-    </div>
-  </section>
-
   <div class="filter-bar">
     <div class="filters" role="tablist" aria-label="Filter apps and plugins">
       <button class="filter-btn active" type="button" data-filter="all">All (19)</button>
@@ -539,12 +539,18 @@ footer a:hover { color: var(--red); border-color: var(--red); }
         <p class="pc-desc">Archives Instagram, LinkedIn, WeChat, Slack, Discord, and Messenger via Beeper Desktop's local read-only API.</p>
       </div>
       <div>
-        <div class="pc-perm"><strong>External plugin (MIT in <code>plugins/trawl-beeper</code>)</strong>Build with Go, then install. Local loopback <code>127.0.0.1:23373</code> + Keychain token · no Full Disk Access</div>
-        <div class="pc-cmd-bar"><span>Install after building ./trawl-beeper</span><button class="pc-cmd-copy" type="button" data-copy-cmd="beeperInstallCmd">Copy</button></div>
-        <pre class="pc-cmd-wrap" id="beeperInstallCmd">trawl plugin install ./trawl-beeper \
+        <div class="pc-perm"><strong>External plugin (MIT in <code>plugins/trawl-beeper</code>)</strong>Local loopback <code>127.0.0.1:23373</code> + Keychain token · no Full Disk Access</div>
+        <details class="pc-install">
+          <summary>Build &amp; install steps</summary>
+          <div class="pc-cmd-bar"><span>1. Build with Go, then install</span><button class="pc-cmd-copy" type="button" data-copy-cmd="beeperInstallCmd">Copy</button></div>
+          <pre class="pc-cmd-wrap" id="beeperInstallCmd">CGO_ENABLED=1 go build -tags=sqlite_fts5 \
+  -o ./trawl-beeper ./cmd/trawl-beeper
+
+trawl plugin install ./trawl-beeper \
   --allow-self-hosted 127.0.0.1:23373=127.0.0.1/32 \
   --allow-read-secret beeper_access_token \
   --allow-write-secret beeper_access_token</pre>
+        </details>
       </div>
     </article>
 
@@ -626,6 +632,21 @@ footer a:hover { color: var(--red); border-color: var(--red); }
     </article>
   </section>
 
+  <section class="security-strip" style="margin-top:44px" aria-label="External plugin security model">
+    <div class="sec-cell">
+      <strong>No access by default</strong>
+      External plugins run inside a macOS sandbox with zero network, folder, or Keychain access until you approve each permission explicitly.
+    </div>
+    <div class="sec-cell">
+      <strong>Isolated per app</strong>
+      A plugin writes only to its own archive folder and can never read your messages, mail, or any other OpenTrawl archive.
+    </div>
+    <div class="sec-cell">
+      <strong>Hash-pinned binaries</strong>
+      OpenTrawl pins each installed plugin's SHA-256 hash. If an update changes the binary or asks for new access, it stops and asks you again.
+    </div>
+  </section>
+
   <section class="build-section" id="build">
     <div>
       <h2>Build any plugin with your coding agent</h2>
@@ -643,9 +664,13 @@ footer a:hover { color: var(--red); border-color: var(--red); }
   <footer>
     <a href="index.html">Home</a>
     <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
+    <a href="https://x.com/opentrawl">x.com/opentrawl</a>
+    <a href="plugins.html">Plugins</a>
     <a href="security.html">Privacy &amp; encryption</a>
     <a href="privacy.html">Gmail privacy</a>
+    <a href="https://keyring.opentrawl.sh/">Agent Keyring</a>
     <a href="llms.txt">llms.txt</a>
+    <div style="width:100%;margin-top:4px;">Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in Rotterdam 🇪🇺 🇳🇱</div>
   </footer>
 </main>
 

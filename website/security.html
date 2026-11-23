@@ -42,6 +42,7 @@ code {
   padding: 1px 5px;
   border: 1px solid var(--hairline);
 }
+.header-wrap { width: 100%; max-width: 1384px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 32px); }
 .wrap { width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 32px); }
 .topbar-outer { border-bottom: var(--rule); background: var(--white); position: sticky; top: 0; z-index: 40; }
 .topbar { display: flex; align-items: center; justify-content: space-between; height: 56px; gap: 16px; }
@@ -90,8 +91,8 @@ ul { margin: 12px 0 0 20px; max-width: 740px; color: var(--ink); display: flex; 
 .pillar strong { display: block; font-size: 15px; margin-bottom: 6px; color: var(--black); }
 .pillar p { margin-top: 0; font-size: 13.5px; line-height: 1.5; }
 
-.table-scroll { margin-top: 18px; overflow-x: auto; border: 1px solid var(--black); }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; text-align: left; min-width: 680px; }
+.table-scroll { margin-top: 18px; border: 1px solid var(--black); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; text-align: left; }
 th {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -107,7 +108,7 @@ th:last-child { border-right: none; }
 td { padding: 12px 13px; border-bottom: var(--hair); border-right: var(--hair); vertical-align: top; color: var(--ink); }
 td:last-child { border-right: none; }
 tr:last-child td { border-bottom: none; }
-td.mode { font-weight: 700; color: var(--black); white-space: nowrap; }
+td.mode { font-weight: 700; color: var(--black); }
 td.mode span { display: block; font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--grey); margin-top: 2px; }
 .cant { color: var(--green); font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
 
@@ -149,20 +150,52 @@ footer a:hover { color: var(--red); border-color: var(--red); }
 .mobile-nav a { text-decoration: none; flex: none; }
 .mobile-nav a.active, .mobile-nav a:hover { color: var(--black); font-weight: 700; }
 
+@media (max-width: 1040px) {
+  .nav { display: none; }
+  .mobile-nav { display: flex; }
+}
 @media (max-width: 820px) {
   .pillars { grid-template-columns: 1fr; }
   .pillar { border-right: none; border-bottom: var(--hair); }
   .pillar:last-child { border-bottom: none; }
 }
-@media (max-width: 680px) {
-  .nav, .btn-top.ghost { display: none; }
-  .mobile-nav { display: flex; }
+@media (max-width: 720px) {
+  .btn-top.ghost { display: none; }
+  .table-scroll { border: none; }
+  table, thead, tbody, tr, td { display: block; width: 100%; }
+  thead { display: none; }
+  tr {
+    border: 1px solid var(--black);
+    margin-bottom: 14px;
+    background: var(--white);
+  }
+  tr:last-child { margin-bottom: 0; }
+  td {
+    border-right: none;
+    border-bottom: var(--hair);
+    padding: 10px 14px;
+  }
+  td.mode {
+    background: var(--paper);
+    border-bottom: var(--rule);
+    font-size: 15px;
+  }
+  td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--grey);
+    margin-bottom: 3px;
+  }
 }
 </style>
 </head>
 <body>
 <header class="topbar-outer">
-  <div class="wrap topbar">
+  <div class="header-wrap topbar">
     <a class="brand" href="index.html">
       <svg class="mark" viewBox="0 0 1024 1024" aria-hidden="true">
         <polygon points="292,196 56,428 270,428" fill="#f2634f"/>
@@ -208,7 +241,7 @@ footer a:hover { color: var(--red); border-color: var(--red); }
 
 <main class="wrap">
   <h1>Privacy &amp; End-to-End Encryption</h1>
-  <p class="lead">Privacy is a human right. OpenTrawl is built in the EU 🇪🇺, open source under the MIT licence, and designed so you never have to take our word for it: today everything stays on your Mac, and our planned sync and cloud tiers are end-to-end encrypted so even we cannot read your data.</p>
+  <p class="lead">Privacy is a human right. OpenTrawl is built in the EU 🇪🇺, open source under the MIT licence, and designed so you never have to take our word for it: today everything stays on your Mac, and our planned sync and cloud tiers are designed to be end-to-end encrypted so OpenTrawl cannot read your data.</p>
 
   <div class="pillars">
     <div class="pillar">
@@ -217,11 +250,11 @@ footer a:hover { color: var(--red); border-color: var(--red); }
     </div>
     <div class="pillar">
       <strong>End-to-end encrypted (planned)</strong>
-      <p>On planned sync and cloud tiers, your archive is encrypted on your device before upload. Cloud storage holds only ciphertext it cannot open.</p>
+      <p>Our planned sync and cloud tiers will encrypt your archive on your device before upload. Cloud storage holds only ciphertext it cannot open.</p>
     </div>
     <div class="pillar">
       <strong>Hardware-locked memory (planned)</strong>
-      <p>When your phone or cloud agent searches your archive while your Mac sleeps, queries run inside hardware-locked memory that requires your agent's live key. Even OpenTrawl admins cannot read RAM or dump your archive.</p>
+      <p>Remote search is planned to run inside confidential VMs (AMD SEV-SNP or Intel TDX), where the CPU encrypts RAM and unlocks queries only for a session authenticated by your device key. That design keeps OpenTrawl admins out of memory.</p>
     </div>
   </div>
 
@@ -234,37 +267,44 @@ footer a:hover { color: var(--red); border-color: var(--red); }
           <th>Your devices</th>
           <th>OpenTrawl servers</th>
           <th>Cloud storage</th>
-          <th>Your AI</th>
+          <th>Your AI &amp; teammates</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td class="mode">Local ($0)<span>Available now</span></td>
-          <td>Full local archive &amp; search</td>
-          <td><span class="cant">Nothing uploaded</span></td>
-          <td><span class="cant">Nothing uploaded</span></td>
-          <td>No AI cloud exposure with local models; or only what you open with cloud AI</td>
+          <td data-label="Your devices">Full local archive &amp; search</td>
+          <td data-label="OpenTrawl servers"><span class="cant">Nothing uploaded</span></td>
+          <td data-label="Cloud storage"><span class="cant">Nothing uploaded</span></td>
+          <td data-label="Your AI &amp; teammates">No AI cloud exposure with local models; or only what you open with cloud AI</td>
         </tr>
         <tr>
           <td class="mode">Encrypted Sync ($7/mo)<span>Planned</span></td>
-          <td>Full archive synced between Mac &amp; iPhone</td>
-          <td><span class="cant">Cannot read</span><br>Keys never leave your devices</td>
-          <td>Encrypted blobs only</td>
-          <td>Only what you search &amp; open locally</td>
+          <td data-label="Your devices">Full archive synced between Mac &amp; iPhone</td>
+          <td data-label="OpenTrawl servers"><span class="cant">Designed so we cannot read</span><br>Keys stay on your devices</td>
+          <td data-label="Cloud storage">Encrypted blobs only</td>
+          <td data-label="Your AI &amp; teammates">Only what you search &amp; open locally</td>
         </tr>
         <tr>
           <td class="mode">Encrypted Cloud ($19/mo)<span>Planned</span></td>
-          <td>Full archive + 24/7 remote search</td>
-          <td><span class="cant">Cannot read</span><br>Hardware-locked memory; requires your agent's live key</td>
-          <td>Encrypted blobs only</td>
-          <td>Only the sources you grant that agent</td>
+          <td data-label="Your devices">Full archive + 24/7 remote search</td>
+          <td data-label="OpenTrawl servers"><span class="cant">Designed so we cannot read</span><br>Confidential VM memory; requires your session key</td>
+          <td data-label="Cloud storage">Encrypted blobs only</td>
+          <td data-label="Your AI &amp; teammates">Only the sources you grant each agent</td>
         </tr>
         <tr>
           <td class="mode">Encrypted Dedicated ($119/mo)<span>Planned</span></td>
-          <td>Full archive + dedicated 24/7 server</td>
-          <td><span class="cant">Cannot read</span><br>Single-user hardware-locked memory + manual update approval</td>
-          <td>Encrypted blobs only</td>
-          <td>Only the sources you grant that agent</td>
+          <td data-label="Your devices">Full archive + dedicated 24/7 server</td>
+          <td data-label="OpenTrawl servers"><span class="cant">Designed so we cannot read</span><br>Single-user confidential VM + manual update approval</td>
+          <td data-label="Cloud storage">Encrypted blobs only</td>
+          <td data-label="Your AI &amp; teammates">Only the sources you grant each agent</td>
+        </tr>
+        <tr>
+          <td class="mode">Encrypted Teams ($39/seat/mo)<span>Planned · 3-seat min</span></td>
+          <td data-label="Your devices">Private personal archive + shared team archive</td>
+          <td data-label="OpenTrawl servers"><span class="cant">Designed so we cannot read</span><br>Dedicated team confidential VM</td>
+          <td data-label="Cloud storage">Separate encrypted personal &amp; team blobs</td>
+          <td data-label="Your AI &amp; teammates">Teammates never see personal archives; shared team sources follow per-agent rules</td>
         </tr>
       </tbody>
     </table>
@@ -287,10 +327,14 @@ footer a:hover { color: var(--red); border-color: var(--red); }
 
   <footer>
     <a href="index.html">Home</a>
-    <a href="plugins.html">Plugins</a>
-    <a href="privacy.html">Gmail privacy</a>
     <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
+    <a href="https://x.com/opentrawl">x.com/opentrawl</a>
+    <a href="plugins.html">Plugins</a>
+    <a href="security.html">Privacy &amp; encryption</a>
+    <a href="privacy.html">Gmail privacy</a>
+    <a href="https://keyring.opentrawl.sh/">Agent Keyring</a>
     <a href="llms.txt">llms.txt</a>
+    <div style="width:100%;margin-top:4px;">Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in Rotterdam 🇪🇺 🇳🇱</div>
   </footer>
 </main>
 </body>

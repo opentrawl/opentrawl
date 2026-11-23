@@ -1,18 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="tile-bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E8E8E8"/>
-    </linearGradient>
-    <linearGradient id="note-green" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3FDB9A"/>
-      <stop offset="1" stop-color="#0A9A63"/>
+    <linearGradient id="money-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2AD18D"/>
+      <stop offset="1" stop-color="#0C8F5C"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="0" width="1024" height="1024" fill="url(#tile-bg)"/>
-  <rect x="107" y="264" width="810" height="497" rx="85" fill="url(#note-green)"/>
-  <rect x="159" y="315" width="707" height="394" rx="44" fill="none" stroke="#FFFFFF" stroke-opacity="0.38" stroke-width="13"/>
-  <path fill="#FFFFFF" d="M664.8 389.3 A176.6 176.6 0 1 0 664.8 634.7 L622.5 593.8 A117.8 117.8 0 1 1 622.5 430.2 Z"/>
-  <rect x="311.4" y="435.6" width="217.1" height="46.0" rx="6" fill="#FFFFFF"/>
-  <rect x="311.4" y="542.4" width="217.1" height="46.0" rx="6" fill="#FFFFFF"/>
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#money-bg)"/>
+  <rect x="96" y="176" width="832" height="672" rx="84" fill="none" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="26"/>
+  <path fill="#FFFFFF" d="M676 356 A214 214 0 1 0 676 668 L624 618 A144 144 0 1 1 624 406 Z"/>
+  <rect x="268" y="422" width="272" height="58" rx="14" fill="#FFFFFF"/>
+  <rect x="268" y="544" width="272" height="58" rx="14" fill="#FFFFFF"/>
 </svg>
