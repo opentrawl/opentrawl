@@ -126,8 +126,6 @@ type Status struct {
 	NewestNoteAt       string
 	Notes              int64
 	Versions           int64
-	DecodedVersions    int64
-	Observations       int64
 	SourceModifiedAt   string
 	LastSourcePathHint string
 }

@@ -25,9 +25,6 @@ type Status struct {
 	SpendMicros      int64
 	TokenValid       bool
 	WebSessionValid  bool
-	FTSTweets        int
-	FTSRows          int
-	IntegrityText    string
 }
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
@@ -42,8 +39,6 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		{&out.LikesSeen, `select count(*) from tweet_roles where role = 'like'`},
 		{&out.DMConversations, `select count(*) from dm_conversations`},
 		{&out.DMMessages, `select count(*) from dm_messages`},
-		{&out.FTSTweets, `select count(*) from tweets`},
-		{&out.FTSRows, `select count(*) from tweets_fts`},
 	} {
 		if err := s.db.QueryRowContext(ctx, count.sql).Scan(count.dst); err != nil {
 			return out, err
@@ -103,7 +98,6 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	out.WebSessionValid = sessionState.Cursor != "false"
 	out.SpendMonth = time.Now().UTC().Format("2006-01")
 	out.SpendMicros, _ = s.SpendMicros(ctx, out.SpendMonth)
-	out.IntegrityText, _ = s.Integrity(ctx)
 	return out, nil
 }
 

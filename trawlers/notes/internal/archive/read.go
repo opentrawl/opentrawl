@@ -41,12 +41,6 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if out.Versions, err = countTable(ctx, db, "note_versions"); err != nil {
 		return Status{}, err
 	}
-	if out.DecodedVersions, err = countWhere(ctx, db, "note_versions", "text_status = 'decoded'"); err != nil {
-		return Status{}, err
-	}
-	if out.Observations, err = countTable(ctx, db, "version_observations"); err != nil {
-		return Status{}, err
-	}
 	state, err := s.UpdateState(ctx)
 	if err != nil {
 		return Status{}, err
@@ -391,12 +385,6 @@ group by note_id`, value).Scan(&note.ID, &note.VersionCount)
 func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {
 	var count int64
 	err := db.QueryRowContext(ctx, `select count(*) from `+store.QuoteIdent(table)).Scan(&count)
-	return count, err
-}
-
-func countWhere(ctx context.Context, db *sql.DB, table, where string) (int64, error) {
-	var count int64
-	err := db.QueryRowContext(ctx, `select count(*) from `+store.QuoteIdent(table)+` where `+where).Scan(&count)
 	return count, err
 }
 
