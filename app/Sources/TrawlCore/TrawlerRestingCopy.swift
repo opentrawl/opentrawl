@@ -123,24 +123,36 @@ public enum TrawlerRestingCopy {
     if trawlerStatus.sourceAppSyncLiveness == .sourceAppNotRunning {
       return "App closed"
     }
-    let commandNames = trawlerStatus.registeredTrawlerManifest
-      .registeredTrawlerCommandDeclarations.lazy
-      .filter {
-        $0.trawlerCommandDiscoveryPlacement
-          == .shownInBareTrawlOverviewAndTrawlerNamespaceHelp
-      }
-      .map { declaration in
-        switch declaration.registeredTrawlerCommand {
-        case .sharedTrawlerOperation(let sharedTrawlerOperation):
-          sharedTrawlerOperation.rawValue
-        case .bespokeTrawlerCommandName(let bespokeTrawlerCommandName):
-          bespokeTrawlerCommandName
-        }
-      }
-      .filter { !$0.isEmpty }
-      .prefix(4)
-    guard !commandNames.isEmpty else { return nil }
-    return commandNames.joined(separator: " · ")
+    return primaryArchiveCountSummary(for: trawlerStatus)
+  }
+
+  public static func primaryArchiveCountSummary(for trawlerStatus: TrawlerStatus) -> String? {
+    let counts = trawlerStatus.archiveContentCountsAfterLastSuccessfullyCompletedUpdate
+    guard let primary = counts.first(where: { $0.archiveContentCount > 0 }) else {
+      return nil
+    }
+    let displayUnit = primary.archiveContentKindDisplayName
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let fallbackKind = primary.archiveContentKindName
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let fallbackUnit = fallbackKind == "apple_library_photos" ? "photos" : fallbackKind
+    let unit = displayUnit.isEmpty ? fallbackUnit : displayUnit
+    let formattedCount = compactRecordCount(primary.archiveContentCount)
+    guard !unit.isEmpty else { return formattedCount }
+    return "\(formattedCount) \(unit)"
+  }
+
+  public static func compactRecordCount(_ count: UInt64) -> String {
+    switch count {
+    case 1_000_000...:
+      let millions = Double(count) / 1_000_000
+      return String(format: "%.1fM", millions)
+    case 10_000...:
+      let thousands = Double(count) / 1_000
+      return String(format: "%.1fK", thousands)
+    default:
+      return count.formatted()
+    }
   }
 
   public static func needsAttention(_ trawlerStatus: TrawlerStatus) -> Bool {

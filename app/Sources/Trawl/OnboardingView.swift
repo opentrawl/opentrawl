@@ -42,6 +42,12 @@ struct OnboardingView: View {
             appModel: appModel,
             registeredTrawlers: refreshedTrawlersToUpdate
           )
+        },
+        onContinueWithoutAccess: {
+          onboarding.continueWithoutFullDiskAccess(
+            appModel: appModel,
+            registeredTrawlers: refreshedTrawlersToUpdate
+          )
         }
       )
     case .building:
@@ -152,19 +158,25 @@ private struct WelcomeAppIconRow: View {
     }
   }
 
+  private var allEntriesInDisplayOrder: [RegisteredTrawlerCatalogEntry] {
+    searchableEntries + comingSoonEntries
+  }
+
+  private var iconRows: [[RegisteredTrawlerCatalogEntry]] {
+    let entries = allEntriesInDisplayOrder
+    guard entries.count > 8 else { return entries.isEmpty ? [] : [entries] }
+    let firstRowCount = (entries.count + 1) / 2
+    return [Array(entries.prefix(firstRowCount)), Array(entries.dropFirst(firstRowCount))]
+  }
+
   var body: some View {
     VStack(spacing: TrawlDesign.onboardingElementSpacing) {
       Text(HumanCopy.Welcome.appsTitle)
         .trawlText(.sectionHeader)
-      HStack(spacing: 32) {
-        HStack(spacing: 20) {
-          ForEach(searchableEntries, id: \.id) { entry in
-            WelcomeAppIcon(entry: entry)
-          }
-        }
-        if !comingSoonEntries.isEmpty {
+      VStack(spacing: 16) {
+        ForEach(Array(iconRows.enumerated()), id: \.offset) { _, row in
           HStack(spacing: 20) {
-            ForEach(comingSoonEntries, id: \.id) { entry in
+            ForEach(row, id: \.id) { entry in
               WelcomeAppIcon(entry: entry)
             }
           }

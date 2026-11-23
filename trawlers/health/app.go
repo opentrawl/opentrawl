@@ -225,8 +225,12 @@ func runHealthWorkoutsCommand(
 		return nil, err
 	}
 	db := req.OpenedTrawlerArchiveStore.DB()
-	if err := ensureHealthArchiveSchema(ctx, db); err != nil {
+	ready, err := healthArchiveTablesExist(ctx, db)
+	if err != nil {
 		return nil, err
+	}
+	if !ready {
+		return buildHealthWorkoutsPresentation(nil), nil
 	}
 	var where []string
 	var args []any
@@ -288,8 +292,15 @@ func runHealthSleepCommand(
 		return nil, err
 	}
 	db := req.OpenedTrawlerArchiveStore.DB()
-	if err := ensureHealthArchiveSchema(ctx, db); err != nil {
+	ready, err := healthArchiveTablesExist(ctx, db)
+	if err != nil {
 		return nil, err
+	}
+	if !ready {
+		if showStages {
+			return buildHealthSleepStagesPresentation(nil), nil
+		}
+		return buildHealthSleepNightsPresentation(nil), nil
 	}
 	if showStages {
 		var where []string
@@ -341,8 +352,15 @@ func runHealthMetricsCommand(
 		return nil, err
 	}
 	db := req.OpenedTrawlerArchiveStore.DB()
-	if err := ensureHealthArchiveSchema(ctx, db); err != nil {
+	ready, err := healthArchiveTablesExist(ctx, db)
+	if err != nil {
 		return nil, err
+	}
+	if !ready {
+		if strings.TrimSpace(metricTypeQuery) == "" {
+			return buildHealthMetricsCatalogPresentation(nil), nil
+		}
+		return buildHealthMetricTrendPresentation(metricTypeQuery, nil), nil
 	}
 	if strings.TrimSpace(metricTypeQuery) == "" {
 		catalog, err := readHealthMetricCatalog(ctx, db)
@@ -384,8 +402,12 @@ func runHealthSummaryCommand(
 		return nil, err
 	}
 	db := req.OpenedTrawlerArchiveStore.DB()
-	if err := ensureHealthArchiveSchema(ctx, db); err != nil {
+	ready, err := healthArchiveTablesExist(ctx, db)
+	if err != nil {
 		return nil, err
+	}
+	if !ready {
+		return buildHealthSummaryPresentation(nil), nil
 	}
 	rollups, err := buildDailyHealthRollups(ctx, db, afterDate, beforeDate)
 	if err != nil {
@@ -403,8 +425,9 @@ func (*App) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionReq
 		return response, nil
 	}
 	db := req.OpenedTrawlerArchiveStore.DB()
-	if err := ensureHealthArchiveSchema(ctx, db); err != nil {
-		return nil, err
+	ready, err := healthArchiveTablesExist(ctx, db)
+	if err != nil || !ready {
+		return response, err
 	}
 
 	var sampleCount uint64
@@ -499,8 +522,12 @@ func (*App) OpenCanonicalRecord(
 	canonicalReference *trawlkit.CanonicalArchiveRecordReference,
 ) (*open.OpenRecord, error) {
 	db := req.OpenedTrawlerArchiveStore.DB()
-	if err := ensureHealthArchiveSchema(ctx, db); err != nil {
+	ready, err := healthArchiveTablesExist(ctx, db)
+	if err != nil {
 		return nil, err
+	}
+	if !ready {
+		return nil, fmt.Errorf("health record not found")
 	}
 	ref := trawlkit.CanonicalArchiveRecordReferenceText(canonicalReference)
 
@@ -568,8 +595,9 @@ func (*App) Search(ctx context.Context, req *trawlkit.TrawlerCommandExecutionReq
 		return response, nil
 	}
 	db := req.OpenedTrawlerArchiveStore.DB()
-	if err := ensureHealthArchiveSchema(ctx, db); err != nil {
-		return nil, err
+	ready, err := healthArchiveTablesExist(ctx, db)
+	if err != nil || !ready {
+		return response, err
 	}
 	rows, err := db.QueryContext(ctx,
 		"SELECT reference, "+store.FTS5MarkedSearchResultSnippetSQLExpression("health_search", 1)+" FROM health_search WHERE health_search MATCH ?",

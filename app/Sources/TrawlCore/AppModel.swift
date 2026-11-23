@@ -223,10 +223,9 @@ public final class AppModel {
     trigger: TrawlerArchiveUpdateTrigger = .manual
   ) async {
     guard !isUpdating else { return }
-    if checkDiskAccess() == .denied {
-      updateMessage = "Full Disk Access is required."
-      return
-    }
+    // Record disk access so the UI can surface optional Full Disk Access
+    // recovery without blocking zero-FDA apps from updating.
+    _ = checkDiskAccess()
     isUpdating = true
     let previousUpdateMessage = updateMessage
     let previousUpdateResults = trawlerArchiveUpdateResults

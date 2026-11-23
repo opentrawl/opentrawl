@@ -66,7 +66,7 @@ import Testing
 }
 
 @Test func layoutsStayBalancedAndInsideSafeBoundsForEverySupportedCount() {
-  let counts = [6, 9]
+  let counts = [6, 9, 12, 13, 14, 16]
   let sizes = [
     ConstellationPoint(x: 704, y: 504),
     ConstellationPoint(x: 744, y: 531),
@@ -224,6 +224,41 @@ private func normalisedOrbitIdentity(
         )
       }
       #expect(!overlap)
+    }
+  }
+}
+
+@Test func twelveAndThirteenSourcesNeverOverlapAcrossFullMotionAtDefaultWindowSize() {
+  let baseSources = [
+    "calendar", "contacts", "gmail", "health", "imessage", "mail", "money", "notes", "photos",
+    "telegram", "twitter", "whatsapp",
+  ]
+  for sourceIDs in [baseSources, baseSources + ["beeper"]] {
+    let size = ConstellationPoint(x: 1_176, y: 768)
+    let centre = ConstellationPoint(x: size.x / 2, y: size.y / 2 - min(27, size.y * 0.035))
+    let metrics = ConstellationLayoutMetrics.forSourceCount(sourceIDs.count, fitting: size)
+    let placements = ConstellationOrbitLayout(
+      sourceIDs: sourceIDs,
+      size: size,
+      centre: centre,
+      metrics: metrics
+    ).placements()
+    let phases = (0...CoreAnimationTimeline.sampleCount).map {
+      Double($0) / Double(CoreAnimationTimeline.sampleCount)
+    }
+    let renderedLabels = placements.map { placement in
+      let bounds = phases.map {
+        placement.labelRect.translated(
+          by: ConstellationMotion(sourceID: placement.id).translation(at: $0))
+      }
+      return (sourceID: placement.id, envelope: bounds.envelope)
+    }
+
+    #expect(placements.count == sourceIDs.count)
+    for left in renderedLabels.indices {
+      for right in renderedLabels.indices.dropFirst(left + 1) {
+        #expect(!renderedLabels[left].envelope.intersects(renderedLabels[right].envelope))
+      }
     }
   }
 }

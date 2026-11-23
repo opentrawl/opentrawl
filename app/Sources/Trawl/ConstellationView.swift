@@ -437,15 +437,17 @@ struct TrawlerLabel: View {
   var body: some View {
     VStack(spacing: isCompact ? 1 : 2) {
       Text(title)
-        .font(isCompact ? .caption2.weight(.semibold) : .body.weight(.semibold))
+        .font(isCompact ? .caption.weight(.semibold) : .body.weight(.semibold))
         .foregroundStyle(.primary)
         .lineLimit(titleLineLimit)
+        .minimumScaleFactor(0.88)
         .fixedSize(horizontal: false, vertical: true)
         .multilineTextAlignment(.center)
       if let detail {
         Text(detail)
           .font(isCompact ? .caption2 : .caption)
           .foregroundStyle(.secondary)
+          .lineLimit(2)
           .fixedSize(horizontal: false, vertical: true)
           .multilineTextAlignment(.center)
       }

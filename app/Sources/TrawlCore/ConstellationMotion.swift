@@ -273,6 +273,26 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
   public static func forSourceCount(_ count: Int, fitting size: ConstellationPoint) -> Self {
     let shorterCanvasSide = min(size.x, size.y)
     let canvasScale = min(max((shorterCanvasSide - 504) / 216, 0), 1)
+    if count >= 11 {
+      let extraDensity = min(1, 12 / Double(max(count, 12)))
+      func scaledDense(_ minimum: Double, _ maximum: Double) -> Double {
+        (minimum + (maximum - minimum) * canvasScale) * extraDensity
+      }
+      return Self(
+        hostSize: ConstellationPoint(
+          x: max(64, scaledDense(74, 114)),
+          y: max(68, scaledDense(76, 108))
+        ),
+        hostCentreYOffset: max(14, scaledDense(16, 22)),
+        labelWidth: max(62, scaledDense(72, 110)),
+        labelTop: max(16, scaledDense(18, 24)),
+        labelHeight: max(44, scaledDense(44, 52)),
+        minimumIconDiameter: max(28, scaledDense(32, 44)),
+        maximumIconDiameter: max(32, scaledDense(36, 48)),
+        diamondClearanceRadius: max(34, scaledDense(38, 60)),
+        spacing: max(3, scaledDense(3, 5))
+      )
+    }
     let density = min(1, 9 / Double(max(count, 1)))
     func scaled(_ minimum: Double, _ maximum: Double) -> Double {
       (minimum + (maximum - minimum) * canvasScale) * density
@@ -394,6 +414,18 @@ public struct ConstellationOrbitLayout: Sendable {
 
   private func normalisedComposition(for orderedIDs: [String]) -> [(angle: Double, radius: Double)]
   {
+    if orderedIDs.count >= 11 {
+      let sectorWeights: [Double] = [0.94, 1.04, 0.96, 1.06, 0.95, 1.05]
+      let radialTiers: [Double] = [0.98, 0.84, 0.97, 0.86, 0.98, 0.85]
+      let weights = orderedIDs.indices.map { sectorWeights[$0 % sectorWeights.count] }
+      let weightTotal = weights.reduce(0, +)
+      let gaps = weights.map { 2 * Double.pi * $0 / weightTotal }
+      var angle = -Double.pi / 2
+      return orderedIDs.indices.map { index in
+        defer { angle += gaps[index] }
+        return (angle: angle, radius: radialTiers[index % radialTiers.count])
+      }
+    }
     let sectorWeights: [Double] = [0.82, 1, 1.08, 1.15, 0.85, 0.82, 1.18, 1.05, 1.05]
     let radialTiers: [Double] = [0.94, 0.98, 0.92, 0.97, 0.98, 0.96, 0.92, 0.98, 0.97]
     let weights = orderedIDs.indices.map { sectorWeights[$0 % sectorWeights.count] }

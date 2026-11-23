@@ -14,6 +14,7 @@ struct PermissionStep: View {
   let onOpenSettings: () -> Void
   let onCheckAgain: () -> Void
   let onContinue: () -> Void
+  let onContinueWithoutAccess: () -> Void
 
   var body: some View {
     TrawlFlowScaffold(
@@ -51,8 +52,10 @@ struct PermissionStep: View {
     } actions: {
       OnboardingActionRow(
         backAction: onBack,
-        secondaryTitle: nil,
-        secondaryAction: nil,
+        secondaryTitle: permissionCheck == .confirmed
+          ? nil
+          : OperationalCopy.FullDiskAccess.continueWithoutAccess,
+        secondaryAction: permissionCheck == .confirmed ? nil : onContinueWithoutAccess,
         primaryTitle: permissionCheck == .confirmed
           ? OperationalCopy.SharedAction.continueAction
           : HumanCopy.FullDiskAccess.openAction,

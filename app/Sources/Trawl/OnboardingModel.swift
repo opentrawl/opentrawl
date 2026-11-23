@@ -237,6 +237,16 @@ final class OnboardingModel {
       appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
 
+  func continueWithoutFullDiskAccess(
+    appModel: AppModel,
+    registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
+  ) {
+    guard case .permission = flowState else { return }
+    FullDiskAccessGuide.dismiss()
+    continueAfterVerifiedAccess(
+      appModel: appModel, registeredTrawlers: registeredTrawlers)
+  }
+
   func startInitialUpdate(
     appModel: AppModel,
     registeredTrawlers: [RegisteredTrawlerIdentity]

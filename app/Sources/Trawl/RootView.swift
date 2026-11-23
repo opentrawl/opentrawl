@@ -78,6 +78,7 @@ struct RootView: View {
               trawlerStatuses: model.trawlerStatuses.filter {
                 featureFlags.includes($0.id)
               },
+              availableTrawlers: searchableHomeTrawlers,
               onTrafficChange: presentTraffic,
               onQueryChange: { searchQuery = $0 },
               onDismiss: dismissSearch
@@ -86,6 +87,20 @@ struct RootView: View {
             .allowsHitTesting(isSearching)
             .accessibilityHidden(!isSearching)
           }
+          Button("") {
+            showSearch(scope: searchScope)
+          }
+          .keyboardShortcut("k", modifiers: .command)
+          .opacity(0)
+          .frame(width: 0, height: 0)
+          .accessibilityHidden(true)
+          Button("") {
+            showSearch(scope: searchScope)
+          }
+          .keyboardShortcut("f", modifiers: .command)
+          .opacity(0)
+          .frame(width: 0, height: 0)
+          .accessibilityHidden(true)
         } else {
           OnboardingView(
             onboarding: onboarding,
@@ -247,6 +262,10 @@ struct RootView: View {
 
   private var homeTrawlers: [RestingTrawler] {
     model.homeTrawlers.filter { featureFlags.includes($0.id) }
+  }
+
+  private var searchableHomeTrawlers: [RestingTrawler] {
+    homeTrawlers.filter { $0.state != .comingSoon }
   }
 
   /// While an update runs, the constellation animates traffic to the

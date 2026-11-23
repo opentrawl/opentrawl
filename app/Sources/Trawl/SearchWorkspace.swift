@@ -70,11 +70,13 @@ enum SearchWorkspaceFieldContent: Equatable {
 struct SearchWorkspace: View {
   @Bindable var interaction: SearchInteraction
   let scope: RestingTrawler?
+  let availableTrawlers: [RestingTrawler]
   let trawlerResolver: SearchTrawlerResolver
   let isCompact: Bool
   let model: SearchModel
   let fieldIdentity: UUID
   @FocusState.Binding var focus: SearchFocus?
+  let onSelectScope: (RestingTrawler?) -> Void
   let onClearScope: () -> Void
   let onReturnToTrawlers: () -> Void
   let onSubmit: () -> Void
@@ -118,7 +120,9 @@ struct SearchWorkspace: View {
     SearchField(
       query: $interaction.query,
       scope: scope,
+      availableTrawlers: availableTrawlers,
       focus: $focus,
+      onSelectScope: onSelectScope,
       onClearScope: onClearScope,
       onReturnToTrawlers: onReturnToTrawlers,
       onSubmit: onSubmit,
@@ -257,7 +261,9 @@ private struct CompactRecordWorkspace: View {
 private struct SearchField: View {
   @Binding var query: String
   let scope: RestingTrawler?
+  let availableTrawlers: [RestingTrawler]
   @FocusState.Binding var focus: SearchFocus?
+  let onSelectScope: (RestingTrawler?) -> Void
   let onClearScope: () -> Void
   let onReturnToTrawlers: () -> Void
   let onSubmit: () -> Void
@@ -290,32 +296,7 @@ private struct SearchField: View {
           onMoveToResults()
           return .handled
         }
-      if let scope {
-        HStack(spacing: 8) {
-          TrawlerIconView(
-            registeredTrawler: scope.id,
-            size: 36)
-            .scaleEffect(1.22)
-            .frame(width: 36, height: 36)
-            .clipShape(.rect(cornerRadius: 8))
-          Text(scope.registeredTrawlerDisplayName)
-            .font(.callout.weight(.semibold))
-            .lineLimit(1)
-            .fixedSize()
-          Button(action: onClearScope) {
-            Text("All apps")
-              .font(.caption.weight(.semibold))
-          }
-          .buttonStyle(.plain)
-          .help("Search all apps")
-          .accessibilityLabel("Search all apps")
-        }
-        .padding(.leading, 8)
-        .padding(.trailing, 7)
-        .padding(.vertical, 2)
-        .background(.secondary.opacity(0.14), in: Capsule())
-        .fixedSize(horizontal: true, vertical: false)
-      }
+      scopeMenu
       Group {
         if query.isEmpty {
           Color.clear
@@ -337,6 +318,65 @@ private struct SearchField: View {
     .padding(.horizontal, 13)
     .frame(height: 44)
     .background(.secondary.opacity(0.08), in: Capsule())
+  }
+
+  @ViewBuilder
+  private var scopeMenu: some View {
+    if !availableTrawlers.isEmpty || scope != nil {
+      Menu {
+        Button {
+          onClearScope()
+        } label: {
+          if scope == nil {
+            Label("All apps", systemImage: "checkmark")
+          } else {
+            Text("All apps")
+          }
+        }
+        if !availableTrawlers.isEmpty {
+          Divider()
+          ForEach(availableTrawlers) { trawler in
+            Button {
+              onSelectScope(trawler)
+            } label: {
+              if scope?.id == trawler.id {
+                Label(trawler.registeredTrawlerDisplayName, systemImage: "checkmark")
+              } else {
+                Text(trawler.registeredTrawlerDisplayName)
+              }
+            }
+          }
+        }
+      } label: {
+        HStack(spacing: 6) {
+          if let scope {
+            TrawlerIconView(registeredTrawler: scope.id, size: 20)
+            Text(scope.registeredTrawlerDisplayName)
+              .font(.callout.weight(.semibold))
+              .lineLimit(1)
+              .fixedSize()
+          } else {
+            Text("All apps")
+              .font(.callout.weight(.medium))
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+              .fixedSize()
+          }
+          Image(systemName: "chevron.up.chevron.down")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.secondary.opacity(0.12), in: Capsule())
+      }
+      .menuStyle(.borderlessButton)
+      .fixedSize(horizontal: true, vertical: false)
+      .help("Choose which app to search")
+      .accessibilityLabel(
+        scope.map { "Searching \($0.registeredTrawlerDisplayName). Change app scope." }
+          ?? "Searching all apps. Change app scope.")
+    }
   }
 
   private func clearQuery() {

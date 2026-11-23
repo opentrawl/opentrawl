@@ -324,7 +324,8 @@ func mergeUnifiedAndFallbackSearchOperations(
 	limit int,
 ) *federationcontract.FederatedTrawlerSearchOperation {
 	op := &federationcontract.FederatedTrawlerSearchOperation{
-		Outcome: federationcontract.OperationOutcome_OPERATION_OUTCOME_COMPLETE,
+		Outcome:     federationcontract.OperationOutcome_OPERATION_OUTCOME_COMPLETE,
+		ResultLimit: uint32(max(limit, 0)),
 	}
 
 	matches := make([]*federationcontract.FederatedSearchMatch, 0, limit)
@@ -338,6 +339,7 @@ func mergeUnifiedAndFallbackSearchOperations(
 		op.TrawlerSearchResults = append(op.TrawlerSearchResults, fallbackResp.GetTrawlerSearchResults()...)
 	}
 
+	totalCandidatesBeforeCap := len(matches) + len(fallbackMatches)
 	if len(fallbackMatches) > 0 {
 		// Reserve a bounded slice for non-indexed trawlers (such as Photos) when
 		// searching across multiple sources so neither side crowds out the other.
@@ -358,19 +360,63 @@ func mergeUnifiedAndFallbackSearchOperations(
 		matches = matches[:limit]
 	}
 	op.SearchMatchesInDisplayOrder = matches
+	op.MoreSearchMatchesExist = unifiedOut.MoreMatchesExist ||
+		(fallbackResp != nil && fallbackResp.GetMoreSearchMatchesExist()) ||
+		totalCandidatesBeforeCap > len(matches)
 
-	// Record one unified TrawlerSearchResult per indexed trawler that contributed
-	// or was queried so TotalSearchMatches and empty-search reporting stay truthful.
-	unifiedTotal := unifiedOut.TotalRawMatches
+	// Record one TrawlerSearchResult per indexed trawler that contributed matches
+	// (or the queried trawler when empty) so display names and match counts stay
+	// truthful across both the CLI and Mac app.
 	if len(exporterTrawlers) > 0 {
-		first := exporterTrawlers[0]
-		op.TrawlerSearchResults = append(op.TrawlerSearchResults, &federationcontract.TrawlerSearchResult{
-			RegisteredTrawler:              first.RegisteredTrawlerManifest.GetRegisteredTrawler(),
-			RegisteredTrawlerDisplayName:   trawlerHumanName(first),
-			TotalSearchMatches:             unifiedTotal,
-			MoreSearchMatchesExist:         unifiedOut.MoreMatchesExist,
-			TotalSearchMatchesIsLowerBound: false,
-		})
+		matchesByTrawler := make(map[string][]*federationcontract.FederatedSearchMatch, len(exporterTrawlers))
+		for _, match := range unifiedOut.Matches {
+			link := strings.TrimSpace(match.GetTrawlLink().GetGloballyRoutableTrawlLink())
+			if trawlerID, _, ok := strings.Cut(link, ":"); ok && trawlerID != "" {
+				matchesByTrawler[trawlerID] = append(matchesByTrawler[trawlerID], match)
+			}
+		}
+		var contributing []InstalledTrawler
+		for _, t := range exporterTrawlers {
+			id := installedTrawlerIdentityText(t)
+			if len(matchesByTrawler[id]) > 0 {
+				contributing = append(contributing, t)
+			}
+		}
+		if len(contributing) == 0 {
+			first := exporterTrawlers[0]
+			op.TrawlerSearchResults = append(op.TrawlerSearchResults, &federationcontract.TrawlerSearchResult{
+				RegisteredTrawler:              first.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+				RegisteredTrawlerDisplayName:   trawlerHumanName(first),
+				TotalSearchMatches:             unifiedOut.TotalRawMatches,
+				MoreSearchMatchesExist:         unifiedOut.MoreMatchesExist,
+				TotalSearchMatchesIsLowerBound: false,
+			})
+		} else {
+			displayedUnifiedTotal := uint64(0)
+			for _, t := range contributing {
+				displayedUnifiedTotal += uint64(len(matchesByTrawler[installedTrawlerIdentityText(t)]))
+			}
+			extraUnifiedTotal := uint64(0)
+			if unifiedOut.TotalRawMatches > displayedUnifiedTotal {
+				extraUnifiedTotal = unifiedOut.TotalRawMatches - displayedUnifiedTotal
+			}
+			for index, t := range contributing {
+				id := installedTrawlerIdentityText(t)
+				trawlerMatches := matchesByTrawler[id]
+				trawlerTotal := uint64(len(trawlerMatches))
+				if index == 0 {
+					trawlerTotal += extraUnifiedTotal
+				}
+				op.TrawlerSearchResults = append(op.TrawlerSearchResults, &federationcontract.TrawlerSearchResult{
+					RegisteredTrawler:                      t.RegisteredTrawlerManifest.GetRegisteredTrawler(),
+					RegisteredTrawlerDisplayName:           trawlerHumanName(t),
+					SearchMatchesFromTrawlerInDisplayOrder: trawlerMatches,
+					TotalSearchMatches:                     trawlerTotal,
+					MoreSearchMatchesExist:                 unifiedOut.MoreMatchesExist,
+					TotalSearchMatchesIsLowerBound:         false,
+				})
+			}
+		}
 	}
 
 	if len(op.OperationFailures) > 0 {

@@ -149,33 +149,32 @@ private struct SearchResultRow: View {
             .font(.body.weight(.semibold))
             .lineLimit(2)
           Spacer(minLength: 4)
-          if let time = searchMatch.time {
-            Text(
-              time,
-              format: searchMatch.associatedTimeHasNoTimeOfDay
-                ? .dateTime.year().month().day()
-                : .dateTime.month().day().hour().minute()
-            )
-            .font(.caption)
-            .foregroundStyle(.tertiary)
+          if let formattedTime {
+            Text(formattedTime)
+              .font(.caption)
+              .foregroundStyle(.tertiary)
+              .fixedSize()
           }
         }
         if !peopleRelatedToMatchingRecordText.isEmpty {
           Text(peopleRelatedToMatchingRecordText)
             .font(.callout)
             .foregroundStyle(.secondary)
-            .lineLimit(2)
+            .lineLimit(1)
         }
         if !physicalPlaceNamesSpecificToBroadestText.isEmpty {
-          Text("Place: \(physicalPlaceNamesSpecificToBroadestText)")
+          Text(physicalPlaceNamesSpecificToBroadestText)
             .font(.callout)
             .foregroundStyle(.secondary)
-            .lineLimit(2)
+            .lineLimit(1)
         }
-        if !digitalContainerNamesNearestToBroadestText.isEmpty {
-          Text("In: \(digitalContainerNamesNearestToBroadestText)")
-            .font(.callout)
-            .foregroundStyle(.secondary)
+        if !digitalContainerNamesNearestToBroadestText.isEmpty,
+          digitalContainerNamesNearestToBroadestText.localizedCaseInsensitiveCompare(title)
+            != .orderedSame
+        {
+          Text(digitalContainerNamesNearestToBroadestText)
+            .font(.caption)
+            .foregroundStyle(.tertiary)
             .lineLimit(1)
         }
         ForEach(
@@ -231,19 +230,19 @@ private struct SearchResultRow: View {
   }
 
   private var peopleRelatedToMatchingRecordText: String {
-    searchMatch.searchMatchPresentation.peopleRelatedToMatchingRecord.compactMap {
-      personRelatedToMatchingRecord in
+    var seen: [String] = []
+    for personRelatedToMatchingRecord in searchMatch.searchMatchPresentation
+      .peopleRelatedToMatchingRecord
+    {
       let personDisplayName =
         personRelatedToMatchingRecord.personDisplayName
         .trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !personDisplayName.isEmpty else { return nil }
-      guard
-        let personRoleDisplayName = personRoleDisplayName(
-          personRelatedToMatchingRecord.personRoleInArchiveRecord)
-      else { return personDisplayName }
-      return "\(personRoleDisplayName): \(personDisplayName)"
+      guard !personDisplayName.isEmpty else { continue }
+      if !seen.contains(where: { $0.localizedCaseInsensitiveCompare(personDisplayName) == .orderedSame }) {
+        seen.append(personDisplayName)
+      }
     }
-    .joined(separator: " · ")
+    return seen.joined(separator: " · ")
   }
 
   private var physicalPlaceNamesSpecificToBroadestText: String {
@@ -280,12 +279,23 @@ private struct SearchResultRow: View {
     }
   }
 
+  private static let genericEvidenceFieldNames: Set<String> = [
+    "message", "body", "title", "description", "text", "health", "snippet",
+  ]
+
+  private func displayedFieldName(for rawFieldName: String) -> String {
+    let trimmed = rawFieldName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty,
+      !Self.genericEvidenceFieldNames.contains(trimmed.lowercased())
+    else { return "" }
+    return trimmed
+  }
+
   private func fieldLabelledSearchMatchTextEvidence(
     _ searchMatchTextField: SearchMatchTextField
   ) -> Text? {
-    let searchMatchTextFieldName =
-      searchMatchTextField.searchMatchTextFieldName
-      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let searchMatchTextFieldName = displayedFieldName(
+      for: searchMatchTextField.searchMatchTextFieldName)
     let nonEmptySearchMatchTextFragments =
       searchMatchTextField.searchMatchTextFragmentsInDisplayOrder
       .filter { !$0.searchMatchTextFragmentContent.isEmpty }
@@ -313,25 +323,15 @@ private struct SearchResultRow: View {
     return fieldLabelledSearchMatchTextEvidence
   }
 
-  private func personRoleDisplayName(
-    _ personRole: PersonRoleInArchiveRecord?
-  ) -> String? {
-    switch personRole {
-    case .sender: "Sender"
-    case .recipient: "Recipient"
-    case .author: "Author"
-    case .organizer: "Organizer"
-    case .attendee: "Attendee"
-    case .participant: "Participant"
-    case nil: nil
-    }
-  }
-
   private var formattedTime: String? {
     guard let time = searchMatch.time else { return nil }
     if searchMatch.associatedTimeHasNoTimeOfDay {
       return time.formatted(.dateTime.year().month().day().locale(locale))
     }
-    return time.formatted(.dateTime.month().day().hour().minute().locale(locale))
+    let isCurrentYear = Calendar.current.isDate(time, equalTo: Date(), toGranularity: .year)
+    if isCurrentYear {
+      return time.formatted(.dateTime.month().day().hour().minute().locale(locale))
+    }
+    return time.formatted(.dateTime.year().month(.abbreviated).day().locale(locale))
   }
 }

@@ -157,6 +157,21 @@ func ensureHealthArchiveSchema(ctx context.Context, db *sql.DB) error {
 	return err
 }
 
+// healthArchiveTablesExist reports whether the health archive schema has been
+// initialised, without issuing write DDL so read-only queries work inside a
+// read-only SQLite connection and Seatbelt sandbox.
+func healthArchiveTablesExist(ctx context.Context, db *sql.DB) (bool, error) {
+	var count int
+	err := db.QueryRowContext(
+		ctx,
+		"SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('health_samples', 'health_records', 'health_update_completion')",
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count == 3, nil
+}
+
 func healthRecordReference(kind healthRecordKind, identifier string) string {
 	return "health:" + string(kind) + "/" + strings.ToLower(strings.TrimSpace(identifier))
 }

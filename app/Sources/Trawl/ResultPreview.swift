@@ -12,33 +12,39 @@ struct ResultPreview: View {
         EmptyView()
       case .loading: ProgressView("Opening result")
       case .loaded(let response, let record):
-        switch record.openedRecordContent {
-        case .messageWithConversationContext(let openedMessage):
-          OpenedMessageRecordWithConversationContextView(
-            openedMessage: openedMessage,
-            targetAnchor: response.requestedRecordAnchor)
-        case .conversation(let conversationRecord):
-          ConversationRecordView(
-            conversationRecord: conversationRecord,
-            trawlLink: response.requestedTrawlLink)
-        case .person(let personRecord):
-          PersonRecordView(
-            personRecord: personRecord,
-            targetAnchor: response.requestedRecordAnchor)
-        case .calendarEvent(let calendarEventRecord):
-          CalendarEventRecordView(calendarEventRecord: calendarEventRecord)
-        case .calendar(let calendarRecord):
-          CalendarRecordView(calendarRecord: calendarRecord)
-        case .note(let openedNoteRecord):
-          OpenedNoteRecordView(
-            openedNoteRecord: openedNoteRecord,
-            targetAnchor: response.requestedRecordAnchor)
-        case .trawlerSpecificRecordPresentation(let openedRecord):
-          TrawlerSpecificOpenedRecordPresentationView(
-            openedRecord: openedRecord,
-            targetAnchor: response.requestedRecordAnchor,
-            onOpenLink: onOpenLink)
+        Group {
+          switch record.openedRecordContent {
+          case .messageWithConversationContext(let openedMessage):
+            OpenedMessageRecordWithConversationContextView(
+              openedMessage: openedMessage,
+              targetAnchor: response.requestedRecordAnchor)
+          case .conversation(let conversationRecord):
+            ConversationRecordView(
+              conversationRecord: conversationRecord,
+              trawlLink: response.requestedTrawlLink)
+          case .person(let personRecord):
+            PersonRecordView(
+              personRecord: personRecord,
+              targetAnchor: response.requestedRecordAnchor)
+          case .calendarEvent(let calendarEventRecord):
+            CalendarEventRecordView(calendarEventRecord: calendarEventRecord)
+          case .calendar(let calendarRecord):
+            CalendarRecordView(calendarRecord: calendarRecord)
+          case .note(let openedNoteRecord):
+            OpenedNoteRecordView(
+              openedNoteRecord: openedNoteRecord,
+              targetAnchor: response.requestedRecordAnchor)
+          case .trawlerSpecificRecordPresentation(let openedRecord):
+            TrawlerSpecificOpenedRecordPresentationView(
+              openedRecord: openedRecord,
+              targetAnchor: response.requestedRecordAnchor,
+              onOpenLink: onOpenLink)
+          }
         }
+        .id(
+          SearchMatchIdentifier(
+            trawlLink: response.requestedTrawlLink,
+            recordAnchor: response.requestedRecordAnchor))
       case .failed:
         ContentUnavailableView(
           OperationalCopy.Record.unavailableTitle,

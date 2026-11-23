@@ -25,18 +25,11 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if err := db.QueryRowContext(ctx, `select count(*) from messages where deleted_from_source_at = ''`).Scan(&status.Messages); err != nil {
 		return Status{}, err
 	}
-	if err := db.QueryRowContext(ctx, `select count(distinct from_address) from messages where trim(from_address) <> '' and deleted_from_source_at = ''`).Scan(&status.Senders); err != nil {
+	var newest sql.NullInt64
+	// Unary '+' keeps SQLite on idx_messages_time instead of scanning all
+	// non-deleted rows through idx_messages_deleted_from_source_at.
+	if err := db.QueryRowContext(ctx, `select time_unix from messages where +deleted_from_source_at = '' and time_unix <> 0 order by time_unix desc limit 1`).Scan(&newest); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return Status{}, err
-	}
-	if err := db.QueryRowContext(ctx, `select count(*) from messages where is_unread = 1 and deleted_from_source_at = ''`).Scan(&status.Unread); err != nil {
-		return Status{}, err
-	}
-	var oldest, newest sql.NullInt64
-	if err := db.QueryRowContext(ctx, `select min(time_unix), max(time_unix) from messages where deleted_from_source_at = '' and time_unix <> 0`).Scan(&oldest, &newest); err != nil {
-		return Status{}, err
-	}
-	if oldest.Valid {
-		status.Since = int64(time.Unix(oldest.Int64, 0).Local().Year())
 	}
 	if newest.Valid && newest.Int64 > 0 {
 		status.NewestMessageAt = time.Unix(newest.Int64, 0).UTC()

@@ -7,6 +7,7 @@ struct SearchOverlay: View {
   let onTrafficChange: (ConstellationActivity, ConstellationTrafficEvent?) -> Void
   let onQueryChange: (String) -> Void
   private let trawlerStatuses: [TrawlerStatus]
+  private let availableTrawlers: [RestingTrawler]
 
   private enum SearchRecordPresentationState: Equatable {
     case hidden
@@ -27,6 +28,7 @@ struct SearchOverlay: View {
     scope: Binding<RestingTrawler?>,
     initialQuery: String = "",
     trawlerStatuses: [TrawlerStatus] = [],
+    availableTrawlers: [RestingTrawler] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
       _, _ in
     },
@@ -38,6 +40,7 @@ struct SearchOverlay: View {
       scope: scope,
       initialQuery: initialQuery,
       trawlerStatuses: trawlerStatuses,
+      availableTrawlers: availableTrawlers,
       onTrafficChange: onTrafficChange,
       onQueryChange: onQueryChange,
       onDismiss: onDismiss
@@ -49,6 +52,7 @@ struct SearchOverlay: View {
     scope: Binding<RestingTrawler?>,
     initialQuery: String = "",
     trawlerStatuses: [TrawlerStatus] = [],
+    availableTrawlers: [RestingTrawler] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
       _, _ in
     },
@@ -59,6 +63,7 @@ struct SearchOverlay: View {
     self.onTrafficChange = onTrafficChange
     self.onQueryChange = onQueryChange
     self.trawlerStatuses = trawlerStatuses
+    self.availableTrawlers = availableTrawlers
     _scope = scope
     _model = State(initialValue: model)
     let interaction = SearchInteraction(
@@ -79,11 +84,13 @@ struct SearchOverlay: View {
         SearchWorkspace(
           interaction: interaction,
           scope: scope,
+          availableTrawlers: availableTrawlers,
           trawlerResolver: trawlerResolver,
           isCompact: TrawlDesign.usesCompactSearchLayout(width: proxy.size.width),
           model: model,
           fieldIdentity: fieldState.identity,
           focus: $focus,
+          onSelectScope: { scope = $0 },
           onClearScope: clearScope,
           onReturnToTrawlers: onDismiss,
           onSubmit: openSelectedResult,

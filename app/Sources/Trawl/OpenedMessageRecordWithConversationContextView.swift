@@ -1,9 +1,14 @@
+import AppKit
 import SwiftUI
 import TrawlClient
 
 struct OpenedMessageRecordWithConversationContextView: View {
   let openedMessage: OpenedMessageRecordWithConversationContext
   let targetAnchor: RecordAnchorIdentifier
+
+  private var messagesOldestFirst: [MessageRecord] {
+    Array(openedMessage.conversationContextMessageRecordsNewestFirst.reversed())
+  }
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -13,26 +18,38 @@ struct OpenedMessageRecordWithConversationContextView: View {
             conversationDisplayName: openedMessage.conversationDisplayName,
             participantDisplayNames: openedMessage.conversationParticipantDisplayNames,
             conversationTrawlLink: openedMessage.conversationTrawlLink)
+          if openedMessage.earlierConversationContextMessagesOmitted {
+            OpenedMessageBoundaryNotice(
+              text: "Earlier messages are not shown.")
+          }
           OpenedMessageConversationContext(
-            messages: openedMessage.conversationContextMessageRecordsNewestFirst,
+            messagesOldestFirst: messagesOldestFirst,
             openedMessageRecordReference: openedMessage.openedMessageRecordReference,
             targetAnchor: targetAnchor)
           if let mediaForOpenedMessage {
             OpenedMessageMediaDetails(messageMedia: mediaForOpenedMessage)
           }
-          OpenedMessageOmissionNotice(
-            earlierMessagesOmitted: openedMessage.earlierConversationContextMessagesOmitted,
-            laterMessagesOmitted: openedMessage.laterConversationContextMessagesOmitted)
+          if openedMessage.laterConversationContextMessagesOmitted {
+            OpenedMessageBoundaryNotice(
+              text: "Later messages are not shown.")
+          }
         }
         .padding(18)
         .frame(maxWidth: TrawlDesign.recordReadingWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
-        guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
-        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
+        scrollToTarget(using: proxy)
+      }
+      .onChange(of: openedMessage.openedMessageRecordReference) { _, _ in
+        scrollToTarget(using: proxy)
       }
     }
+  }
+
+  private func scrollToTarget(using proxy: ScrollViewProxy) {
+    guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
+    proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
   }
 
   private var mediaForOpenedMessage: MessageMedia? {
@@ -47,40 +64,64 @@ private struct OpenedMessageConversationHeader: View {
   let participantDisplayNames: [String]
   let conversationTrawlLink: GloballyRoutableTrawlLink
 
+  @State private var copiedLink = false
+
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(conversationDisplayName)
-        .font(.title2)
-        .textSelection(.enabled)
+      HStack(alignment: .firstTextBaseline, spacing: 12) {
+        Text(conversationDisplayName)
+          .font(.title2.weight(.semibold))
+          .textSelection(.enabled)
+        Spacer(minLength: 8)
+        if !conversationTrawlLink.globallyRoutableTrawlLink.isEmpty {
+          Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(
+              conversationTrawlLink.globallyRoutableTrawlLink,
+              forType: .string)
+            copiedLink = true
+            Task { @MainActor in
+              try? await Task.sleep(for: .seconds(2))
+              copiedLink = false
+            }
+          } label: {
+            Label(
+              copiedLink ? "Copied" : conversationTrawlLink.globallyRoutableTrawlLink,
+              systemImage: copiedLink ? "checkmark" : "link"
+            )
+            .font(.caption.monospaced())
+          }
+          .buttonStyle(.bordered)
+          .controlSize(.small)
+          .help("Copy archive link")
+        }
+      }
       if !participantDisplayNames.isEmpty
         && (participantDisplayNames.count != 1
           || participantDisplayNames.first?.localizedCaseInsensitiveCompare(
             conversationDisplayName) != .orderedSame)
       {
-        Text(
-          "Participants: \(participantDisplayNames.formatted())",
-          comment: "People in the opened message conversation."
-        )
-        .foregroundStyle(.secondary)
-        .textSelection(.enabled)
-      }
-      if !conversationTrawlLink.globallyRoutableTrawlLink.isEmpty {
-        LabeledContent("Link", value: conversationTrawlLink.globallyRoutableTrawlLink)
-          .font(.caption)
+        Text(participantDisplayNames.formatted())
+          .font(.callout)
           .foregroundStyle(.secondary)
+          .textSelection(.enabled)
       }
     }
   }
 }
 
 private struct OpenedMessageConversationContext: View {
-  let messages: [MessageRecord]
+  let messagesOldestFirst: [MessageRecord]
   let openedMessageRecordReference: CanonicalArchiveRecordReference
   let targetAnchor: RecordAnchorIdentifier
 
   var body: some View {
     LazyVStack(alignment: .leading, spacing: 8) {
-      ForEach(messages) { message in
+      ForEach(Array(messagesOldestFirst.enumerated()), id: \.element.id) { index, message in
+        if shouldShowDayHeader(at: index), let date = messageDate(message.messageTime) {
+          OpenedMessageDayDivider(date: date)
+            .padding(.top, index == 0 ? 0 : 6)
+        }
         let isOpenedMessage =
           message.canonicalRecordReference == openedMessageRecordReference
         OpenedMessageConversationRow(
@@ -97,6 +138,26 @@ private struct OpenedMessageConversationContext: View {
     }
   }
 
+  private func shouldShowDayHeader(at index: Int) -> Bool {
+    guard let currentDate = messageDate(messagesOldestFirst[index].messageTime) else {
+      return false
+    }
+    guard index > 0, let previousDate = messageDate(messagesOldestFirst[index - 1].messageTime)
+    else {
+      return true
+    }
+    return !Calendar.current.isDate(currentDate, inSameDayAs: previousDate)
+  }
+
+  private func messageDate(_ associatedTime: ArchiveRecordAssociatedTimeForDisplay?) -> Date? {
+    switch associatedTime {
+    case .exactTime(let date), .calendarDate(let date):
+      date
+    case nil:
+      nil
+    }
+  }
+
   private func senderDisplayNames(for message: MessageRecord) -> [String] {
     message.peopleRelatedToMessage.compactMap { person in
       switch person.personRoleInArchiveRecord {
@@ -109,6 +170,25 @@ private struct OpenedMessageConversationContext: View {
   }
 }
 
+private struct OpenedMessageDayDivider: View {
+  let date: Date
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Rectangle()
+        .fill(.quaternary)
+        .frame(height: 1)
+      Text(date, format: .dateTime.year().month(.abbreviated).day())
+        .font(.caption.weight(.medium))
+        .foregroundStyle(.secondary)
+        .fixedSize()
+      Rectangle()
+        .fill(.quaternary)
+        .frame(height: 1)
+    }
+  }
+}
+
 private struct OpenedMessageConversationRow: View {
   let messageTime: ArchiveRecordAssociatedTimeForDisplay?
   let senderDisplayNames: [String]
@@ -116,34 +196,39 @@ private struct OpenedMessageConversationRow: View {
   let isOpenedMessage: Bool
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: 5) {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
-        if isOpenedMessage {
-          Image(systemName: "arrow.right")
-            .accessibilityLabel(
-              Text(
-                "Opened message",
-                comment: "Accessibility label for the selected message."))
+        if !senderDisplayNames.isEmpty {
+          Text(senderDisplayNames.formatted())
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(isOpenedMessage ? TrawlDesign.brandRed : .primary)
         }
-        OpenedMessageTime(messageTime: messageTime)
+        if isOpenedMessage {
+          Text("Match")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(TrawlDesign.brandRed)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(TrawlDesign.brandRed.opacity(0.12), in: Capsule())
+        }
         Spacer(minLength: 0)
-      }
-      if !senderDisplayNames.isEmpty {
-        Text(
-          "From: \(senderDisplayNames.formatted())",
-          comment: "People who sent the message."
-        )
-        .font(.callout)
-        .foregroundStyle(.secondary)
+        OpenedMessageTime(messageTime: messageTime)
       }
       Text(messageTextAndMediaDescription)
         .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
     }
     .padding(10)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(
-      isOpenedMessage ? Color.accentColor.opacity(0.12) : .secondary.opacity(0.05),
+      isOpenedMessage ? TrawlDesign.brandRed.opacity(0.08) : .secondary.opacity(0.05),
       in: .rect(cornerRadius: 8))
+    .overlay {
+      if isOpenedMessage {
+        RoundedRectangle(cornerRadius: 8)
+          .stroke(TrawlDesign.brandRed.opacity(0.32), lineWidth: 1)
+      }
+    }
   }
 }
 
@@ -151,10 +236,10 @@ private struct OpenedMessageTime: View {
   let messageTime: ArchiveRecordAssociatedTimeForDisplay?
 
   var body: some View {
-    HStack {
+    Group {
       switch messageTime {
       case .exactTime(let time):
-        Text(time, format: .dateTime.year().month().day().hour().minute())
+        Text(time, format: .dateTime.hour().minute())
       case .calendarDate(let date):
         Text(date, format: .dateTime.year().month().day())
       case nil:
@@ -196,27 +281,14 @@ private struct OpenedMessageMediaDetails: View {
   }
 }
 
-private struct OpenedMessageOmissionNotice: View {
-  let earlierMessagesOmitted: Bool
-  let laterMessagesOmitted: Bool
+private struct OpenedMessageBoundaryNotice: View {
+  let text: String
 
   var body: some View {
-    VStack(alignment: .leading) {
-      if earlierMessagesOmitted && laterMessagesOmitted {
-        Text(
-          "Earlier and later messages are not shown.",
-          comment: "Notice below a partial conversation around an opened message.")
-      } else if earlierMessagesOmitted {
-        Text(
-          "Earlier messages are not shown.",
-          comment: "Notice below a partial conversation around an opened message.")
-      } else if laterMessagesOmitted {
-        Text(
-          "Later messages are not shown.",
-          comment: "Notice below a partial conversation around an opened message.")
-      }
-    }
-    .font(.callout)
-    .foregroundStyle(.secondary)
+    Text(text)
+      .font(.caption)
+      .foregroundStyle(.tertiary)
+      .frame(maxWidth: .infinity, alignment: .center)
+      .padding(.vertical, 2)
   }
 }

@@ -16,6 +16,7 @@ enum OperationalCopy {
     static let notConfirmed = "OpenTrawl cannot confirm Full Disk Access yet."
     static let instruction = "In Full Disk Access, turn on OpenTrawl, then return to the app."
     static let needed = "Full Disk Access needed"
+    static let continueWithoutAccess = "Skip for now"
   }
 
   enum ArchiveBuild {

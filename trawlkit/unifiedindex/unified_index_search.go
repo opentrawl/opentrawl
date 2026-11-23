@@ -451,14 +451,50 @@ func candidateToFederatedSearchMatch(
 			}}
 		}
 	}
-	var anchor *identity.RecordAnchorIdentifier
-	if c.recordAnchor != "" {
-		anchor = &identity.RecordAnchorIdentifier{RecordAnchorIdentifier: c.recordAnchor}
+	anchorText := strings.TrimSpace(c.recordAnchor)
+	if anchorText == "" {
+		anchorText = DefaultRecordAnchorForIndexedRecord(c.trawler, c.recordKind)
 	}
 	return &federationcontract.FederatedSearchMatch{
-		RecordAnchor:            anchor,
+		RecordAnchor:            &identity.RecordAnchorIdentifier{RecordAnchorIdentifier: anchorText},
 		SearchMatchPresentation: pres,
 		TrawlLink:               &identity.GloballyRoutableTrawlLink{GloballyRoutableTrawlLink: link},
+	}
+}
+
+// DefaultRecordAnchorForIndexedRecord returns the canonical non-empty record
+// anchor expected by OpenCanonicalRecord when an indexed row did not store an
+// explicit field-level anchor.
+func DefaultRecordAnchorForIndexedRecord(trawlerID, recordKind string) string {
+	switch strings.ToLower(strings.TrimSpace(trawlerID)) {
+	case "gmail", "mail":
+		return "subject"
+	case "notes":
+		return "body"
+	case "calendar":
+		return "summary"
+	case "contacts":
+		return "person_display_name"
+	case "money":
+		return "money-details"
+	case "photos":
+		return "photo-details"
+	case "health":
+		return "health-details"
+	}
+	switch strings.ToLower(strings.TrimSpace(recordKind)) {
+	case "email":
+		return "subject"
+	case "note":
+		return "body"
+	case "event", "calendar":
+		return "summary"
+	case "person":
+		return "person_display_name"
+	case "photo":
+		return "photo-details"
+	default:
+		return "match"
 	}
 }
 

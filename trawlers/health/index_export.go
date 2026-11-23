@@ -31,7 +31,8 @@ func (*App) ExportArchiveIndexChanges(
 		return nil
 	}
 	db := req.OpenedTrawlerArchiveStore.DB()
-	if err := ensureHealthArchiveSchema(ctx, db); err != nil {
+	ready, err := healthArchiveTablesExist(ctx, db)
+	if err != nil || !ready {
 		return err
 	}
 	nextCursor, err := healthArchiveCursor(ctx, db)

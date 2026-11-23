@@ -149,6 +149,12 @@ func ValidateRequestedAnchor(
 		) {
 			return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
 		}
+	case *open.OpenRecord_CalendarEventRecord,
+		*open.OpenRecord_CalendarRecord,
+		*open.OpenRecord_ConversationRecord:
+		if !ValidAnchorID(requestedAnchorIdentifier) {
+			return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
+		}
 	default:
 		return fmt.Errorf("opened record does not contain requested anchor %q", requestedAnchorIdentifier)
 	}

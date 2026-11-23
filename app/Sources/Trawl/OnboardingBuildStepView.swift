@@ -18,8 +18,7 @@ struct BuildStep: View {
 
   private var canFinishSetup: Bool {
     !appModel.isUpdating
-      && !hasGlobalPermissionFailure
-      && (hasSearchableArchive || hasNoAvailableApps)
+      && (hasSearchableArchive || (!hasGlobalPermissionFailure && hasNoAvailableApps))
   }
 
   private var hasSearchableArchive: Bool {
@@ -115,17 +114,20 @@ private struct ArchiveBuildStatus: View {
   let onPermissionRecovery: () -> Void
 
   var body: some View {
-    if hasGlobalPermissionFailure {
-      PermissionRecoveryBanner(action: onPermissionRecovery)
-    } else if appModel.blockingFailureMessage != nil, appModel.displayedTrawlers.isEmpty {
+    if appModel.blockingFailureMessage != nil, appModel.displayedTrawlers.isEmpty {
       InitialLoadRecovery(action: onRetryInitialLoad)
     } else {
-      ArchiveTrawlerSummary(
-        appModel: appModel,
-        appInstallations: appInstallations,
-        comingSoonEntries: comingSoonEntries,
-        onRetryApp: onRetryApp
-      )
+      VStack(alignment: .leading, spacing: 14) {
+        if hasGlobalPermissionFailure {
+          PermissionRecoveryBanner(action: onPermissionRecovery)
+        }
+        ArchiveTrawlerSummary(
+          appModel: appModel,
+          appInstallations: appInstallations,
+          comingSoonEntries: comingSoonEntries,
+          onRetryApp: onRetryApp
+        )
+      }
     }
   }
 }
@@ -267,25 +269,39 @@ private struct AppBuildList: View {
   let suppressPermissionFailures: Bool
   let onRetryApp: (RegisteredTrawlerIdentity) -> Void
 
+  private var columns: [GridItem] {
+    if registeredTrawlers.count > 6 {
+      return [
+        GridItem(.flexible(), spacing: 28, alignment: .leading),
+        GridItem(.flexible(), spacing: 28, alignment: .leading),
+      ]
+    }
+    return [GridItem(.flexible(), alignment: .leading)]
+  }
+
   var body: some View {
     VStack(spacing: 0) {
-      ForEach(registeredTrawlers, id: \.self) { registeredTrawler in
-        let presentation = AppBuildRowPresentation.resolve(
-          for: registeredTrawler,
-          in: appModel,
-          appInstallations: appInstallations,
-          suppressPermissionFailure: suppressPermissionFailures
-        )
-        ArchiveAppRow(
-          registeredTrawler: registeredTrawler,
-          name: presentation.name,
-          status: presentation.status,
-          statusLabel: presentation.statusLabel,
-          recoveryTitle: presentation.canRetry ? HumanCopy.AppStatus.retry : nil,
-          recovery: presentation.canRetry ? { onRetryApp(registeredTrawler) } : nil,
-          recoveryDisabled: appModel.isUpdating
-        )
-        Divider()
+      LazyVGrid(columns: columns, alignment: .leading, spacing: 0) {
+        ForEach(registeredTrawlers, id: \.self) { registeredTrawler in
+          let presentation = AppBuildRowPresentation.resolve(
+            for: registeredTrawler,
+            in: appModel,
+            appInstallations: appInstallations,
+            suppressPermissionFailure: suppressPermissionFailures
+          )
+          VStack(spacing: 0) {
+            ArchiveAppRow(
+              registeredTrawler: registeredTrawler,
+              name: presentation.name,
+              status: presentation.status,
+              statusLabel: presentation.statusLabel,
+              recoveryTitle: presentation.canRetry ? HumanCopy.AppStatus.retry : nil,
+              recovery: presentation.canRetry ? { onRetryApp(registeredTrawler) } : nil,
+              recoveryDisabled: appModel.isUpdating
+            )
+            Divider()
+          }
+        }
       }
       ForEach(comingSoonEntries, id: \.id) { entry in
         ArchiveAppRow(
