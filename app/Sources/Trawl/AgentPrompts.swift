@@ -37,12 +37,12 @@ enum AgentPrompts {
       \(appBundlePath)
 
       OpenTrawl says that this exact \(buildKind):
-      - reads local data from Messages, WhatsApp, Telegram, Notes, Contacts and Calendar;
+      - archives data from 12 built-in apps: Messages, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Apple Health, Money, and Twitter (X);
       - writes separate search archives under ~/.opentrawl;
       - keeps those archives and my searches on my Mac;
       - has no telemetry or analytics;
       - does not run servers that receive my archive, searches or usage data;
-      - keeps app indexing on my Mac by default. The app \(updateClaim). If I ask OpenTrawl to download missing Telegram media, it requests that media from Telegram.
+      - keeps app indexing on my Mac by default. The app \(updateClaim). Network requests happen only when I explicitly connect a cloud service or ask OpenTrawl to sync or download something (for example Google for Gmail, Telegram for direct login or missing media downloads, Enable Banking for Money, X for Twitter, or local embedding weights if I enable optional semantic search).
 
       \(auditTarget) Explain in plain English what OpenTrawl reads, what leaves my Mac, which network requests happen automatically or when I ask for them, whether OpenTrawl receives any of my personal data, and whether the app has telemetry or analytics.
 
@@ -61,32 +61,24 @@ enum AgentPrompts {
 
     /Applications/OpenTrawl.app/Contents/Helpers/trawl
 
-    Start with session-only use:
+    Start with a read-only demo:
 
-    1. Run the executable with no arguments for its introduction.
-    2. Run it with --help to inspect the current interface.
-    3. Perform a small, read-only smoke test: search the archive and open one relevant result.
-    4. Optionally do limited additional exploration to orient yourself with the tool as needed.
-    5. Explain briefly what worked and how I can ask you to use OpenTrawl in future.
+    1. Run the executable with no arguments for its overview, and with --help to inspect the current interface.
+    2. Run a small, read-only search against my archive and open one relevant result to show me how it works.
+    3. Explain briefly what worked and how I can ask you to use OpenTrawl in future.
+    4. Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl more often (for example by adding a short instruction to my AGENTS.md or setting up a skill or MCP connection).
 
     Use the normal text output.
 
-    Do not change any files or configuration during this process.
+    Do not run update, install plugins, or change any files or configuration during this demo.
 
-    After the smoke test, you may offer these optional integrations:
-
-    - Add a short OpenTrawl instruction to AGENTS.md.
-    - Create a small OpenTrawl skill.
-
-    Only discuss or draft an integration if I explicitly ask for it.
-
-    If I ask for one:
+    If I ask you to set up an ongoing integration:
 
     1. Confirm its scope and target path.
-    2. Show me the complete proposed text. Keep it as short as possible.
+    2. Show me the complete proposed text or exact diff. Keep it as short as possible.
     3. Explain exactly which file would change.
     4. Wait for my explicit approval before writing anything.
 
-    A request to explore an option is not approval to edit a file. Never create or edit AGENTS.md, install a skill, change PATH or modify other configuration without approval of the exact final text.
+    A request to explore an option is not approval to edit a file. Never create or edit AGENTS.md, install a skill, run trawl connect --write, change PATH or modify other configuration without approval of the exact final text.
     """
 }

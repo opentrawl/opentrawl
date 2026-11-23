@@ -28,8 +28,8 @@ var canonicalOpenTrawlSkillMarkdown string
 type ConnectCmd struct {
 	Agent     string `arg:"" optional:"" name:"agent" help:"Agent to connect (claude-code, claude-desktop, codex, executor, openclaw, hermes, cursor, t3, or all); omit to auto-detect installed agents"`
 	Sources   string `name:"sources" default:"all" placeholder:"TRAWLERS" help:"Sources each agent may read, separated by commas, or all"`
-	Transport string `name:"transport" default:"stdio" enum:"stdio,http" help:"stdio runs trawl mcp locally (default); http connects to trawl mcp --http"`
-	Port      int    `name:"port" default:"7391" help:"Port trawl mcp --http listens on"`
+	Transport string `name:"transport" default:"stdio" enum:"stdio,http" placeholder:"MODE" help:"stdio runs trawl mcp locally (default); http connects to trawl mcp --http"`
+	Port      int    `name:"port" default:"7391" placeholder:"PORT" help:"Port trawl mcp --http listens on"`
 	Write     bool   `name:"write" help:"Write the shown configuration changes and mint per-agent scoped tokens"`
 	Skill     bool   `name:"skill" help:"Include the canonical OpenTrawl SKILL.md diff and write it with --write"`
 }

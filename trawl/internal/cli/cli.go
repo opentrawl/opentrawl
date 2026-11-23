@@ -34,6 +34,7 @@ type CLI struct {
 	Mcp           McpCmd           `cmd:"" help:"Serve read-only OpenTrawl MCP tools over stdio or --http"`
 	Connect       ConnectCmd       `cmd:"" help:"Auto-detect local agents, preview exact MCP and SKILL.md config diffs, and write scoped setup"`
 	Token         TokenCmd         `cmd:"" help:"Create, list or revoke per-agent source-scoped MCP access tokens"`
+	Skill         SkillCmd         `cmd:"" help:"Print the bundled agent skill instructions"`
 	Complain      ComplainCmd      `cmd:"" hidden:"" help:"Record a local agent complaint about OpenTrawl search, output or ergonomics"`
 	Complaints    ComplaintsCmd    `cmd:"" hidden:"" help:"List local OpenTrawl agent complaints newest first"`
 }
@@ -207,8 +208,15 @@ func execute(
 	}
 	args = rewriteHelp(normalizeGlobalFlags(args))
 	if helpTrawler, ok := trawlerNamedByHelpCommand(args); ok {
-		runtime := &Runtime{ctx: context.Background(), output: output, root: &CLI{}, stateRoot: stateRoot}
-		return runtime.dispatchNamespace([]string{helpTrawler}, helpTrawler)
+		runtime := &Runtime{
+			ctx:       context.Background(),
+			output:    output,
+			root:      &CLI{},
+			now:       time.Now,
+			timeout:   timeout,
+			stateRoot: stateRoot,
+		}
+		return runtime.dispatchNamespace(args, helpTrawler)
 	}
 	if len(args) == 1 {
 		switch args[0] {
@@ -236,7 +244,7 @@ func execute(
 		canonicalObserver:                   observer,
 		stateRoot:                           stateRoot,
 	}
-	if !commandServesAgents(args) {
+	if !commandServesAgents(args) && firstNonFlag(args) != "skill" {
 		_ = runtime.startLogRun(commandName(args))
 	}
 	defer func() {
@@ -320,10 +328,10 @@ func rewriteHelp(args []string) []string {
 	return args
 }
 
-// trawlerNamedByHelpCommand reads `trawl help imessage` as the iMessage
-// command list.
+// trawlerNamedByHelpCommand reads `trawl help imessage` or
+// `trawl help health workouts` as the trawler namespace help request.
 func trawlerNamedByHelpCommand(args []string) (string, bool) {
-	if len(args) != 2 || args[1] != "--help" || reservedCommand(args[0]) || strings.HasPrefix(args[0], "-") {
+	if len(args) < 2 || args[len(args)-1] != "--help" || reservedCommand(args[0]) || strings.HasPrefix(args[0], "-") {
 		return "", false
 	}
 	return args[0], true

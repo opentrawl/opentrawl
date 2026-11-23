@@ -28,7 +28,7 @@ func namespaceCandidate(args []string) (string, bool) {
 	return "", false
 }
 
-var builtInCommandNames = []string{"status", "update", "search", "around", "index", "plugin", "semantic", "who", "conversations", "messages", "open", "mcp", "connect", "token", "help", "complain", "complaints"}
+var builtInCommandNames = []string{"status", "update", "search", "around", "index", "plugin", "semantic", "who", "conversations", "messages", "open", "mcp", "connect", "token", "skill", "help", "complain", "complaints"}
 
 func reservedCommand(name string) bool {
 	for _, builtInCommandName := range builtInCommandNames {
@@ -114,7 +114,7 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 	if rootCommandDeclaration != nil {
 		if len(rest) == 0 || strings.HasPrefix(rest[0], "-") {
 			if containsArg(rest, "--help") || containsArg(rest, "-h") {
-				return r.output.WriteCommandHelp(commandHelpFromTrawlerCommandDeclaration(trawler, rootCommandDeclaration))
+				return r.output.WriteCommandHelp(rootNamespaceCommandHelp(trawler, rootCommandDeclaration))
 			}
 			return r.runNamespaceTrawlerCommand(trawler, token, append([]string{registeredTrawlerCommandName(rootCommandDeclaration)}, rest...))
 		}
@@ -122,7 +122,7 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 			leading := leadingLiterals(rest)
 			if len(leading) > 0 && len(leading) <= len(rootCommandDeclaration.GetTrawlerCommandPositionalArgumentNames()) {
 				if containsArg(rest, "--help") || containsArg(rest, "-h") {
-					return r.output.WriteCommandHelp(commandHelpFromTrawlerCommandDeclaration(trawler, rootCommandDeclaration))
+					return r.output.WriteCommandHelp(rootNamespaceCommandHelp(trawler, rootCommandDeclaration))
 				}
 				return r.runNamespaceTrawlerCommand(trawler, token, append([]string{registeredTrawlerCommandName(rootCommandDeclaration)}, rest...))
 			}
@@ -375,6 +375,24 @@ func (r *Runtime) writeNamespaceCommandGroupHelp(
 		TrawlerDisplayName:            trawlerHumanName(trawler),
 		TrawlerCommandsInDisplayOrder: commands,
 	})
+}
+
+func rootNamespaceCommandHelp(
+	trawler InstalledTrawler,
+	rootCommandDeclaration *federation.RegisteredTrawlerCommandDeclaration,
+) render.CommandHelp {
+	commandHelp := commandHelpFromTrawlerCommandDeclaration(trawler, rootCommandDeclaration)
+	commandHelp.CommandCanRunWithoutSubcommand = true
+	for _, declaration := range trawler.RegisteredTrawlerManifest.GetRegisteredTrawlerCommandDeclarations() {
+		if declaration == nil || declaration.GetTrawlerCommandRunsAtNamespaceRoot() || !trawlerCommandIsShownInNamespaceHelp(declaration) || registeredTrawlerCommandName(declaration) == "" {
+			continue
+		}
+		commandHelp.CommandSubcommandsInDisplayOrder = append(
+			commandHelp.CommandSubcommandsInDisplayOrder,
+			commandHelpFromTrawlerCommandDeclaration(trawler, declaration),
+		)
+	}
+	return commandHelp
 }
 
 func namespaceCommandHelp(trawler InstalledTrawler) []render.CommandHelp {

@@ -32,8 +32,11 @@ struct BuildIdentityTests {
     #expect(prompt.contains(commit))
     #expect(prompt.contains("has no telemetry or analytics"))
     #expect(prompt.contains("does not run servers"))
-    #expect(prompt.contains("it requests that media from Telegram"))
-    #expect(prompt.contains("Messages, WhatsApp, Telegram, Notes, Contacts and Calendar"))
+    #expect(prompt.contains("missing media downloads"))
+    #expect(
+      prompt.contains(
+        "12 built-in apps: Messages, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Apple Health, Money, and Twitter (X)"
+      ))
     #expect(prompt.contains(Bundle.main.bundleURL.path))
     #expect(prompt.contains("this exact alpha build"))
     #expect(prompt.contains("Keep disabled or feature-flagged pre-release features"))

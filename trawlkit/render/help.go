@@ -31,6 +31,7 @@ type CommandHelp struct {
 	CommandDescription                string
 	CommandFlagsInDisplayOrder        []CommandFlagHelp
 	CommandSubcommandsInDisplayOrder  []CommandHelp
+	CommandCanRunWithoutSubcommand    bool
 }
 
 // CommandPositionalArgumentHelp describes one argument that follows the
@@ -85,7 +86,21 @@ const (
 )
 
 // The commands bare trawl offers first, in order.
-var trawlStartHereCommandWords = [][]string{{"search"}, {"open"}, {"update"}, {"status"}}
+var trawlStartHereCommandWords = [][]string{
+	{"status"},
+	{"search"},
+	{"open"},
+	{"around"},
+	{"who"},
+	{"conversations"},
+	{"messages"},
+	{"update"},
+	{"semantic"},
+	{"plugin"},
+	{"mcp"},
+	{"connect"},
+	{"skill"},
+}
 
 // WriteTrawlOverview writes bare trawl: what OpenTrawl is, the trawlers, and
 // where to start.
@@ -144,6 +159,13 @@ func (output TrawlCommandOutput) WriteCommandHelp(commandHelp CommandHelp) error
 	writer := output.standardOutput
 	outputWidth := OutputWidth(writer)
 	usage := trawlInvocationDisplayForWriter(writer) + " " + commandUsageSyntax(commandHelp)
+	if len(commandHelp.CommandSubcommandsInDisplayOrder) > 0 && len(commandHelp.CommandPositionalArgumentsInOrder) == 0 {
+		if commandHelp.CommandCanRunWithoutSubcommand {
+			usage += " [COMMAND]"
+		} else {
+			usage += " COMMAND"
+		}
+	}
 	if len(commandHelp.CommandFlagsInDisplayOrder) > 0 {
 		usage += " [flags]"
 	}
@@ -214,6 +236,17 @@ func (output TrawlCommandOutput) WriteTrawlerNamespaceHelp(namespaceHelp Trawler
 // WriteTrawlVersion writes the version number alone, for scripts.
 func (output TrawlCommandOutput) WriteTrawlVersion(trawlVersion string) error {
 	return writeLine(output.standardOutput, strings.TrimSpace(trawlVersion))
+}
+
+// WriteBundledAgentSkillMarkdown writes the embedded canonical OpenTrawl
+// SKILL.md document verbatim without rewrapping so agents and scripts receive
+// exact YAML frontmatter, commands, and Markdown structure.
+func (output TrawlCommandOutput) WriteBundledAgentSkillMarkdown(skillMarkdown string) error {
+	normalized := strings.TrimRight(strings.ReplaceAll(skillMarkdown, "\r\n", "\n"), "\n")
+	if normalized == "" {
+		return nil
+	}
+	return writeLine(output.standardOutput, normalized)
 }
 
 func writeHelpSections(writer io.Writer, sections [][]string) error {

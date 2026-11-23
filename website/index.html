@@ -8,8 +8,9 @@
 <link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>OpenTrawl: your entire digital life, searchable by your AI, on your machine</title>
-<meta name="description" content="OpenTrawl is a macOS app and a command line tool. It builds you a small index of all the data in your apps (notes, messages, e-mails). You can search it, and so can your (local) AI.">
+<meta name="description" content="OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.">
 <link rel="canonical" href="https://opentrawl.sh/">
+<link rel="alternate" type="text/plain" href="llms.txt" title="LLMs.txt">
 
 <!-- link previews. absolute URLs: the crawlers do not resolve relative ones.
      card.png is built by assets/brand/build/build_card.py from copy.txt. -->
@@ -17,7 +18,7 @@
 <meta property="og:site_name" content="OpenTrawl">
 <meta property="og:url" content="https://opentrawl.sh/">
 <meta property="og:title" content="OpenTrawl: your entire digital life, searchable by your AI, on your machine">
-<meta property="og:description" content="OpenTrawl is a macOS app and a command line tool. It builds you a small index of all the data in your apps (notes, messages, e-mails). You can search it, and so can your (local) AI.">
+<meta property="og:description" content="OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.">
 <meta property="og:image" content="https://opentrawl.sh/card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -25,7 +26,7 @@
 <meta name="twitter:site" content="@opentrawl">
 <meta name="twitter:creator" content="@jjpcodes">
 <meta name="twitter:title" content="OpenTrawl: your entire digital life, searchable by your AI, on your machine">
-<meta name="twitter:description" content="OpenTrawl is a macOS app and a command line tool. It builds you a small index of all the data in your apps (notes, messages, e-mails). You can search it, and so can your (local) AI.">
+<meta name="twitter:description" content="OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.">
 <meta name="twitter:image" content="https://opentrawl.sh/card.png">
 <meta name="twitter:image:alt" content="The OpenTrawl wordmark above the line: Your AI can't search your iMessage. OpenTrawl fixes this.">
 <style>
@@ -251,7 +252,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
 
   <h1>Your AI can't search your <span class="cycle" id="cycle"><span class="word" id="cycleWord">iMessage.</span></span><br>OpenTrawl fixes this.</h1>
   <script>
-    const words = "iMessage., WhatsApp., Telegram., Notes., Contacts., Calendar., Gmail., Photos., Twitter.".split(", ");
+    const words = "iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Apple Health., Money., Twitter.".split(", ");
     let i = 0;
     const slot = document.getElementById("cycle");
     const word = document.getElementById("cycleWord");
@@ -278,10 +279,10 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     }
   </script>
 
-  <p class="sub"><span>OpenTrawl is a macOS app and a command line tool. It builds you a small index of all the data in your apps (notes, messages, e-mails). You can search it, and so can your (local) AI.</span></p>
+  <p class="sub"><span>OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.</span></p>
   <p class="privacy">Nothing leaves your machine, unless you want it to.</p>
-  <p class="sources"><b>Available today:</b> iMessage, WhatsApp, Telegram, Notes, Contacts, Calendar.<br>
-  <span class="soon"><b>Coming soon:</b> Gmail, Twitter, Photos.</span></p>
+  <p class="sources"><b>12 built-in sources:</b> iMessage, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Apple Health, Money, and Twitter (X).<br>
+  <span class="soon"><b>Plus sandboxed plugins &amp; scoped MCP:</b> add any other app or export with <code>trawl plugin install</code>, or connect Claude, Codex, Cursor, OpenClaw, Hermes, and T3 Code with <code>trawl connect</code>.</span></p>
   <div class="hero-ctas">
     <a class="btn btn-lg" href="https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg">Download for Mac</a>
     <a class="btn-secondary btn-lg" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
@@ -416,17 +417,17 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
     <p><b>Private by design</b>
     <span>Your archives are just files on your Mac. Nothing is uploaded anywhere, we don't know who you are. If you want to point a (local) AI at your archives, <em>you're</em> in control - not a company.</span></p>
     <p><b>It just works</b>
-    <span>Install the Mac app. It builds search indexes, updates them, and updates the app for you. No npm install hell, no MCP servers, no updates breaking everything.</span></p>
+    <span>Install the Mac app. It builds local SQLite archives and unified search indexes, keeps them updated, and connects to your AI via CLI or scoped read-only MCP (<code>trawl connect</code>).</span></p>
     <p><b>Open source</b>
     <span>The code is on GitHub, MIT licensed. Take a look, see how it works. No secrets here.</span></p>
-    <p><b>Plugins - coming soon</b>
-    <span>Want to search something that we haven't built yet? We'll share a skill for your coding agent - so you can write a plugin to search anything you like.</span></p>
+    <p><b>Sandboxed plugins</b>
+    <span>Want to search something we have not built yet? Hand our <a href="https://github.com/opentrawl/opentrawl/blob/main/skills/build-trawl-plugin/SKILL.md">plugin skill</a> to your coding agent and install it under strict macOS sandboxing with <code>trawl plugin install</code>.</span></p>
   </section>
 
   <section class="app">
     <p class="app-line">The macOS app is cool too. But the agent terminal is cooler.</p>
-    <img class="app-shot" src="app-window.png" width="1312" height="984"
-         alt="The OpenTrawl Mac app window, showing every app it can search and which ones are coming soon">
+    <img class="app-shot" src="app-window.png" width="2528" height="1872"
+         alt="The OpenTrawl Mac app window showing connected local sources">
     <p class="app-why">We mostly made the app to manage the boring technical stuff (permissions, easy updates), so you can stay out of the terminal. That's about it. Claude made some cool animations though.</p>
   </section>
 
@@ -438,6 +439,7 @@ footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--
   <footer>
     <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
     <a href="https://x.com/opentrawl">x.com/opentrawl</a>
+    <a href="llms.txt">llms.txt</a>
     <div class="byline"><span>Built by <a href="https://x.com/jjpcodes">Josh Palmer</a> · OpenClaw community maintainer · ex Spotify · made in rotterdam 🇳🇱</span></div>
   </footer>
 </main>

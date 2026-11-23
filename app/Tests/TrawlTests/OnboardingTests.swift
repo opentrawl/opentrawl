@@ -84,8 +84,12 @@ struct OnboardingTests {
       instruction.contains(
         "/Applications/OpenTrawl.app/Contents/Helpers/trawl"))
     #expect(instruction.contains("--help"))
-    #expect(instruction.contains("Do not change any files or configuration"))
-    #expect(instruction.contains("Only discuss or draft an integration if I explicitly ask"))
+    #expect(
+      instruction.contains("Do not run update, install plugins, or change any files or configuration"))
+    #expect(
+      instruction.contains(
+        "Once you have shown me the demo, ask me what I think and whether I want you to use OpenTrawl more often"
+      ))
     #expect(instruction.contains("Wait for my explicit approval"))
     #expect(instruction.contains("A request to explore an option is not approval"))
   }

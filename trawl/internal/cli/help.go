@@ -53,6 +53,7 @@ func commandHelpFromKongNode(commandNode *kong.Node) render.CommandHelp {
 	commandHelp := render.CommandHelp{
 		CommandWordsAfterTrawlInvocation: strings.Fields(commandNode.Path()),
 		CommandDescription:               commandNode.Help,
+		CommandCanRunWithoutSubcommand:   commandNode.DefaultCmd != nil,
 	}
 	for _, positionalArgument := range commandNode.Positional {
 		commandHelp.CommandPositionalArgumentsInOrder = append(

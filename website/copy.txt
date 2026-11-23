@@ -22,23 +22,22 @@ OpenTrawl: your entire digital life, searchable by your AI, on your machine
 Your AI can't search your
 
 [hero.cycle]
-iMessage., WhatsApp., Telegram., Notes., Contacts., Calendar., Gmail., Photos., Twitter.
+iMessage., WhatsApp., Telegram., Apple Mail., Gmail., Notes., Contacts., Calendar., Photos., Apple Health., Money., Twitter.
 
 [hero.line2]
 OpenTrawl fixes this.
 
 [hero.sub]
-OpenTrawl is a macOS app and a command line tool. It builds you a small index of all the data in your apps (notes, messages, e-mails). 
-You can search it, and so can your (local) AI.
+OpenTrawl is a macOS app and command-line tool. It builds a private, searchable local archive of your messages, email, notes, photos, calendar, contacts, health, finances, and X history so you and any AI can search them together.
 
 [hero.privacy]
 Nothing leaves your machine, unless you want it to.
 
 [sources.today]
-**Available today:** iMessage, WhatsApp, Telegram, Notes, Contacts, Calendar.
+**12 built-in sources:** iMessage, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Apple Health, Money, and Twitter (X).
 
 [sources.soon]
-**Coming soon:** Gmail, Twitter, Photos.
+**Plus sandboxed plugins & scoped MCP:** add any other app or export with `trawl plugin install`, or connect Claude, Codex, Cursor, OpenClaw, Hermes, and T3 Code with `trawl connect`.
 
 [terminal.caption]
 I took my real archive and told Claude to anonymise it by LARPing as The
@@ -55,8 +54,7 @@ If you want to point a (local) AI at your archives, *you're* in control - not a 
 It just works
 
 [fact.2.body]
-Install the Mac app. It builds search indexes, updates them, and updates the app for you.
-No npm install hell, no MCP servers, no updates breaking everything.
+Install the Mac app. It builds local SQLite archives and unified search indexes, keeps them updated, and connects to your AI via CLI or scoped read-only MCP (`trawl connect`).
 
 [fact.3.title]
 Open source
@@ -65,10 +63,10 @@ Open source
 The code is on GitHub, MIT licensed. Take a look, see how it works. No secrets here.
 
 [fact.4.title]
-Plugins - coming soon
+Sandboxed plugins
 
 [fact.4.body]
-Want to search something that we haven't built yet? We'll share a skill for your coding agent - so you can write a plugin to search anything you like.
+Want to search something we have not built yet? Hand our [plugin skill](https://github.com/opentrawl/opentrawl/blob/main/skills/build-trawl-plugin/SKILL.md) to your coding agent and install it under strict macOS sandboxing with `trawl plugin install`.
 
 [card.line.1]
 Local, private AI search

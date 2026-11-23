@@ -1,0 +1,127 @@
+# OpenTrawl — Full LLM Reference
+
+> Spotlight for the Agentic OS. OpenTrawl is an open-source (MIT), local-first macOS app and Go CLI (`trawl`) that indexes 12 personal sources into private, source-native SQLite archives under `~/.opentrawl` so any AI agent can search a person's real history read-only via CLI or scoped MCP.
+
+- Website: https://opentrawl.sh/
+- Repository: https://github.com/opentrawl/opentrawl
+- Mac app release: https://github.com/opentrawl/opentrawl/releases/latest/download/OpenTrawl.dmg
+- Bundled macOS CLI path: `/Applications/OpenTrawl.app/Contents/Helpers/trawl`
+- Concise index: https://opentrawl.sh/llms.txt
+- Canonical skill (raw): https://raw.githubusercontent.com/opentrawl/opentrawl/main/trawl/internal/cli/skill/SKILL.md (also printed by `trawl skill`)
+- Plugin authoring skill (raw): https://raw.githubusercontent.com/opentrawl/opentrawl/main/skills/build-trawl-plugin/SKILL.md
+
+---
+
+## 1. Core Principles & Privacy Boundary
+
+- **Strictly read-only:** OpenTrawl copies history into local SQLite archives so humans and AI agents can search it. It never sends messages, edits emails or notes, or writes back to source apps.
+- **Local-first storage:** Source archives, the unified full-text index (`~/.opentrawl/index.db`), and the optional disposable semantic index (`~/.opentrawl/semantic.db`) stay on the user's machine. OpenTrawl runs no servers, requires no account, and collects no telemetry.
+- **Downstream AI boundary:** Whatever an agent reads from the archive (including full conversations, notes, or emails opened with `trawl open`) goes to that AI provider under its privacy terms. Per-agent scoped tokens (`trawl token` / `trawl connect --sources ...`) restrict which sources each agent can see.
+- **One output library:** Every word printed by `trawl` is rendered by `trawlkit/render` with real timestamps (local time with offset plus UTC), globally routable links (`<trawler>:<shortref>`), bounded output, and actionable next commands.
+- **Verbatim links:** Always open the full record with `trawl open LINK` (or `trawl_open`) before answering from a search snippet. Copy links verbatim without modifying them.
+- **Never mutate without asking:** Agents must not run `trawl update`, install plugins (`trawl plugin install`), enable semantic search (`trawl semantic enable`), or write config files (`trawl connect --write`) unless the user explicitly asks.
+- **Stable process exit codes:**
+  - `0`: complete
+  - `1`: failed
+  - `2`: bad command usage
+  - `3`: partial result with usable stdout (for example one source unavailable while others succeeded)
+
+---
+
+## 2. Architecture
+
+- **Source-native archives:** Each trawler owns one provider's access semantics and SQLite archive schema under `~/.opentrawl/<source>/`.
+- **Typed protobuf contract:** `trawlkit/contracts.go` and `trawlkit/proto/trawl/` define the boundary between trawlers, `trawl`, the SwiftUI Mac app, and plugins.
+- **Unified full-text index (`index.db`):** Built via `ArchiveIndexChangeExporter` batches from each trawler, powering fast cross-source `trawl search` and temporal/trip joins in `trawl around`. Inspect or rebuild with `trawl index status` / `trawl index rebuild`.
+- **Optional local semantic search (`semantic.db`):** Hybrid lexical + dense vector search on Apple Silicon Macs using verified local embedding weights and an on-demand helper that releases memory when idle. Disposable and regenerable from `index.db`.
+- **Sandboxed plugin runtime:** Both bundled first-party plugins (`health`, `money`, `notes`, `telegram`, `twitter`, `whatsapp`) and standalone third-party plugins run out of process over length-delimited binary protobuf pipes inside OS sandboxes (macOS Seatbelt / Linux bubblewrap) with SHA-256 binary pinning, explicit host-owned read-path/network-host/CIDR approvals, loopback HTTP allowlist proxying, and brokered Keychain/encrypted-store secrets.
+
+---
+
+## 3. All 12 Built-in Sources
+
+| Command | Source | What it archives | Key subcommands | Setup / Access |
+| --- | --- | --- | --- | --- |
+| `imessage` | Apple Messages | Conversations and messages | `trawl imessage messages`, `conversations` | Full Disk Access |
+| `whatsapp` | WhatsApp Desktop | Chats, groups, messages, media details | `trawl whatsapp messages`, `conversations` | WhatsApp Desktop + Full Disk Access |
+| `telegram` | Telegram | Chats and messages | `trawl telegram connect`, `login-qr`, `disconnect`, `messages`, `conversations` | Telegram for macOS + Full Disk Access, or direct zero-FDA MTProto QR login |
+| `mail` | Apple Mail | iCloud Mail and any account in Apple Mail | Search via `trawl search --trawler mail` | Full Disk Access |
+| `gmail` | Gmail | Gmail mailbox directly from Mac to Google | `trawl gmail connect`, `disconnect` | Read-only Google OAuth sign-in |
+| `notes` | Apple Notes | Folders, notes, attachments, recovered versions | `trawl notes [FOLDER]`, `folders`, `versions LINK` | Full Disk Access |
+| `contacts` | Apple Contacts | Contacts and cross-source people resolution | `trawl contacts people`, `person QUERY`, `annotate LINK DESCRIPTION` | Full Disk Access |
+| `calendar` | Apple Calendar | Events, calendars, attendees, annotations | `trawl calendar events [LINK]`, `calendars`, `annotate LINK DESCRIPTION` | Full Disk Access |
+| `photos` | Apple Photos | Capture dates, places, albums, cameras, people tags, favourites | `trawl photos [flags]`, `days`, `inspect PHOTO [LAYER]`, `run STEP` | Full Disk Access |
+| `health` | Apple Health & HealthFit | Apple Health `export.zip`/`export.xml`, HealthFit `.fit` workouts, sleep, daily vitals, clinical/ECG/audiogram records, incremental HealthKit batches | `trawl health import PATH`, `workouts`, `sleep`, `metrics`, `summary` | Local files only (no network) |
+| `money` | Money | Bank accounts, balances, transactions (ING, Wise, or agent-written imports) | `trawl money accounts`, `transactions` | User Enable Banking registration or local import files |
+| `twitter` | Twitter (X) | Posts, bookmarks, likes, mentions, direct messages | `trawl twitter conversations`, `messages`, `bookmarks`, `tweets`, `likes`, `mentions`, `connect`, `disconnect`, `stats`, `spend`, `import archive PATH` | X web session cookies, exported X archive, or X API key |
+
+---
+
+## 4. Complete CLI Reference
+
+Global flags on every command:
+- `-h, --help`: Show help (works on root, every command group, every subcommand, and every trawler namespace)
+- `-v, --verbose`: Detailed progress on stderr (`-vv` for debug detail)
+- `--version`: Print version
+
+### Discovery & Skill
+- `trawl`: Overview of installed trawlers and essential commands
+- `trawl --help`: Complete list of built-in commands, global flags, and trawler commands
+- `trawl skill`: Print the embedded canonical `SKILL.md` verbatim
+
+### Read-Only Archive Lookup
+- `trawl status [TRAWLER]`: Archive counts, last successful update time, and whether each trawler works
+- `trawl search [WORDS...] [--trawler TRAWLERS] [--who PERSON] [--after DATE] [--before DATE] [--limit N]`: Cross-source search returning dated evidence rows and verbatim links
+- `trawl open LINK [--participants]`: Open one full record by link (messages include surrounding conversation context; notes include full body; photos include Apple facts)
+- `trawl around [TARGET] [--trip NAME] [--window DURATION] [--trawler TRAWLERS] [--limit N]`: Temporal and place/trip join across sources around a trawl link, `YYYY-MM-DD` date, or `--trip` name (default `--window 3d`, `--limit 30`)
+- `trawl who NAME... [--limit N]`: Resolve a person across Contacts and messaging apps
+- `trawl conversations [--with PERSON] [--unread] [--all] [--limit N]`: List conversations across messaging sources
+- `trawl messages --conversation=LINK [--after DATE] [--before DATE] [--limit N]`: List messages inside one conversation
+
+### Sync & Unified Index
+- `trawl update [TRAWLER...]`: Refresh local archives from source apps, exports, or connected APIs
+- `trawl index status`: Unified `index.db` record counts, anchors, and per-trawler cursors
+- `trawl index rebuild [--trawler TRAWLERS]`: Rebuild `index.db` via trawler index exporters
+
+### Optional Local Semantic Search (Apple Silicon)
+- `trawl semantic status`: Inspect semantic index state, cached weights, and helper status
+- `trawl semantic enable [--window 60d|180d|all] [--skip-build]`: Download verified local embedding weights, enable hybrid search, and build initial `semantic.db`
+- `trawl semantic build [--window DURATION] [--trawler TRAWLERS] [--rebuild]`: Incrementally update or rebuild `semantic.db`
+- `trawl semantic disable [--delete-index]`: Disable semantic search and optionally delete `semantic.db`
+
+### Sandboxed Plugins
+- `trawl plugin list`: List bundled and staged external plugins with origin, status, SHA-256 prefix, and approved capabilities
+- `trawl plugin install PATH [--allow-host HOST:PORT] [--allow-self-hosted HOST:PORT=CIDR] [--allow-read-path PATH] [--allow-read-secret KEY] [--allow-write-secret KEY] [--allow-auth-origin ORIGIN] [--archive-dir DIR]`: Probe plugin manifest in a zero-access sandbox, pin its SHA-256 hash, and record approved capabilities in `trust.pb`
+- `trawl plugin remove PLUGIN`: Remove a staged plugin binary while keeping its archive
+
+### Scoped MCP Server, Tokens & Agent Setup
+- `trawl mcp [--sources TRAWLERS] [--http] [--listen HOST:PORT]`: Serve read-only MCP tools over stdio (default) or Streamable HTTP (`--http`, default `127.0.0.1:7391`; use `0.0.0.0:7391` for Tailscale)
+- `trawl connect [AGENT] [--sources TRAWLERS] [--transport stdio|http] [--port 7391] [--skill] [--write]`: Auto-detect installed local agents (`claude-code`, `claude-desktop`, `codex`, `executor`, `openclaw`, `hermes`, `cursor`, `t3`, or `all`), preview exact config and `SKILL.md` diffs, and write scoped setup with `--write`
+- `trawl token create AGENT [--sources TRAWLERS|all]`: Mint a per-agent read-only bearer token (shown once; stored hashed)
+- `trawl token list`: List active and revoked tokens
+- `trawl token revoke TOKEN-ID`: Immediately revoke a token
+
+---
+
+## 5. MCP Tools
+
+All MCP tools exposed by `trawl mcp` are strictly read-only and enforce the session's source scope (from `OPENTRAWL_ACCESS_TOKEN`, HTTP `Authorization: Bearer ...`, or `--sources` in stdio mode):
+
+- `trawl_status`: Arguments `{ trawler?: string }`. Shows allowed sources, archive counts, last update time, and operability.
+- `trawl_search`: Arguments `{ query?: string, trawler?: string, who?: string, after?: string, before?: string, limit?: integer }`. Searches allowed sources and returns links.
+- `trawl_open`: Arguments `{ link: string, participants?: boolean }`. Opens one record in full by link if its source is within scope.
+- `trawl_around`: Arguments `{ target?: string, trip?: string, window?: string, trawler?: string, limit?: integer }`. Finds related records across allowed sources around a link, `YYYY-MM-DD` date, or trip name.
+- `trawl_who`: Arguments `{ name: string, limit?: integer }`. Resolves a person across allowed sources.
+
+---
+
+## 6. Building Standalone Plugins
+
+OpenTrawl keeps tight architectural control and does not accept unsolicited new-source PRs in core. Any new app, API, or export should be built as a standalone external plugin:
+
+1. Read `https://raw.githubusercontent.com/opentrawl/opentrawl/main/skills/build-trawl-plugin/SKILL.md`.
+2. Pin `github.com/opentrawl/opentrawl/trawlkit` to the installed app's exact Git commit.
+3. Implement `Trawler`, `Updater`, `Searcher`, `CanonicalRecordOpener`, `ArchiveIndexChangeExporter`, and `PluginCapabilityDeclarator` (or speak the protobuf wire protocol in `trawlkit/proto/trawl/plugin/plugin.proto` from any language).
+4. Serve from `main.go` via `os.Exit(pluginruntime.ServePluginExecutable(myplugin.New()))`.
+5. Show the user every declared network host, CIDR, read path, secret key, and auth origin and obtain explicit approval before running `trawl plugin install`.
+6. Verify end to end on real local data with `trawl plugin list`, `trawl update <name>`, `trawl status <name>`, `trawl search`, and `trawl open`.

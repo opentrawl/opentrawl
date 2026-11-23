@@ -1,12 +1,12 @@
 # OpenTrawl
 
-**Spotlight for the Agentic OS.** Give any AI you use searchable access to your messages, emails, notes, photos, calendar, contacts, finances, and X history, without handing your life to a cloud vendor.
+**Spotlight for the Agentic OS.** Give any AI you use searchable access to your messages, emails, notes, photos, calendar, contacts, health, finances, and X history, without handing your life to a cloud vendor.
 
 Your AI does not know your history. Every time you switch models or start a new chat, you re-explain who people are, paste old messages, and dig up receipts yourself.
 
 OpenTrawl fixes that. It keeps a private, searchable archive of your apps on your Mac so any AI you use can answer questions from your real life and link straight back to the original message, email, note, or transaction.
 
-![OpenTrawl Mac app showing 11 connected sources](docs/images/app-home.png)
+![OpenTrawl Mac app showing connected sources](docs/images/app-home.png)
 
 ## Get started on Mac
 
@@ -34,18 +34,19 @@ Because your archive stays on your disk in standard SQLite files, you can point 
 
 ## What it connects to
 
-### 11 built-in sources
+### 12 built-in sources
 
 | Source | What OpenTrawl archives | What it needs from you |
 | --- | --- | --- |
 | [iMessage](trawlers/imessage) | Apple Messages conversations and messages | Full Disk Access (guided setup) |
 | [WhatsApp](trawlers/whatsapp) | WhatsApp Desktop chats, groups, messages, and media details | WhatsApp Desktop + Full Disk Access (guided setup) |
-| [Telegram](trawlers/telegram) | Telegram for macOS chats and messages | Telegram for macOS + Full Disk Access (guided setup) |
+| [Telegram](trawlers/telegram) | Telegram for macOS chats and messages | Telegram for macOS + Full Disk Access, or direct QR login (`trawl telegram connect`) |
 | [Apple Mail](trawlers/mail) | iCloud Mail and any other account in Apple Mail | Full Disk Access (guided setup) |
 | [Notes](trawlers/notes) | Apple Notes folders, notes, attachments, and past versions | Full Disk Access (guided setup) |
 | [Contacts](trawlers/contacts) | Apple Contacts and people resolved across your messaging apps | Full Disk Access (guided setup) |
 | [Calendar](trawlers/calendar) | Apple Calendar events, calendars, and attendees | Full Disk Access (guided setup) |
 | [Photos](trawlers/photos) | Apple Photos dates, places, albums, cameras, people tags, and favourites | Full Disk Access (nearby-place lookups and photo descriptions are not enabled yet) |
+| [Apple Health](trawlers/health) | Apple Health exports, HealthFit `.fit` workouts, sleep, daily vitals, and incremental HealthKit batches | Local `export.zip`/`export.xml`, `.fit` files, or dropped HealthKit batches (`trawl health import PATH`; no network) |
 | [Gmail](trawlers/gmail) | Your Gmail mailbox (direct from your Mac to Google) | Read-only Google sign-in via your agent (`trawl gmail connect`) |
 | [Money](trawlers/money) | Bank accounts, balances, and transactions (ING and Wise) | Your own Enable Banking app registration, or import files written by an agent |
 | [Twitter (X)](trawlers/twitter) | Your posts, bookmarks, likes, mentions, and direct messages | Pasted X web session cookies, an exported X archive, or an X API key |
@@ -73,16 +74,16 @@ OpenTrawl runs locally on macOS today. Here is what we are building next so your
 - **Phone and Linux:** iPhone and Android apps (for Apple Health, mobile photos, contacts, and messaging) plus Linux and Docker support for always-on agent servers.
 - **One-click agent connections (MCP):** Connect agents like Claude, Codex, OpenClaw, Hermes, and T3 Code directly and choose which sources each agent can see (for example, let a coding agent search your notes without seeing your bank history).
 - **Optional encrypted sync and paid private hosting:** Sync across your Mac, phone, and Linux machines while servers store only data they cannot decrypt, plus optional paid cloud hosting so your phone and cloud agents can search your archive at any hour, encrypted so that we cannot read it.
-- **More sources:** Apple Health, Signal, and community-maintained plugins.
+- **More sources:** Signal and community-maintained plugins.
 
 ## The OpenTrawl suite
 
-- **OpenTrawl** (this repo): Spotlight for the Agentic OS. Give any AI searchable access to your messages, emails, notes, photos, calendar, contacts, finances, and X history.
+- **OpenTrawl** (this repo): Spotlight for the Agentic OS. Give any AI searchable access to your messages, emails, notes, photos, calendar, contacts, health, finances, and X history.
 - **[Agent Keyring](https://agent-keyring.jjpcodes.com/)**: 1Password for the Agentic OS. Let your AI agents sign in as you anywhere you work, using the passwords you already keep in Apple Passwords, approved on your Mac, iPhone, or Apple Watch.
 
 ## For agents and developers
 
-- **Agent CLI:** Run `/Applications/OpenTrawl.app/Contents/Helpers/trawl` with no arguments and with `--help` for the complete command reference and exit codes (`0` complete, `1` failed, `2` bad usage, `3` partial result).
+- **Agent CLI & skill:** Run `/Applications/OpenTrawl.app/Contents/Helpers/trawl` with no arguments, `--help`, or `skill` for the complete command reference, bundled `SKILL.md`, and exit codes (`0` complete, `1` failed, `2` bad usage, `3` partial result). Machine-readable site overview: [`https://opentrawl.sh/llms.txt`](https://opentrawl.sh/llms.txt).
 - **Build from source:** Install Nix, [devenv](https://devenv.sh), and [direnv](https://direnv.net), then run `direnv allow` and `scripts/dev-bin` (or `app/scripts/dev-run --candidate <name>` for a separate signed `OpenTrawl Dev.app`, and `app/scripts/cold-run --candidate <name>` to reset dev onboarding).
 - **Architecture docs:** [Vision](docs/vision.md), [Trawler control contract](docs/contract.md), [Mac app contract](docs/mac-app.md), shared packages in [`trawlkit/`](trawlkit/), and per-source docs under [`trawlers/`](trawlers/).
 
