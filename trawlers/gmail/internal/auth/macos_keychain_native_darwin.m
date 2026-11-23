@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <Security/Security.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -73,6 +74,24 @@ int32_t saveGenericPasswordInDataProtectionKeychain(const char *service, const c
   }
 }
 
+static bool currentProcessHasDataProtectionKeychainEntitlement(void) {
+  SecTaskRef task = SecTaskCreateFromSelf(kCFAllocatorDefault);
+  if (task == NULL) {
+    return false;
+  }
+  CFTypeRef appIdentifier = SecTaskCopyValueForEntitlement(task, CFSTR("com.apple.application-identifier"), NULL);
+  CFTypeRef accessGroups = SecTaskCopyValueForEntitlement(task, CFSTR("keychain-access-groups"), NULL);
+  bool hasEntitlement = (appIdentifier != NULL) || (accessGroups != NULL);
+  if (appIdentifier != NULL) {
+    CFRelease(appIdentifier);
+  }
+  if (accessGroups != NULL) {
+    CFRelease(accessGroups);
+  }
+  CFRelease(task);
+  return hasEntitlement;
+}
+
 MacOSKeychainBytesResult loadGenericPasswordFromDataProtectionKeychain(const char *service, const char *account) {
   @autoreleasepool {
     LAContext *context = newNonInteractiveAuthenticationContext();
@@ -81,6 +100,9 @@ MacOSKeychainBytesResult loadGenericPasswordFromDataProtectionKeychain(const cha
     CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne);
     CFTypeRef returned = NULL;
     OSStatus status = SecItemCopyMatching(query, &returned);
+    if (status == errSecItemNotFound && !currentProcessHasDataProtectionKeychainEntitlement()) {
+      status = errSecMissingEntitlement;
+    }
     MacOSKeychainBytesResult result = keychainBytesResultFromData(status, (CFDataRef)returned);
     if (returned != NULL) {
       CFRelease(returned);

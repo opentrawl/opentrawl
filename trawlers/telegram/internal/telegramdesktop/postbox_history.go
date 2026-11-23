@@ -33,6 +33,7 @@ var postboxHistoryFolderIDs = []int{0, 1}
 // at the first message already present in the archive. A newly discovered
 // conversation must still traverse its full history before becoming complete.
 type PostboxHistoryOptions struct {
+	ConversationID   string
 	CompletedDialogs map[string]bool
 	ResumeOffsets    map[string]int
 	MessageExists    func(context.Context, int64) (bool, error)
@@ -113,6 +114,17 @@ func DownloadPostboxMessageHistory(ctx context.Context, sources []postboxpkg.Sou
 		}
 	}
 	return nil
+}
+
+// DownloadAuthenticatedTelegramHistory uses the same projection as Postbox cloud history.
+func DownloadAuthenticatedTelegramHistory(ctx context.Context, client *telegram.Client, self *tg.User, opts PostboxHistoryOptions) error {
+	loader := postboxHistoryLoader{raw: client.API(), self: self, opts: opts, resumeOffsets: cloneHistoryOffsets(opts.ResumeOffsets)}
+	return loader.download(ctx)
+}
+
+// TelegramDesktopAPI returns the default application credentials used by the existing Telegram integration.
+func TelegramDesktopAPI() (int, string) {
+	return telegramMacAPIID, telegramMacAPIHash
 }
 
 func newPostboxHistoryClient(ctx context.Context, remote postboxRemoteSession) (*telegram.Client, error) {
@@ -218,6 +230,9 @@ func (l *postboxHistoryLoader) downloadFolder(ctx context.Context, folderID int)
 		}
 		checkpoint := fmt.Sprintf("%d:%d", l.self.ID, rawChatID)
 		chatID := postboxpkg.PeerStoreID(l.accountID, rawChatID, l.multiAccount)
+		if l.opts.ConversationID != "" && chatID != l.opts.ConversationID {
+			return nil
+		}
 		if download, incremental := l.dialogTraversal(checkpoint); download {
 			chatInfo := cloudPeerInfo(elem.Dialog.GetPeer(), elem.Entities, l.self)
 			topArchived, err := l.dialogTopAlreadyArchived(ctx, rawChatID, elem.Last)

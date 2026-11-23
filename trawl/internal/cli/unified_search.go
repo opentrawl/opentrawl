@@ -33,6 +33,9 @@ func (r *Runtime) ensureUnifiedIndexBootstrappedForTrawlers(
 	if len(trawlers) == 0 {
 		return nil
 	}
+	if _, isAgentRequest := agentServingContextFrom(ctx); isAgentRequest {
+		return nil
+	}
 	stateRoot, err := trawlkit.ResolveStateRoot(r.stateRoot)
 	if err != nil {
 		return err
@@ -78,6 +81,9 @@ func (r *Runtime) openUnifiedIndexForTrawlers(
 	indexStore, err := unifiedindex.OpenUnifiedIndexReadOnly(ctx, stateRoot, false)
 	if err != nil {
 		return nil, err
+	}
+	if _, isAgentRequest := agentServingContextFrom(ctx); isAgentRequest {
+		return indexStore, nil
 	}
 	indexed := make(map[string]bool, len(trawlers))
 	if indexStore != nil {

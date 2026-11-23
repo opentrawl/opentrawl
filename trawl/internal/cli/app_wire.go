@@ -31,7 +31,7 @@ func isAppWireCommand(args []string) bool {
 func executeAppWire(
 	args []string,
 	output render.TrawlCommandOutput,
-	appWireProtobufFrameStream io.Writer,
+	machineReadableProtocolOutputStream io.Writer,
 	timeout time.Duration,
 	stateRoot string,
 ) error {
@@ -39,7 +39,7 @@ func executeAppWire(
 		return fmt.Errorf("usage: trawl %s status|update|search|open", appWireCommand)
 	}
 	runtime := &Runtime{
-		ctx: context.Background(), output: output, appWireProtobufFrameStream: appWireProtobufFrameStream,
+		ctx: context.Background(), output: output, machineReadableProtocolOutputStream: machineReadableProtocolOutputStream,
 		root: &CLI{}, now: time.Now, timeout: timeout, stateRoot: stateRoot,
 	}
 	switch args[1] {
@@ -58,7 +58,7 @@ func executeAppWire(
 
 func (r *Runtime) runAppStatus() error {
 	registeredTrawlerManifestSnapshot := buildRegisteredTrawlerManifestSnapshotForContext(r.ctx, r.stateRoot, true)
-	return writeAppResponse(r.appWireProtobufFrameStream, r.appStatusResponse(r.ctx, registeredTrawlerManifestSnapshot))
+	return writeAppResponse(r.machineReadableProtocolOutputStream, r.appStatusResponse(r.ctx, registeredTrawlerManifestSnapshot))
 }
 
 func (r *Runtime) runAppUpdate(args []string) error {
@@ -96,7 +96,7 @@ func (r *Runtime) runAppUpdate(args []string) error {
 	}
 	trawlers = canonicalUpdateTrawlers(trawlers)
 	allInstalledTrawlers := discoverInstalledTrawlers(r.ctx)
-	events := appUpdateEventWriter{writer: r.appWireProtobufFrameStream}
+	events := appUpdateEventWriter{writer: r.machineReadableProtocolOutputStream}
 	operation, err := r.runUpdateBatch(
 		trawlers,
 		nil,
@@ -211,7 +211,7 @@ func (r *Runtime) runAppSearch(args []string) error {
 	}
 	canonicalSearchQuery.SearchTotalIsLowerBoundWhenResultLimitIsReached = true
 	return writeAppResponse(
-		r.appWireProtobufFrameStream,
+		r.machineReadableProtocolOutputStream,
 		r.appSearchResponse(r.ctx, trawlers, canonicalSearchQuery, normalizedLimit),
 	)
 }
@@ -238,7 +238,7 @@ func (r *Runtime) runAppOpen(args []string) error {
 		requestedTrawlLink,
 	)
 	response.RequestedTrawlLink = requestedTrawlLink
-	return writeAppResponse(r.appWireProtobufFrameStream, response)
+	return writeAppResponse(r.machineReadableProtocolOutputStream, response)
 }
 
 func writeAppResponse(w io.Writer, message proto.Message) error {

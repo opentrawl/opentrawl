@@ -31,6 +31,9 @@ type CLI struct {
 	Conversations ConversationsCmd `cmd:"" help:"List conversations"`
 	Messages      MessagesCmd      `cmd:"" help:"List messages in a conversation"`
 	Open          OpenCmd          `cmd:"" help:"Open an archive item"`
+	Mcp           McpCmd           `cmd:"" help:"Serve read-only OpenTrawl MCP tools over stdio or --http"`
+	Connect       ConnectCmd       `cmd:"" help:"Auto-detect local agents, preview exact MCP and SKILL.md config diffs, and write scoped setup"`
+	Token         TokenCmd         `cmd:"" help:"Create, list or revoke per-agent source-scoped MCP access tokens"`
 	Complain      ComplainCmd      `cmd:"" hidden:"" help:"Record a local agent complaint about OpenTrawl search, output or ergonomics"`
 	Complaints    ComplaintsCmd    `cmd:"" hidden:"" help:"List local OpenTrawl agent complaints newest first"`
 }
@@ -38,15 +41,15 @@ type CLI struct {
 // Runtime carries one command run. It has no writer: every word a command
 // shows goes through output, the shared output library.
 type Runtime struct {
-	ctx                        context.Context
-	output                     render.TrawlCommandOutput
-	appWireProtobufFrameStream io.Writer
-	root                       *CLI
-	now                        func() time.Time
-	timeout                    time.Duration
-	log                        *logRun
-	canonicalObserver          canonicalConsumerObserver
-	stateRoot                  string
+	ctx                                 context.Context
+	output                              render.TrawlCommandOutput
+	machineReadableProtocolOutputStream io.Writer
+	root                                *CLI
+	now                                 func() time.Time
+	timeout                             time.Duration
+	log                                 *logRun
+	canonicalObserver                   canonicalConsumerObserver
+	stateRoot                           string
 }
 
 type StatusCmd struct {
@@ -116,7 +119,7 @@ func trawlCommandArgumentsShowingHelpForCommandLine(args []string) []string {
 func execute(
 	args []string,
 	output render.TrawlCommandOutput,
-	appWireProtobufFrameStream io.Writer,
+	machineReadableProtocolOutputStream io.Writer,
 	timeout time.Duration,
 	observer canonicalConsumerObserver,
 ) (err error) {
@@ -125,7 +128,7 @@ func execute(
 		return err
 	}
 	if isAppWireCommand(args) {
-		return executeAppWire(args, output, appWireProtobufFrameStream, timeout, stateRoot)
+		return executeAppWire(args, output, machineReadableProtocolOutputStream, timeout, stateRoot)
 	}
 	if complaintText, remainingArgs, hasComplaint, complaintErr := extractGlobalComplaintFlag(args); complaintErr != nil {
 		return complaintErr
@@ -224,15 +227,18 @@ func execute(
 		return commandFailureFromParserError(err)
 	}
 	runtime := &Runtime{
-		ctx:               context.Background(),
-		output:            output,
-		root:              &root,
-		now:               time.Now,
-		timeout:           timeout,
-		canonicalObserver: observer,
-		stateRoot:         stateRoot,
+		ctx:                                 context.Background(),
+		output:                              output,
+		machineReadableProtocolOutputStream: machineReadableProtocolOutputStream,
+		root:                                &root,
+		now:                                 time.Now,
+		timeout:                             timeout,
+		canonicalObserver:                   observer,
+		stateRoot:                           stateRoot,
 	}
-	_ = runtime.startLogRun(commandName(args))
+	if !commandServesAgents(args) {
+		_ = runtime.startLogRun(commandName(args))
+	}
 	defer func() {
 		err = runtime.finishLogRun(err)
 	}()

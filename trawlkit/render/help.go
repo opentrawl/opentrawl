@@ -30,6 +30,7 @@ type CommandHelp struct {
 	CommandPositionalArgumentsInOrder []CommandPositionalArgumentHelp
 	CommandDescription                string
 	CommandFlagsInDisplayOrder        []CommandFlagHelp
+	CommandSubcommandsInDisplayOrder  []CommandHelp
 }
 
 // CommandPositionalArgumentHelp describes one argument that follows the
@@ -159,6 +160,13 @@ func (output TrawlCommandOutput) WriteCommandHelp(commandHelp CommandHelp) error
 	}
 	if len(argumentRows) > 0 {
 		sections = append(sections, append([]string{"Arguments:"}, twoColumnHelpRows(argumentRows, helpTwoColumnGap, outputWidth)...))
+	}
+	if len(commandHelp.CommandSubcommandsInDisplayOrder) > 0 {
+		subcommandRows := make([][2]string, 0, len(commandHelp.CommandSubcommandsInDisplayOrder))
+		for _, subcommand := range commandHelp.CommandSubcommandsInDisplayOrder {
+			subcommandRows = append(subcommandRows, [2]string{trawlInvocationDisplayForWriter(writer) + " " + commandUsageSyntax(subcommand), subcommand.CommandDescription})
+		}
+		sections = append(sections, append([]string{"Commands:"}, twoColumnHelpRows(subcommandRows, helpTwoColumnGap, outputWidth)...))
 	}
 	if len(commandHelp.CommandFlagsInDisplayOrder) > 0 {
 		sections = append(sections, append(

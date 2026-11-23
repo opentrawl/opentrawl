@@ -2,13 +2,19 @@
 
 package secrets
 
-type unavailablePluginSecretStore struct{}
-
-// NewPlatformPluginSecretStore returns an unavailable store on platforms
-// without a configured native secret backend.
+// NewPlatformPluginSecretStore returns the encrypted file store on platforms
+// without the macOS Data Protection Keychain. If the state root or user
+// configuration directory cannot be found, every call reports that the store
+// is unavailable.
 func NewPlatformPluginSecretStore() PluginSecretStore {
-	return unavailablePluginSecretStore{}
+	store, err := DefaultEncryptedFilePluginSecretStore()
+	if err != nil {
+		return unavailablePluginSecretStore{}
+	}
+	return store
 }
+
+type unavailablePluginSecretStore struct{}
 
 func (unavailablePluginSecretStore) LoadPluginSecret(string, string) ([]byte, error) {
 	return nil, ErrPluginSecretStoreUnavailable

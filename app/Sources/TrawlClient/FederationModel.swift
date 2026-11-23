@@ -136,6 +136,13 @@ public enum SourceAppSyncLiveness: Sendable, Equatable {
   case sourceAppNotRunning
 }
 
+public enum ArchiveLiveSyncCredentialStatus: Sendable, Equatable {
+  case notApplicable
+  case available
+  case requiresSignedApp
+  case notConnected
+}
+
 public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   public let registeredTrawlerManifest: RegisteredTrawlerManifest
   public let archiveContentCountsAfterLastSuccessfullyCompletedUpdate:
@@ -144,6 +151,7 @@ public struct TrawlerStatus: Sendable, Equatable, Identifiable {
   public let newestArchivedRecordTime: Date?
   public let trawlerArchiveCanAnswerCurrentCommands: Bool
   public let sourceAppSyncLiveness: SourceAppSyncLiveness
+  public let archiveLiveSyncCredentialStatus: ArchiveLiveSyncCredentialStatus
 
   public var id: RegisteredTrawlerIdentity {
     registeredTrawlerManifest.registeredTrawler

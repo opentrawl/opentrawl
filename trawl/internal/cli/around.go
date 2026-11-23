@@ -56,6 +56,16 @@ func (c *AroundCmd) Run(r *Runtime) error {
 	defer func() { _ = indexStore.Close() }()
 
 	var trawlerFilter []string
+	if _, isAgentRequest := agentServingContextFrom(r.ctx); isAgentRequest {
+		if err := refuseAroundTargetOutsideAgentScope(installed, c.Target); err != nil {
+			return err
+		}
+		if strings.TrimSpace(c.Trawler) == "" {
+			for _, t := range installed {
+				trawlerFilter = append(trawlerFilter, installedTrawlerIdentityText(t))
+			}
+		}
+	}
 	if strings.TrimSpace(c.Trawler) != "" {
 		selected, selErr := r.selectInstalledTrawlers(installed, splitTrawlerCSV(c.Trawler))
 		if selErr != nil {
@@ -155,4 +165,38 @@ func formatAroundMatchSummary(m unifiedindex.AroundMatch) string {
 		parts = append(parts, ppl)
 	}
 	return strings.Join(parts, " · ")
+}
+
+// refuseAroundTargetOutsideAgentScope stops an agent from anchoring around on
+// a record from a source its token does not allow.
+func refuseAroundTargetOutsideAgentScope(allowedTrawlers []InstalledTrawler, target string) error {
+	trimmed := strings.TrimSpace(target)
+	if trimmed == "" {
+		return nil
+	}
+	if route, err := trawlkit.ParseGloballyRoutableTrawlLink(trawlkit.NewGloballyRoutableTrawlLink(trimmed)); err == nil {
+		trawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)
+		if _, allowed := findInstalledTrawler(allowedTrawlers, trawlerIdentity); !allowed {
+			return render.AgentAccessSourceNotAllowed(trawlerIdentity, installedTrawlerCommandNames(allowedTrawlers))
+		}
+		return nil
+	}
+	if prefix, _, hasColon := strings.Cut(trimmed, ":"); hasColon && isTrawlerIdentifierPrefix(prefix) {
+		if _, allowed := findInstalledTrawler(allowedTrawlers, prefix); !allowed {
+			return render.AgentAccessSourceNotAllowed(prefix, installedTrawlerCommandNames(allowedTrawlers))
+		}
+	}
+	return nil
+}
+
+func isTrawlerIdentifierPrefix(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && char != '-' && char != '_' {
+			return false
+		}
+	}
+	return true
 }

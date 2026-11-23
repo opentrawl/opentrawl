@@ -1,5 +1,6 @@
-// Package pluginsandbox compiles and enforces per-invocation macOS Seatbelt
-// sandboxes for standalone OpenTrawl plugin executables.
+// Package pluginsandbox compiles and enforces per-invocation sandboxes for
+// standalone OpenTrawl plugin executables: macOS Seatbelt profiles, and
+// bubblewrap namespaces on Linux.
 package pluginsandbox
 
 import (

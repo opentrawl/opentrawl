@@ -162,6 +162,17 @@ extension Trawl_Status_SourceAppSyncLiveness {
   }
 }
 
+extension Trawl_Status_ArchiveLiveSyncCredentialStatus {
+  fileprivate func decodedArchiveLiveSyncCredentialStatus() -> ArchiveLiveSyncCredentialStatus {
+    switch self {
+    case .available: .available
+    case .requiresSignedApp: .requiresSignedApp
+    case .notConnected: .notConnected
+    case .unspecified, .notApplicable, .UNRECOGNIZED: .notApplicable
+    }
+  }
+}
+
 extension Trawl_Federation_RegisteredTrawlerManifest {
   fileprivate func decodedRegisteredTrawlerManifest() throws -> RegisteredTrawlerManifest {
     let registeredTrawlerIdentity = registeredTrawler.decodedRegisteredTrawlerIdentity
@@ -258,7 +269,10 @@ extension Trawl_Federation_FederatedTrawlerStatusOperation {
         trawlerArchiveCanAnswerCurrentCommands:
           trawlerArchiveStatus.trawlerArchiveCanAnswerCurrentCommands,
         sourceAppSyncLiveness:
-          try trawlerArchiveStatus.sourceAppSyncLiveness.decodedSourceAppSyncLiveness())
+          try trawlerArchiveStatus.sourceAppSyncLiveness.decodedSourceAppSyncLiveness(),
+        archiveLiveSyncCredentialStatus:
+          trawlerArchiveStatus.archiveLiveSyncCredentialStatus
+          .decodedArchiveLiveSyncCredentialStatus())
     }
     return FederatedTrawlerStatusOperation(
       trawlerStatuses: trawlerStatuses,

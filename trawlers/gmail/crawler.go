@@ -5,6 +5,7 @@ package gmail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -120,8 +121,9 @@ func googleOAuthClient() auth.GoogleOAuthClient {
 	}
 }
 
-// Status says Gmail works only when the archive can answer and this Mac
-// holds the Google grant that updates need.
+// Status reports the readable local Gmail archive truthfully even when an
+// unsigned binary cannot read the Data Protection Keychain, while clearly
+// reporting whether live sync credentials are accessible.
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
 	trawlerArchiveStatus := &status.TrawlerArchiveStatus{}
 	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: trawlerArchiveStatus}
@@ -145,11 +147,23 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	if !archiveStatus.NewestMessageAt.IsZero() {
 		trawlerArchiveStatus.NewestArchivedRecordTime = timestamppb.New(archiveStatus.NewestMessageAt)
 	}
+	hasReadableArchive := archiveStatus.Messages > 0 || strings.TrimSpace(archiveStatus.LastUpdateAt) != ""
 	connected, err := auth.GmailCredentialIsStored()
-	if err != nil {
+	switch {
+	case err == nil && connected:
+		trawlerArchiveStatus.ArchiveLiveSyncCredentialStatus = status.ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_AVAILABLE
+		trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = true
+	case errors.Is(err, auth.ErrMacOSKeychainNeedsSignedApp):
 		logGmailConnectionFailure(req, err)
+		trawlerArchiveStatus.ArchiveLiveSyncCredentialStatus = status.ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_REQUIRES_SIGNED_APP
+		trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = hasReadableArchive
+	default:
+		if err != nil {
+			logGmailConnectionFailure(req, err)
+		}
+		trawlerArchiveStatus.ArchiveLiveSyncCredentialStatus = status.ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_CONNECTED
+		trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = hasReadableArchive
 	}
-	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = connected
 	return response, nil
 }
 

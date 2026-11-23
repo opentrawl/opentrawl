@@ -19,6 +19,9 @@ type InstalledTrawler struct {
 // discoverInstalledTrawlers projects the explicit registrations and discovered
 // standalone plugins into the installed trawler model.
 func discoverInstalledTrawlers(ctx context.Context) []InstalledTrawler {
+	if serving, isAgentRequest := agentServingContextFrom(ctx); isAgentRequest {
+		return serving.agentSourceScope.installedTrawlersAllowed(serving.installedTrawlersDiscoveredAtServerStart)
+	}
 	return buildRegisteredTrawlerManifestSnapshotForContext(ctx, "", false).installedTrawlers
 }
 

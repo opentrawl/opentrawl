@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opentrawl/opentrawl/trawlers/telegram/directmtproto"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
@@ -26,6 +27,7 @@ type Crawler struct {
 	archiveSourcePathUsedByCurrentUpdate string
 
 	messages messageOptions
+	connect  telegramConnectFlags
 }
 
 type updateOptions struct {
@@ -42,7 +44,9 @@ type updateOptions struct {
 // interrupted first runs remain resumable rather than silently changing the
 // behaviour of normal update.
 type TelegramCrawlerConfiguration struct {
-	FullHistory bool `toml:"full_history"`
+	FullHistory bool   `toml:"full_history"`
+	APIID       int    `toml:"api_id"`
+	APIHash     string `toml:"api_hash"`
 }
 
 type searchOptions struct {
@@ -83,6 +87,7 @@ func New() *Crawler {
 
 func (*Crawler) DeclaredPluginCapabilities() *plugincontract.PluginDeclaredCapabilities {
 	return &plugincontract.PluginDeclaredCapabilities{
+		DeclaredNetworkHosts:             directmtproto.NetworkHosts(),
 		DeclaredReadPaths:                []string{"~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"},
 		SupportsArchiveIndexChangeExport: true,
 	}
@@ -94,9 +99,9 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerCommandName: "telegram",
 		RegisteredTrawlerDisplayName: "Telegram",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "Telegram's local database and media files stored on your Mac.",
-			LeavesMachine:   "Nothing leaves your Mac during a default update. If you enable full history or request missing media, OpenTrawl asks Telegram for it using your existing Telegram session.",
-			NetworkRequests: "Default updates are local. --full-history downloads older messages. --fetch-media downloads missing media.",
+			Reads:           "Telegram cloud chats when connected directly, or Telegram's local database and media on macOS.",
+			LeavesMachine:   "Direct sign-in and cloud history communicate with Telegram. Archive searches run locally.",
+			NetworkRequests: "Direct updates download cloud messages from Telegram. Desktop updates access Telegram only with --full-history or --fetch-media.",
 		},
 		RegisteredTrawlerBranding: &federation.TrawlerBranding{
 			SymbolName:              "paperplane.fill",
@@ -133,6 +138,9 @@ func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit
 
 func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 	return []trawlkit.TrawlerCommand{
+		{TrawlerCommandName: "connect", TrawlerCommandHelpDescription: "Connect directly to Telegram without Full Disk Access", RegisterTrawlerCommandFlags: c.bindConnectFlags, TrawlerCommandChangesArchive: true, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessNone, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp, ExecuteTrawlerCommand: c.connectTelegram},
+		{TrawlerCommandName: "login-qr", TrawlerCommandHelpDescription: "Show the path to the current Telegram QR image", TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessNone, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp, ExecuteTrawlerCommand: c.telegramLoginQR},
+		{TrawlerCommandName: "disconnect", TrawlerCommandHelpDescription: "Revoke the direct Telegram session", TrawlerCommandChangesArchive: true, TrawlerCommandArchiveAccess: trawlkit.TrawlerCommandArchiveAccessNone, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp, ExecuteTrawlerCommand: c.disconnectTelegram},
 		{SharedTrawlerOperation: federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandRoutedOnlyByRootSharedCommand},
 		{
 			SharedTrawlerOperation:           federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,

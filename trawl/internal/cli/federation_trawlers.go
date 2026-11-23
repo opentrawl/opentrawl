@@ -38,7 +38,8 @@ func (r *Runtime) federationStatusTrawlers(installedTrawlers []InstalledTrawler)
 			if err != nil {
 				return nil, federation.FailureForError(manifest, federationcontract.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, err)
 			}
-			if archiveStatus := statusResponse.GetTrawlerArchiveStatus(); archiveStatus != nil {
+			if archiveStatus := statusResponse.GetTrawlerArchiveStatus(); archiveStatus != nil &&
+				archiveStatus.GetSourceAppSyncLiveness() == status.SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED {
 				archiveStatus.SourceAppSyncLiveness = sourceAppSyncLivenessForManifest(manifest)
 			}
 			return statusResponse, nil

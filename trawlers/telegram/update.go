@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/telegram/directmtproto"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -47,6 +48,29 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	progress, stopProgress := r.startCommandProgress("update_progress", "messages", "starting update")
 	defer stopProgress()
+	sessionPath := telegramSessionPath(req)
+	if _, err := os.Stat(sessionPath); err == nil && c.update.Path == "" {
+		if c.update.FetchMedia {
+			return nil, usageErr(errors.New("--fetch-media requires a Telegram desktop source"))
+		}
+		counts, err := directmtproto.SyncDirectMTProto(ctx, sessionPath, r.dbPath, directmtproto.SyncOptions{
+			ClientOptions:  c.directClientOptions(req),
+			OpenedArchive:  req.OpenedTrawlerArchiveStore,
+			ConversationID: providerNativeConversationIdentifier,
+			Progress:       progress.Report,
+		})
+		if err != nil {
+			return nil, updateImportError(err)
+		}
+		c.archiveSourcePathUsedByCurrentUpdate = directmtproto.ArchiveSource
+		return &update.TrawlerArchiveUpdateReport{
+			ArchiveRecordCountAddedByThisUpdate:   proto.Uint64(uint64(counts.Added)),
+			ArchiveRecordCountUpdatedByThisUpdate: proto.Uint64(uint64(counts.Updated)),
+			ArchiveRecordCountRemovedByThisUpdate: proto.Uint64(0),
+		}, nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, updateImportError(err)
+	}
 	var report *update.TrawlerArchiveUpdateReport
 	err = r.withStore(func(st *store.Store) error {
 		historyState, err := loadTelegramHistoryState(st.Path())

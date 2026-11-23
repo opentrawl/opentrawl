@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"os"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -11,6 +12,10 @@ import (
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*status.TrawlerStatusResponse, error) {
 	trawlerArchiveStatus := &status.TrawlerArchiveStatus{}
+	if _, err := os.Stat(telegramSessionPath(req)); err == nil {
+		// Direct MTProto updates do not require Telegram for macOS to be running.
+		trawlerArchiveStatus.SourceAppSyncLiveness = status.SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_NOT_APPLICABLE
+	}
 	response := &status.TrawlerStatusResponse{TrawlerArchiveStatus: trawlerArchiveStatus}
 	if req.OpenedTrawlerArchiveStore == nil {
 		return response, nil

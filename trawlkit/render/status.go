@@ -77,14 +77,25 @@ func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTraw
 }
 
 const (
-	archiveWorksYes       = "yes"
-	archiveWorksNo        = "no"
-	archiveWorksAppClosed = "app closed"
+	archiveWorksYes                  = "yes"
+	archiveWorksNo                   = "no"
+	archiveWorksAppClosed            = "app closed"
+	archiveWorksSyncNeedsSignedApp   = "yes (sync needs signed app)"
+	archiveWorksSyncNeedsCredentials = "yes (sync needs sign-in)"
 )
 
 func statusWorks(archiveStatus *status.TrawlerArchiveStatus) string {
 	if !archiveStatus.GetTrawlerArchiveCanAnswerCurrentCommands() {
 		return archiveWorksNo
+	}
+	switch archiveStatus.GetArchiveLiveSyncCredentialStatus() {
+	case status.ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_REQUIRES_SIGNED_APP:
+		return archiveWorksSyncNeedsSignedApp
+	case status.ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_CONNECTED:
+		return archiveWorksSyncNeedsCredentials
+	case status.ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_UNSPECIFIED,
+		status.ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_APPLICABLE,
+		status.ArchiveLiveSyncCredentialStatus_ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_AVAILABLE:
 	}
 	if archiveStatus.GetSourceAppSyncLiveness() == status.SourceAppSyncLiveness_SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING {
 		return archiveWorksAppClosed

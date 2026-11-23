@@ -81,6 +81,11 @@ func commandHelpFromKongNode(commandNode *kong.Node) render.CommandHelp {
 			commandHelp.CommandFlagsInDisplayOrder = append(commandHelp.CommandFlagsInDisplayOrder, flagHelp)
 		}
 	}
+	for _, subcommandNode := range commandNode.Children {
+		if subcommandNode != nil && !subcommandNode.Hidden {
+			commandHelp.CommandSubcommandsInDisplayOrder = append(commandHelp.CommandSubcommandsInDisplayOrder, commandHelpFromKongNode(subcommandNode))
+		}
+	}
 	return commandHelp
 }
 

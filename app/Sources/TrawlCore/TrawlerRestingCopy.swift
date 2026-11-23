@@ -112,6 +112,14 @@ public enum TrawlerRestingCopy {
   }
 
   public static func detail(for trawlerStatus: TrawlerStatus) -> String? {
+    switch trawlerStatus.archiveLiveSyncCredentialStatus {
+    case .requiresSignedApp:
+      return "Sync needs signed app"
+    case .notConnected:
+      return "Sync needs sign-in"
+    case .available, .notApplicable:
+      break
+    }
     if trawlerStatus.sourceAppSyncLiveness == .sourceAppNotRunning {
       return "App closed"
     }
@@ -138,6 +146,8 @@ public enum TrawlerRestingCopy {
   public static func needsAttention(_ trawlerStatus: TrawlerStatus) -> Bool {
     !trawlerStatus.trawlerArchiveCanAnswerCurrentCommands
       || trawlerStatus.sourceAppSyncLiveness == .sourceAppNotRunning
+      || trawlerStatus.archiveLiveSyncCredentialStatus == .requiresSignedApp
+      || trawlerStatus.archiveLiveSyncCredentialStatus == .notConnected
   }
 
   private static func firstByTrawler<Value>(

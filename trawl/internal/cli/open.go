@@ -37,7 +37,11 @@ func (c *OpenCmd) Run(r *Runtime) error {
 		}
 	}
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
-	if selectedTrawler, found := findInstalledTrawler(installedTrawlers, trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)); found {
+	targetTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)
+	if serving, isAgentRequest := agentServingContextFrom(r.ctx); isAgentRequest && !serving.agentSourceScope.allowsSource(targetTrawlerIdentity) {
+		return render.AgentAccessSourceNotAllowed(targetTrawlerIdentity, installedTrawlerCommandNames(installedTrawlers))
+	}
+	if selectedTrawler, found := findInstalledTrawler(installedTrawlers, targetTrawlerIdentity); found {
 		if _, err := trawlersForSharedOperation([]InstalledTrawler{selectedTrawler}, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, true); err != nil {
 			return err
 		}

@@ -62,6 +62,52 @@ public nonisolated enum Trawl_Status_SourceAppSyncLiveness: SwiftProtobuf.Enum, 
 
 }
 
+public nonisolated enum Trawl_Status_ArchiveLiveSyncCredentialStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case notApplicable // = 1
+  case available // = 2
+  case requiresSignedApp // = 3
+  case notConnected // = 4
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .notApplicable
+    case 2: self = .available
+    case 3: self = .requiresSignedApp
+    case 4: self = .notConnected
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .notApplicable: return 1
+    case .available: return 2
+    case .requiresSignedApp: return 3
+    case .notConnected: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Status_ArchiveLiveSyncCredentialStatus] = [
+    .unspecified,
+    .notApplicable,
+    .available,
+    .requiresSignedApp,
+    .notConnected,
+  ]
+
+}
+
 public nonisolated struct Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -106,6 +152,8 @@ public nonisolated struct Trawl_Status_TrawlerArchiveStatus: Sendable {
   public mutating func clearNewestArchivedRecordTime() {self._newestArchivedRecordTime = nil}
 
   public var sourceAppSyncLiveness: Trawl_Status_SourceAppSyncLiveness = .unspecified
+
+  public var archiveLiveSyncCredentialStatus: Trawl_Status_ArchiveLiveSyncCredentialStatus = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -154,6 +202,10 @@ nonisolated extension Trawl_Status_SourceAppSyncLiveness: SwiftProtobuf._ProtoNa
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SOURCE_APP_SYNC_LIVENESS_UNSPECIFIED\0\u{1}SOURCE_APP_SYNC_LIVENESS_NOT_APPLICABLE\0\u{1}SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_RUNNING\0\u{1}SOURCE_APP_SYNC_LIVENESS_SOURCE_APP_NOT_RUNNING\0")
 }
 
+nonisolated extension Trawl_Status_ArchiveLiveSyncCredentialStatus: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_UNSPECIFIED\0\u{1}ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_APPLICABLE\0\u{1}ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_AVAILABLE\0\u{1}ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_REQUIRES_SIGNED_APP\0\u{1}ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_CONNECTED\0")
+}
+
 nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ArchiveContentCountAfterLastSuccessfullyCompletedUpdate"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_kind_name\0\u{3}archive_content_kind_display_name\0\u{3}archive_content_count\0")
@@ -196,7 +248,7 @@ nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompl
 
 nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0\u{3}newest_archived_record_time\0\u{3}source_app_sync_liveness\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0\u{3}newest_archived_record_time\0\u{3}source_app_sync_liveness\0\u{3}archive_live_sync_credential_status\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -209,6 +261,7 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
       case 3: try { try decoder.decodeSingularBoolField(value: &self.trawlerArchiveCanAnswerCurrentCommands) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._newestArchivedRecordTime) }()
       case 5: try { try decoder.decodeSingularEnumField(value: &self.sourceAppSyncLiveness) }()
+      case 6: try { try decoder.decodeSingularEnumField(value: &self.archiveLiveSyncCredentialStatus) }()
       default: break
       }
     }
@@ -234,6 +287,9 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     if self.sourceAppSyncLiveness != .unspecified {
       try visitor.visitSingularEnumField(value: self.sourceAppSyncLiveness, fieldNumber: 5)
     }
+    if self.archiveLiveSyncCredentialStatus != .unspecified {
+      try visitor.visitSingularEnumField(value: self.archiveLiveSyncCredentialStatus, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -243,6 +299,7 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     if lhs.trawlerArchiveCanAnswerCurrentCommands != rhs.trawlerArchiveCanAnswerCurrentCommands {return false}
     if lhs._newestArchivedRecordTime != rhs._newestArchivedRecordTime {return false}
     if lhs.sourceAppSyncLiveness != rhs.sourceAppSyncLiveness {return false}
+    if lhs.archiveLiveSyncCredentialStatus != rhs.archiveLiveSyncCredentialStatus {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
