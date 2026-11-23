@@ -74,7 +74,7 @@ func (r *Runtime) readPersonMessageCountsFromTrawlers(
 	for candidateIndex := range candidates {
 		candidate := &candidates[candidateIndex]
 		for _, installedTrawler := range installedTrawlers {
-			if _, supported := installedTrawler.Trawler.(trawlkit.PersonMessageCounter); !supported {
+			if !trawlkit.TrawlerSupportsPersonMessageCounting(installedTrawler.Trawler) {
 				continue
 			}
 			trawlerIdentity := installedTrawlerIdentityText(installedTrawler)

@@ -94,7 +94,7 @@ func (r *runtime) runOfficialAPIUpdateReport(cfg birdConfig) (*updatecontract.Tr
 	err := r.withStore(func(st *store.Store) error {
 		client, err := xapi.New(xapi.Options{
 			BaseURL:         xapiBaseURL,
-			HTTPClient:      xapiHTTPClient,
+			HTTPClient:      r.httpClient(xapiHTTPClient),
 			CredentialsPath: cfg.OfficialAPICredentialsPath(),
 		})
 		if err != nil {

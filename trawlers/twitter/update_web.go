@@ -84,7 +84,7 @@ func (r *runtime) runWebSessionUpdateReport(cfg birdConfig) (*updatecontract.Tra
 		policy := xweb.DefaultRateLimitPolicy()
 		client, err := xweb.NewClient(xweb.ClientOptions{
 			Origin:      xwebOriginOverride,
-			HTTPClient:  xwebHTTPClient,
+			HTTPClient:  r.httpClient(xwebHTTPClient),
 			SessionPath: cfg.SessionPath(),
 			Policy:      policy,
 			Now:         nowFn,

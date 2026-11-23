@@ -40,6 +40,36 @@ type ExternalPluginManifestProvider interface {
 	ExternalPluginManifest() *federation.RegisteredTrawlerManifest
 }
 
+// ExternalPluginCapabilityProvider returns the probed capability declarations
+// of an out-of-process standalone trawler plugin.
+type ExternalPluginCapabilityProvider interface {
+	ExternalPluginDeclaredCapabilities() *plugincontract.PluginDeclaredCapabilities
+}
+
+// TrawlerSupportsPeopleSnapshot reports whether trawler provides People
+// identity snapshots either in-process or via an external plugin executable.
+func TrawlerSupportsPeopleSnapshot(trawler Trawler) bool {
+	if _, ok := trawler.(PeopleSnapshotProvider); ok {
+		return true
+	}
+	if provider, ok := trawler.(ExternalPluginCapabilityProvider); ok {
+		return provider.ExternalPluginDeclaredCapabilities().GetSupportsPeopleSnapshotExport()
+	}
+	return false
+}
+
+// TrawlerSupportsPersonMessageCounting reports whether trawler counts person
+// messages either in-process or via an external plugin executable.
+func TrawlerSupportsPersonMessageCounting(trawler Trawler) bool {
+	if _, ok := trawler.(PersonMessageCounter); ok {
+		return true
+	}
+	if provider, ok := trawler.(ExternalPluginCapabilityProvider); ok {
+		return provider.ExternalPluginDeclaredCapabilities().GetSupportsPersonMessageCounting()
+	}
+	return false
+}
+
 // ExternalPluginExecutor is implemented by host-side adapters for standalone
 // plugin executables so core dispatches all operations over the sandboxed
 // protobuf wire protocol without opening the plugin's private archive directly.
@@ -101,6 +131,25 @@ func BuildTrawlerPluginManifest(trawler Trawler) (*plugincontract.PluginManifest
 	if _, ok := trawler.(PeopleSnapshotProvider); ok {
 		capabilities.SupportsPeopleSnapshotExport = true
 	}
+	mutatingSeen := make(map[string]struct{})
+	for _, existing := range capabilities.MutatingBespokeCommandNames {
+		if normalized := strings.Join(strings.Fields(existing), " "); normalized != "" {
+			mutatingSeen[normalized] = struct{}{}
+		}
+	}
+	for _, cmd := range trawler.TrawlerCommands() {
+		if cmd.SharedTrawlerOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED || !cmd.TrawlerCommandChangesArchive {
+			continue
+		}
+		normalized := strings.Join(strings.Fields(cmd.TrawlerCommandName), " ")
+		if normalized == "" {
+			continue
+		}
+		if _, dup := mutatingSeen[normalized]; !dup {
+			mutatingSeen[normalized] = struct{}{}
+			capabilities.MutatingBespokeCommandNames = append(capabilities.MutatingBespokeCommandNames, normalized)
+		}
+	}
 	return &plugincontract.PluginManifestResponse{
 		RegisteredTrawlerManifest: manifest,
 		DeclaredCapabilities:      capabilities,
@@ -160,8 +209,8 @@ func OpenExternalPluginArchiveStore(ctx context.Context, archivePath string, acc
 }
 
 // ExecuteBespokeCommandForExternalPluginSDK resolves flags, opens the archive
-// with the declared store mode, and runs one bespoke trawler command inside a
-// standalone plugin process.
+// with the declared store mode, and runs one bespoke or namespace-routed shared
+// trawler command inside a standalone plugin process.
 func ExecuteBespokeCommandForExternalPluginSDK(
 	ctx context.Context,
 	trawler Trawler,
@@ -175,6 +224,18 @@ func ExecuteBespokeCommandForExternalPluginSDK(
 	targetCommand, err = parseTargetTrawlerCommandFlags(targetCommand)
 	if err != nil {
 		return nil, false, err
+	}
+	if targetCommand.sharedOperation != federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UNSPECIFIED {
+		parsedArgs, flagErr := parseSharedTrawlerCommandFlags(
+			targetCommand.sharedOperation,
+			targetCommand.shared,
+			targetCommand.args,
+			targetCommand.sharedOperation == federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH,
+		)
+		if flagErr != nil {
+			return nil, false, flagErr
+		}
+		targetCommand.args = parsedArgs
 	}
 	access := archiveStoreAccessFromStoreMode(targetCommand.storeMode)
 	openedStore, err := OpenExternalPluginArchiveStore(ctx, req.TrawlerArchivePaths.TrawlerArchivePath, access)
@@ -206,13 +267,33 @@ func archiveStoreAccessFromStoreMode(mode storeMode) ArchiveStoreAccessRequireme
 	}
 }
 
-// ExecuteUpdateForExternalPluginSDK runs Updater.Update and optional
+// ExecuteUpdateForExternalPluginSDK parses update-specific flags declared by
+// the trawler, then runs Updater.Update and optional
 // SuccessfullyCompletedArchiveUpdateRecorder inside a standalone plugin.
 func ExecuteUpdateForExternalPluginSDK(
 	ctx context.Context,
 	trawler Trawler,
 	req *TrawlerCommandExecutionRequest,
+	updateArgs []string,
 ) (*update.TrawlerArchiveUpdateReport, error) {
+	targetCommand, err := sharedTrawlerOperationTargetCommand(
+		trawler,
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
+		updateArgs...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	remainingArgs, err := parseSharedTrawlerCommandFlags(
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE,
+		targetCommand.shared,
+		targetCommand.args,
+		false,
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.TrawlerCommandPositionalArguments = remainingArgs
 	return executeUpdate(ctx, trawler, req)
 }
 
@@ -310,6 +391,14 @@ func matchManifestCommandForRenderContext(
 					},
 				}
 			}
+		}
+	}
+	if len(commandArguments) > 0 && commandArguments[0] == sharedTrawlerOperationCommandName(federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES) {
+		return targetTrawlerCommand{
+			name:                "messages",
+			tokens:              []string{"messages"},
+			invocationArguments: append([]string(nil), commandArguments[1:]...),
+			sharedOperation:     federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_MESSAGES,
 		}
 	}
 	return targetTrawlerCommand{

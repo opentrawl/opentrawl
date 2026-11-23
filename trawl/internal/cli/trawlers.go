@@ -19,7 +19,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/pluginruntime"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
-	"github.com/opentrawl/opentrawl/twitter"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -62,7 +61,6 @@ var trawlerFactories = []trawlerRegistration{
 	{factory: func() trawlkit.Trawler { return gmail.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return calendar.New() }, beta: true},
 	{factory: func() trawlkit.Trawler { return photos.New() }, beta: true, fallbackBranding: macAppBranding("photo.on.rectangle.angled", "#007AFF", "com.apple.Photos", "com.apple.mobileslideshow"), fallbackSourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_NONE},
-	{factory: func() trawlkit.Trawler { return twitter.New() }, beta: true},
 }
 
 func macAppBranding(symbolName, accentColor, bundleIdentifier, artworkBundleIdentifier string) *federation.TrawlerBranding {
@@ -162,6 +160,13 @@ func appendDiscoveredExternalPluginsToSnapshot(
 				manifest.GetTrawlerBranding(),
 				manifest.GetSourceFreshnessDependency(),
 			)
+		} else if manifest == nil && strings.TrimSpace(plugin.PluginIdentifier) != "" {
+			id := strings.TrimSpace(plugin.PluginIdentifier)
+			manifest = &federation.RegisteredTrawlerManifest{
+				RegisteredTrawler:            trawlkit.NewRegisteredTrawlerIdentity(id),
+				RegisteredTrawlerCommandName: id,
+				RegisteredTrawlerDisplayName: id,
+			}
 		}
 		snapshot.installedTrawlers = append(snapshot.installedTrawlers, InstalledTrawler{
 			RegisteredTrawlerManifest: manifest,

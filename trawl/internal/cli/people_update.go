@@ -11,7 +11,7 @@ func (r *Runtime) reconcileTrawlerPeopleContext(ctx context.Context, trawler Ins
 	if installedTrawlerIdentityText(trawler) == "contacts" {
 		return nil
 	}
-	if _, ok := trawler.Trawler.(trawlkit.PeopleSnapshotProvider); !ok {
+	if !trawlkit.TrawlerSupportsPeopleSnapshot(trawler.Trawler) {
 		return nil
 	}
 	contacts, found := findInstalledTrawler(installedTrawlers, "contacts")

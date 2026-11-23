@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
 	update "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
@@ -57,10 +59,18 @@ var (
 	_ trawlkit.PersonMessageCounter       = (*Crawler)(nil)
 	_ trawlkit.PeopleSnapshotProvider     = (*Crawler)(nil)
 	_ trawlkit.ArchiveIndexChangeExporter = (*Crawler)(nil)
+	_ trawlkit.PluginCapabilityDeclarator = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{cfg: TwitterCrawlerConfiguration{MonthlyBudgetUSD: "10"}}
+}
+
+func (*Crawler) DeclaredPluginCapabilities() *plugincontract.PluginDeclaredCapabilities {
+	return &plugincontract.PluginDeclaredCapabilities{
+		DeclaredNetworkHosts:             []string{"x.com:443", "abs.twimg.com:443", "api.x.com:443"},
+		SupportsArchiveIndexChangeExport: true,
+	}
 }
 
 func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDeclaration {
@@ -302,6 +312,16 @@ func (c *Crawler) handler(ctx context.Context, req *trawlkit.TrawlerCommandExecu
 		log:        req.TrawlerCommandLog,
 		c:          c,
 	}
+}
+
+func (r *runtime) httpClient(testOverride *http.Client) *http.Client {
+	if testOverride != nil {
+		return testOverride
+	}
+	if r != nil && r.req != nil && r.req.PluginHTTPClient != nil {
+		return r.req.PluginHTTPClient
+	}
+	return nil
 }
 
 func (r *runtime) withStore(fn func(*store.Store) error) error {

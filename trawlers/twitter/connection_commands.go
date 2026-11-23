@@ -43,7 +43,7 @@ func (r *runtime) runConnect() (*command.TrawlerCommandResponse, error) {
 	}
 	client, err := xweb.NewClient(xweb.ClientOptions{
 		Origin:      xwebOriginOverride,
-		HTTPClient:  xwebHTTPClient,
+		HTTPClient:  r.httpClient(xwebHTTPClient),
 		Credentials: creds,
 	})
 	if err != nil {

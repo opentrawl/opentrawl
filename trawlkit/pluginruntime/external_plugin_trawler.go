@@ -60,10 +60,11 @@ type externalPluginIndexExportingTrawler struct {
 }
 
 var (
-	_ trawlkit.Trawler                        = (*ExternalPluginTrawler)(nil)
-	_ trawlkit.ExternalPluginManifestProvider = (*ExternalPluginTrawler)(nil)
-	_ trawlkit.ExternalPluginExecutor         = (*ExternalPluginTrawler)(nil)
-	_ trawlkit.ArchiveIndexChangeExporter     = (*externalPluginIndexExportingTrawler)(nil)
+	_ trawlkit.Trawler                          = (*ExternalPluginTrawler)(nil)
+	_ trawlkit.ExternalPluginManifestProvider   = (*ExternalPluginTrawler)(nil)
+	_ trawlkit.ExternalPluginCapabilityProvider = (*ExternalPluginTrawler)(nil)
+	_ trawlkit.ExternalPluginExecutor           = (*ExternalPluginTrawler)(nil)
+	_ trawlkit.ArchiveIndexChangeExporter       = (*externalPluginIndexExportingTrawler)(nil)
 )
 
 // NewExternalPluginTrawler creates the host-side trawler adapter for a
@@ -121,6 +122,12 @@ func (p *externalPluginIndexExportingTrawler) ExportArchiveIndexChanges(
 // ExternalPluginManifest returns the plugin's pre-probed RegisteredTrawlerManifest.
 func (p *ExternalPluginTrawler) ExternalPluginManifest() *federation.RegisteredTrawlerManifest {
 	return p.manifest.GetRegisteredTrawlerManifest()
+}
+
+// ExternalPluginDeclaredCapabilities returns the plugin's probed capability
+// declarations.
+func (p *ExternalPluginTrawler) ExternalPluginDeclaredCapabilities() *plugincontract.PluginDeclaredCapabilities {
+	return p.manifest.GetDeclaredCapabilities()
 }
 
 // RegisteredTrawlerDeclaration projects the plugin's probed manifest into the
@@ -338,7 +345,7 @@ func (p *ExternalPluginTrawler) ExecuteExternalPluginDeclaredCommand(
 	render.TrawlerCommandRenderContext,
 	error,
 ) {
-	paths, _, err := p.archivePaths(opts.StateRoot)
+	paths, baseDir, err := p.archivePaths(opts.StateRoot)
 	if err != nil {
 		return nil, nil, render.TrawlerCommandRenderContext{}, err
 	}
@@ -346,6 +353,7 @@ func (p *ExternalPluginTrawler) ExecuteExternalPluginDeclaredCommand(
 	if err != nil {
 		return nil, nil, render.TrawlerCommandRenderContext{}, err
 	}
+	isMutating := p.bespokeCommandMutates(args)
 	req := &plugincontract.PluginInvocationRequest{
 		Operation: &plugincontract.PluginInvocationRequest_BespokeCommand{
 			BespokeCommand: &plugincontract.PluginBespokeCommandOperationRequest{
@@ -354,7 +362,12 @@ func (p *ExternalPluginTrawler) ExecuteExternalPluginDeclaredCommand(
 		},
 		PreResolvedLocalShortReferences: preResolvedRefs,
 	}
-	outcome, err := p.invokeReadOnlyOperation(ctx, opts, req)
+	var outcome pluginInvocationOutcome
+	if isMutating {
+		outcome, err = p.executeMutatingBespokeCommand(ctx, opts, paths, baseDir, args, req)
+	} else {
+		outcome, err = p.invokeReadOnlyOperation(ctx, opts, req)
+	}
 	if err != nil {
 		return nil, nil, render.TrawlerCommandRenderContext{}, err
 	}
@@ -379,6 +392,122 @@ func (p *ExternalPluginTrawler) ExecuteExternalPluginDeclaredCommand(
 		response,
 	)
 	return response, refs, renderContext, nil
+}
+
+func (p *ExternalPluginTrawler) executeMutatingBespokeCommand(
+	ctx context.Context,
+	opts trawlkit.TrawlerExecutorOptions,
+	paths trawlkit.TrawlerArchivePaths,
+	baseDir string,
+	args []string,
+	req *plugincontract.PluginInvocationRequest,
+) (pluginInvocationOutcome, error) {
+	runLock, err := trawlkit.AcquireExternalPluginRunLock(baseDir)
+	if err != nil {
+		return pluginInvocationOutcome{}, err
+	}
+	defer func() { _ = runLock.Close() }()
+
+	commandName := "command"
+	if len(args) > 0 {
+		commandName = args[0]
+	}
+	runLog, err := p.openHostRunLog(opts, commandName)
+	if err != nil {
+		return pluginInvocationOutcome{}, err
+	}
+	req.GetBespokeCommand().SinceOpaqueIndexCursor = trawlkit.ReadExternalPluginIndexCursor(ctx, opts.StateRoot, p.pluginIdentifier)
+	extraReadFiles, extraReadDirs := collectExplicitCommandInputPaths(args)
+	outcome, invokeErr := p.invokeMutatingOperationWithExtraReadPaths(ctx, opts, paths, runLog, req, extraReadFiles, extraReadDirs)
+	if invokeErr != nil {
+		_ = runLog.Finish(invokeErr)
+		return pluginInvocationOutcome{}, invokeErr
+	}
+	if len(outcome.StagedIndexChangeBatches) > 0 {
+		if pubErr := trawlkit.PublishExternalPluginIndexChangeBatches(
+			ctx,
+			opts.StateRoot,
+			p.pluginIdentifier,
+			p.displayName(),
+			paths.TrawlerArchivePath,
+			outcome.StagedIndexChangeBatches,
+		); pubErr != nil {
+			_ = runLog.Finish(pubErr)
+			return pluginInvocationOutcome{}, pubErr
+		}
+	}
+	if finishErr := runLog.Finish(nil); finishErr != nil {
+		return pluginInvocationOutcome{}, finishErr
+	}
+	return outcome, nil
+}
+
+func (p *ExternalPluginTrawler) bespokeCommandMutates(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	for _, declaredName := range p.manifest.GetDeclaredCapabilities().GetMutatingBespokeCommandNames() {
+		tokens := strings.Fields(declaredName)
+		if len(tokens) == 0 || len(args) < len(tokens) {
+			continue
+		}
+		matched := true
+		for i, token := range tokens {
+			if args[i] != token {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
+func collectExplicitCommandInputPaths(args []string) (files []string, dirs []string) {
+	seen := make(map[string]struct{})
+	addExistingPath := func(raw string) {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" || strings.HasPrefix(trimmed, "-") {
+			return
+		}
+		abs, err := filepath.Abs(trimmed)
+		if err != nil {
+			return
+		}
+		stat, err := os.Stat(abs)
+		if err != nil {
+			return
+		}
+		if _, dup := seen[abs]; dup {
+			return
+		}
+		seen[abs] = struct{}{}
+		if stat.IsDir() {
+			dirs = append(dirs, abs)
+		} else {
+			files = append(files, abs)
+		}
+	}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if _, afterEq, hasEq := strings.Cut(arg, "="); hasEq && strings.HasPrefix(arg, "-") {
+			addExistingPath(afterEq)
+			continue
+		}
+		if arg == "--file" || arg == "-file" {
+			if i+1 < len(args) {
+				addExistingPath(args[i+1])
+				i++
+			}
+			continue
+		}
+		if i > 0 && !strings.HasPrefix(arg, "-") {
+			addExistingPath(arg)
+		}
+	}
+	return files, dirs
 }
 
 func (p *ExternalPluginTrawler) ExecuteExternalPluginSyncArchiveIndex(
@@ -495,8 +624,10 @@ func (p *ExternalPluginTrawler) ExecuteExternalPluginConversations(
 	query trawlkit.ConversationQuery,
 ) (*conversation.ConversationListResponse, []trawlkit.CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
 	convReq := &plugincontract.PluginConversationsOperationRequest{
-		ResultLimit:             uint32(max(query.Limit, 0)),
-		IncludeAllConversations: query.All,
+		ResultLimit:                      uint32(max(query.Limit, 0)),
+		IncludeAllConversations:          query.All,
+		UnreadOnly:                       query.Unread,
+		ResolvedPersonConversationFilter: query.PersonConversationFilterResolvedAcrossTrawlerArchives,
 	}
 	outcome, err := p.invokeReadOnlyOperation(ctx, opts, &plugincontract.PluginInvocationRequest{
 		Operation: &plugincontract.PluginInvocationRequest_Conversations{Conversations: convReq},
@@ -531,8 +662,33 @@ func (p *ExternalPluginTrawler) ExecuteExternalPluginMessages(
 	opts trawlkit.TrawlerExecutorOptions,
 	query trawlkit.TrawlerMessageListQuery,
 ) (*message.MessageListResponse, error) {
+	paths, _, err := p.archivePaths(opts.StateRoot)
+	if err != nil {
+		return nil, err
+	}
+	localConvRef := strings.TrimSpace(query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation)
+	var preResolved []*plugincontract.ResolvedLocalShortReferenceMapping
+	if localConvRef != "" && trawlkit.ValidShortRef(localConvRef) {
+		canonicalRefs, resolveErr := trawlkit.ResolveLocalShortReferenceForExternalPlugin(
+			ctx,
+			opts.StateRoot,
+			p.pluginIdentifier,
+			paths.TrawlerArchivePath,
+			trawlkit.NewLocalTrawlerShortReference(localConvRef),
+			p.replayIndexFunc(opts.StateRoot),
+		)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		if len(canonicalRefs) == 1 {
+			preResolved = append(preResolved, &plugincontract.ResolvedLocalShortReferenceMapping{
+				LocalShortReference:      trawlkit.NewLocalTrawlerShortReference(localConvRef),
+				CanonicalRecordReference: canonicalRefs[0],
+			})
+		}
+	}
 	msgReq := &plugincontract.PluginMessagesOperationRequest{
-		LocalConversationShortReference: trawlkit.NewLocalTrawlerShortReference(query.OptionalLocalConversationShortReferenceForRestrictingMessagesToOneConversation),
+		LocalConversationShortReference: trawlkit.NewLocalTrawlerShortReference(localConvRef),
 		ResultLimit:                     uint32(max(query.MaximumReturnedMessageCount, 0)),
 	}
 	if !query.After.IsZero() {
@@ -544,7 +700,8 @@ func (p *ExternalPluginTrawler) ExecuteExternalPluginMessages(
 		msgReq.BeforeTimeIsSet = true
 	}
 	outcome, err := p.invokeReadOnlyOperation(ctx, opts, &plugincontract.PluginInvocationRequest{
-		Operation: &plugincontract.PluginInvocationRequest_Messages{Messages: msgReq},
+		Operation:                       &plugincontract.PluginInvocationRequest_Messages{Messages: msgReq},
+		PreResolvedLocalShortReferences: preResolved,
 	})
 	if err != nil {
 		return nil, err
@@ -627,6 +784,18 @@ func (p *ExternalPluginTrawler) invokeMutatingOperation(
 	runLog *cklog.Run,
 	req *plugincontract.PluginInvocationRequest,
 ) (pluginInvocationOutcome, error) {
+	return p.invokeMutatingOperationWithExtraReadPaths(ctx, opts, paths, runLog, req, nil, nil)
+}
+
+func (p *ExternalPluginTrawler) invokeMutatingOperationWithExtraReadPaths(
+	ctx context.Context,
+	opts trawlkit.TrawlerExecutorOptions,
+	paths trawlkit.TrawlerArchivePaths,
+	runLog *cklog.Run,
+	req *plugincontract.PluginInvocationRequest,
+	extraReadFiles []string,
+	extraReadDirs []string,
+) (pluginInvocationOutcome, error) {
 	if err := os.MkdirAll(paths.TrawlerArchiveDirectoryPath, 0o700); err != nil {
 		return pluginInvocationOutcome{}, fmt.Errorf("create plugin archive directory: %w", err)
 	}
@@ -635,6 +804,8 @@ func (p *ExternalPluginTrawler) invokeMutatingOperation(
 		return pluginInvocationOutcome{}, err
 	}
 	readOnlyFiles, readOnlyDirs := p.effectiveMutatingReadPaths(string(paths.TrawlerConfigurationPath))
+	readOnlyFiles = append(readOnlyFiles, extraReadFiles...)
+	readOnlyDirs = append(readOnlyDirs, extraReadDirs...)
 	secretBroker, err := p.effectiveSecretBroker()
 	if err != nil {
 		return pluginInvocationOutcome{}, err
@@ -647,13 +818,18 @@ func (p *ExternalPluginTrawler) invokeMutatingOperation(
 	req.VerbosityLevel = int32(opts.Verbosity)
 	req.IsInternalAppRequest = trawlkit.IsInternalAppRequest(ctx)
 
+	var deniedWriteFiles []string
+	if !p.isBundledFirstParty || len(p.manifest.GetDeclaredCapabilities().GetDeclaredConfigReadPathFields()) > 0 {
+		deniedWriteFiles = []string{string(paths.TrawlerConfigurationPath)}
+	}
+
 	return invokeSandboxedPlugin(ctx, pluginInvocationExecutionOptions{
 		ExecutablePath: p.executablePath,
 		SandboxPolicy: pluginsandbox.PluginSandboxPolicy{
 			WritableDirectoryPaths: []string{paths.TrawlerArchiveDirectoryPath},
 			ReadOnlyDirectoryPaths: readOnlyDirs,
 			ReadOnlyFilePaths:      readOnlyFiles,
-			DeniedWriteFilePaths:   []string{string(paths.TrawlerConfigurationPath)},
+			DeniedWriteFilePaths:   deniedWriteFiles,
 		},
 		Request:                req,
 		IdleWatchdog:           pluginDefaultUpdateWatchdog,
@@ -789,16 +965,21 @@ func (p *ExternalPluginTrawler) preResolveCommandArgumentTrawlLinks(
 	prefix := p.pluginIdentifier + ":"
 	var mappings []*plugincontract.ResolvedLocalShortReferenceMapping
 	seen := make(map[string]struct{})
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		candidate := arg
-		if _, afterEq, hasEq := strings.Cut(arg, "="); hasEq && strings.HasPrefix(arg, "-") {
+		isConversationFlagValue := false
+		if flagName, afterEq, hasEq := strings.Cut(arg, "="); hasEq && strings.HasPrefix(arg, "-") {
 			candidate = afterEq
+			isConversationFlagValue = flagName == "--conversation" || flagName == "-conversation"
+		} else if i > 0 && (args[i-1] == "--conversation" || args[i-1] == "-conversation") {
+			isConversationFlagValue = true
 		}
 		localAlias, ok, err := trawlkit.ReplaceGloballyRoutableTrawlLinkWithLocalShortReferenceForSelectedTrawlerOrKeepFreeFormArgument(candidate, p.pluginIdentifier)
 		if err != nil {
 			continue
 		}
-		if !ok && !strings.HasPrefix(candidate, prefix) {
+		if !ok && !strings.HasPrefix(candidate, prefix) && !isConversationFlagValue {
 			continue
 		}
 		if !trawlkit.ValidShortRef(localAlias) {

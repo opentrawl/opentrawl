@@ -56,6 +56,7 @@ message PluginDeclaredCapabilities {
   bool supports_conversation_listing = 11;
   bool supports_message_listing = 12;
   bool supports_people_snapshot_export = 13;
+  repeated string mutating_bespoke_command_names = 14;
 }
 
 // PluginManifestResponse is returned by a plugin when probed with
@@ -160,6 +161,8 @@ message PluginConversationsOperationRequest {
   bool include_all_conversations = 2;
   string person_filter_text = 3;
   repeated trawl.person.ExactPersonFilterIdentifier exact_person_filter_identifiers = 4;
+  bool unread_only = 5;
+  trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives resolved_person_conversation_filter = 6;
 }
 
 message PluginMessagesOperationRequest {

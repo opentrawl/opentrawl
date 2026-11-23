@@ -76,7 +76,6 @@ require (
 	github.com/opentrawl/opentrawl/trawlers/photos v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/telegram v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/whatsapp v0.0.0
-	github.com/opentrawl/opentrawl/twitter v0.0.0
 	golang.org/x/sys v0.46.0 // indirect
 )
 
@@ -95,8 +94,6 @@ replace github.com/opentrawl/opentrawl/trawlers/photos => ../trawlers/photos
 replace github.com/opentrawl/opentrawl/gmail => ../trawlers/gmail
 
 replace github.com/opentrawl/opentrawl/calendar => ../trawlers/calendar
-
-replace github.com/opentrawl/opentrawl/twitter => ../trawlers/twitter
 
 replace github.com/opentrawl/opentrawl/trawlers/notes => ../trawlers/notes
 

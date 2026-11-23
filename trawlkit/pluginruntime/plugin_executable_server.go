@@ -257,8 +257,7 @@ func runSDKUpdate(
 		defer func() { _ = opened.Close() }()
 		execReq.OpenedTrawlerArchiveStore = opened
 	}
-	execReq.TrawlerCommandPositionalArguments = append([]string(nil), op.GetUpdateArguments()...)
-	report, err := trawlkit.ExecuteUpdateForExternalPluginSDK(ctx, trawler, execReq)
+	report, err := trawlkit.ExecuteUpdateForExternalPluginSDK(ctx, trawler, execReq, op.GetUpdateArguments())
 	if err != nil {
 		return nil, err
 	}
@@ -463,8 +462,10 @@ func runSDKConversations(
 		execReq.OpenedTrawlerArchiveStore = opened
 	}
 	resp, err := trawlkit.ExecuteConversationsForExternalPluginSDK(ctx, trawler, execReq, trawlkit.ConversationQuery{
-		Limit: int(op.GetResultLimit()),
-		All:   op.GetIncludeAllConversations(),
+		Limit:  int(op.GetResultLimit()),
+		All:    op.GetIncludeAllConversations(),
+		Unread: op.GetUnreadOnly(),
+		PersonConversationFilterResolvedAcrossTrawlerArchives: op.GetResolvedPersonConversationFilter(),
 	})
 	if err != nil {
 		return nil, err

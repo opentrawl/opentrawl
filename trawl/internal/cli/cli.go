@@ -25,6 +25,7 @@ type CLI struct {
 	Search        SearchCmd        `cmd:"" help:"Search local archives"`
 	Around        AroundCmd        `cmd:"" help:"Find related records across archives around a link, date, or trip"`
 	Index         IndexCmd         `cmd:"" help:"Inspect or rebuild the unified search index"`
+	Plugin        PluginCmd        `cmd:"" help:"List, install or remove standalone plugins"`
 	Who           WhoCmd           `cmd:"" help:"Find a person"`
 	Conversations ConversationsCmd `cmd:"" help:"List conversations"`
 	Messages      MessagesCmd      `cmd:"" help:"List messages in a conversation"`

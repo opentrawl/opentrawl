@@ -121,6 +121,7 @@ type PluginDeclaredCapabilities struct {
 	SupportsConversationListing      bool     `protobuf:"varint,11,opt,name=supports_conversation_listing,json=supportsConversationListing,proto3" json:"supports_conversation_listing,omitempty"`
 	SupportsMessageListing           bool     `protobuf:"varint,12,opt,name=supports_message_listing,json=supportsMessageListing,proto3" json:"supports_message_listing,omitempty"`
 	SupportsPeopleSnapshotExport     bool     `protobuf:"varint,13,opt,name=supports_people_snapshot_export,json=supportsPeopleSnapshotExport,proto3" json:"supports_people_snapshot_export,omitempty"`
+	MutatingBespokeCommandNames      []string `protobuf:"bytes,14,rep,name=mutating_bespoke_command_names,json=mutatingBespokeCommandNames,proto3" json:"mutating_bespoke_command_names,omitempty"`
 	unknownFields                    protoimpl.UnknownFields
 	sizeCache                        protoimpl.SizeCache
 }
@@ -244,6 +245,13 @@ func (x *PluginDeclaredCapabilities) GetSupportsPeopleSnapshotExport() bool {
 		return x.SupportsPeopleSnapshotExport
 	}
 	return false
+}
+
+func (x *PluginDeclaredCapabilities) GetMutatingBespokeCommandNames() []string {
+	if x != nil {
+		return x.MutatingBespokeCommandNames
+	}
+	return nil
 }
 
 // PluginManifestResponse is returned by a plugin when probed with
@@ -1114,13 +1122,15 @@ func (x *PluginWhoOperationRequest) GetQueryText() string {
 }
 
 type PluginConversationsOperationRequest struct {
-	state                        protoimpl.MessageState                `protogen:"open.v1"`
-	ResultLimit                  uint32                                `protobuf:"varint,1,opt,name=result_limit,json=resultLimit,proto3" json:"result_limit,omitempty"`
-	IncludeAllConversations      bool                                  `protobuf:"varint,2,opt,name=include_all_conversations,json=includeAllConversations,proto3" json:"include_all_conversations,omitempty"`
-	PersonFilterText             string                                `protobuf:"bytes,3,opt,name=person_filter_text,json=personFilterText,proto3" json:"person_filter_text,omitempty"`
-	ExactPersonFilterIdentifiers []*person.ExactPersonFilterIdentifier `protobuf:"bytes,4,rep,name=exact_person_filter_identifiers,json=exactPersonFilterIdentifiers,proto3" json:"exact_person_filter_identifiers,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	state                            protoimpl.MessageState                                        `protogen:"open.v1"`
+	ResultLimit                      uint32                                                        `protobuf:"varint,1,opt,name=result_limit,json=resultLimit,proto3" json:"result_limit,omitempty"`
+	IncludeAllConversations          bool                                                          `protobuf:"varint,2,opt,name=include_all_conversations,json=includeAllConversations,proto3" json:"include_all_conversations,omitempty"`
+	PersonFilterText                 string                                                        `protobuf:"bytes,3,opt,name=person_filter_text,json=personFilterText,proto3" json:"person_filter_text,omitempty"`
+	ExactPersonFilterIdentifiers     []*person.ExactPersonFilterIdentifier                         `protobuf:"bytes,4,rep,name=exact_person_filter_identifiers,json=exactPersonFilterIdentifiers,proto3" json:"exact_person_filter_identifiers,omitempty"`
+	UnreadOnly                       bool                                                          `protobuf:"varint,5,opt,name=unread_only,json=unreadOnly,proto3" json:"unread_only,omitempty"`
+	ResolvedPersonConversationFilter *person.PersonConversationFilterResolvedAcrossTrawlerArchives `protobuf:"bytes,6,opt,name=resolved_person_conversation_filter,json=resolvedPersonConversationFilter,proto3" json:"resolved_person_conversation_filter,omitempty"`
+	unknownFields                    protoimpl.UnknownFields
+	sizeCache                        protoimpl.SizeCache
 }
 
 func (x *PluginConversationsOperationRequest) Reset() {
@@ -1177,6 +1187,20 @@ func (x *PluginConversationsOperationRequest) GetPersonFilterText() string {
 func (x *PluginConversationsOperationRequest) GetExactPersonFilterIdentifiers() []*person.ExactPersonFilterIdentifier {
 	if x != nil {
 		return x.ExactPersonFilterIdentifiers
+	}
+	return nil
+}
+
+func (x *PluginConversationsOperationRequest) GetUnreadOnly() bool {
+	if x != nil {
+		return x.UnreadOnly
+	}
+	return false
+}
+
+func (x *PluginConversationsOperationRequest) GetResolvedPersonConversationFilter() *person.PersonConversationFilterResolvedAcrossTrawlerArchives {
+	if x != nil {
+		return x.ResolvedPersonConversationFilter
 	}
 	return nil
 }
@@ -2115,7 +2139,7 @@ const file_trawl_plugin_plugin_proto_rawDesc = "" +
 	"\x19trawl/plugin/plugin.proto\x12\ftrawl.plugin\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1btrawl/command/command.proto\x1a%trawl/conversation/conversation.proto\x1a!trawl/federation/federation.proto\x1a\x1dtrawl/identity/identity.proto\x1a\x17trawl/index/index.proto\x1a\x1btrawl/message/message.proto\x1a\x15trawl/open/open.proto\x1a\x19trawl/person/person.proto\x1a\x19trawl/search/search.proto\x1a\x19trawl/status/status.proto\x1a\x19trawl/update/update.proto\x1a\x19trawl/worker/worker.proto\"s\n" +
 	"\x1dSelfHostedNetworkHostApproval\x12\"\n" +
 	"\rhost_and_port\x18\x01 \x01(\tR\vhostAndPort\x12.\n" +
-	"\x13allowed_ip_prefixes\x18\x02 \x03(\tR\x11allowedIpPrefixes\"\xe1\x06\n" +
+	"\x13allowed_ip_prefixes\x18\x02 \x03(\tR\x11allowedIpPrefixes\"\xa6\a\n" +
 	"\x1aPluginDeclaredCapabilities\x124\n" +
 	"\x16declared_network_hosts\x18\x01 \x03(\tR\x14declaredNetworkHosts\x12J\n" +
 	"\"declared_self_hosted_network_hosts\x18\x02 \x03(\tR\x1edeclaredSelfHostedNetworkHosts\x129\n" +
@@ -2130,7 +2154,8 @@ const file_trawl_plugin_plugin_proto_rawDesc = "" +
 	" \x01(\bR\x1dsupportsPersonMessageCounting\x12B\n" +
 	"\x1dsupports_conversation_listing\x18\v \x01(\bR\x1bsupportsConversationListing\x128\n" +
 	"\x18supports_message_listing\x18\f \x01(\bR\x16supportsMessageListing\x12E\n" +
-	"\x1fsupports_people_snapshot_export\x18\r \x01(\bR\x1csupportsPeopleSnapshotExport\"\xe4\x01\n" +
+	"\x1fsupports_people_snapshot_export\x18\r \x01(\bR\x1csupportsPeopleSnapshotExport\x12C\n" +
+	"\x1emutating_bespoke_command_names\x18\x0e \x03(\tR\x1bmutatingBespokeCommandNames\"\xe4\x01\n" +
 	"\x16PluginManifestResponse\x12k\n" +
 	"\x1bregistered_trawler_manifest\x18\x01 \x01(\v2+.trawl.federation.RegisteredTrawlerManifestR\x19registeredTrawlerManifest\x12]\n" +
 	"\x15declared_capabilities\x18\x02 \x01(\v2(.trawl.plugin.PluginDeclaredCapabilitiesR\x14declaredCapabilities\"\xd7\x04\n" +
@@ -2190,12 +2215,15 @@ const file_trawl_plugin_plugin_proto_rawDesc = "" +
 	"\x19since_opaque_index_cursor\x18\x02 \x01(\tR\x16sinceOpaqueIndexCursor\":\n" +
 	"\x19PluginWhoOperationRequest\x12\x1d\n" +
 	"\n" +
-	"query_text\x18\x01 \x01(\tR\tqueryText\"\xa4\x02\n" +
+	"query_text\x18\x01 \x01(\tR\tqueryText\"\xda\x03\n" +
 	"#PluginConversationsOperationRequest\x12!\n" +
 	"\fresult_limit\x18\x01 \x01(\rR\vresultLimit\x12:\n" +
 	"\x19include_all_conversations\x18\x02 \x01(\bR\x17includeAllConversations\x12,\n" +
 	"\x12person_filter_text\x18\x03 \x01(\tR\x10personFilterText\x12p\n" +
-	"\x1fexact_person_filter_identifiers\x18\x04 \x03(\v2).trawl.person.ExactPersonFilterIdentifierR\x1cexactPersonFilterIdentifiers\"\x8c\x03\n" +
+	"\x1fexact_person_filter_identifiers\x18\x04 \x03(\v2).trawl.person.ExactPersonFilterIdentifierR\x1cexactPersonFilterIdentifiers\x12\x1f\n" +
+	"\vunread_only\x18\x05 \x01(\bR\n" +
+	"unreadOnly\x12\x92\x01\n" +
+	"#resolved_person_conversation_filter\x18\x06 \x01(\v2C.trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchivesR resolvedPersonConversationFilter\"\x8c\x03\n" +
 	"\x1ePluginMessagesOperationRequest\x12w\n" +
 	"\"local_conversation_short_reference\x18\x01 \x01(\v2*.trawl.identity.LocalTrawlerShortReferenceR\x1flocalConversationShortReference\x12!\n" +
 	"\fresult_limit\x18\x02 \x01(\rR\vresultLimit\x129\n" +
@@ -2275,52 +2303,53 @@ func file_trawl_plugin_plugin_proto_rawDescGZIP() []byte {
 
 var file_trawl_plugin_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_trawl_plugin_plugin_proto_goTypes = []any{
-	(*SelfHostedNetworkHostApproval)(nil),                   // 0: trawl.plugin.SelfHostedNetworkHostApproval
-	(*PluginDeclaredCapabilities)(nil),                      // 1: trawl.plugin.PluginDeclaredCapabilities
-	(*PluginManifestResponse)(nil),                          // 2: trawl.plugin.PluginManifestResponse
-	(*PluginTrustRecord)(nil),                               // 3: trawl.plugin.PluginTrustRecord
-	(*CachedPluginManifestRecord)(nil),                      // 4: trawl.plugin.CachedPluginManifestRecord
-	(*PluginProxyConnectionGrant)(nil),                      // 5: trawl.plugin.PluginProxyConnectionGrant
-	(*PluginSecretEntry)(nil),                               // 6: trawl.plugin.PluginSecretEntry
-	(*PluginSecretMutation)(nil),                            // 7: trawl.plugin.PluginSecretMutation
-	(*ResolvedLocalShortReferenceMapping)(nil),              // 8: trawl.plugin.ResolvedLocalShortReferenceMapping
-	(*PluginManifestOperationRequest)(nil),                  // 9: trawl.plugin.PluginManifestOperationRequest
-	(*PluginStatusOperationRequest)(nil),                    // 10: trawl.plugin.PluginStatusOperationRequest
-	(*PluginUpdateOperationRequest)(nil),                    // 11: trawl.plugin.PluginUpdateOperationRequest
-	(*PluginSearchOperationRequest)(nil),                    // 12: trawl.plugin.PluginSearchOperationRequest
-	(*PluginOpenRecordOperationRequest)(nil),                // 13: trawl.plugin.PluginOpenRecordOperationRequest
-	(*PluginExportArchiveIndexChangesOperationRequest)(nil), // 14: trawl.plugin.PluginExportArchiveIndexChangesOperationRequest
-	(*PluginBespokeCommandOperationRequest)(nil),            // 15: trawl.plugin.PluginBespokeCommandOperationRequest
-	(*PluginWhoOperationRequest)(nil),                       // 16: trawl.plugin.PluginWhoOperationRequest
-	(*PluginConversationsOperationRequest)(nil),             // 17: trawl.plugin.PluginConversationsOperationRequest
-	(*PluginMessagesOperationRequest)(nil),                  // 18: trawl.plugin.PluginMessagesOperationRequest
-	(*PluginPeopleSnapshotOperationRequest)(nil),            // 19: trawl.plugin.PluginPeopleSnapshotOperationRequest
-	(*PluginInvocationRequest)(nil),                         // 20: trawl.plugin.PluginInvocationRequest
-	(*PluginOpenBrowserURLNotice)(nil),                      // 21: trawl.plugin.PluginOpenBrowserURLNotice
-	(*PluginArchiveIndexExportCompleted)(nil),               // 22: trawl.plugin.PluginArchiveIndexExportCompleted
-	(*PluginInvocationResult)(nil),                          // 23: trawl.plugin.PluginInvocationResult
-	(*PluginStreamFrame)(nil),                               // 24: trawl.plugin.PluginStreamFrame
-	(*federation.RegisteredTrawlerManifest)(nil),            // 25: trawl.federation.RegisteredTrawlerManifest
-	(*identity.LocalTrawlerShortReference)(nil),             // 26: trawl.identity.LocalTrawlerShortReference
-	(*identity.CanonicalArchiveRecordReference)(nil),        // 27: trawl.identity.CanonicalArchiveRecordReference
-	(*timestamppb.Timestamp)(nil),                           // 28: google.protobuf.Timestamp
-	(*person.ExactPersonFilterIdentifier)(nil),              // 29: trawl.person.ExactPersonFilterIdentifier
-	(*identity.RecordAnchorIdentifier)(nil),                 // 30: trawl.identity.RecordAnchorIdentifier
-	(*person.ExactPersonMessageCountRequest)(nil),           // 31: trawl.person.ExactPersonMessageCountRequest
-	(*status.TrawlerStatusResponse)(nil),                    // 32: trawl.status.TrawlerStatusResponse
-	(*update.TrawlerArchiveUpdateReport)(nil),               // 33: trawl.update.TrawlerArchiveUpdateReport
-	(*search.TrawlerSearchResponse)(nil),                    // 34: trawl.search.TrawlerSearchResponse
-	(*open.OpenRecord)(nil),                                 // 35: trawl.open.OpenRecord
-	(*command.TrawlerCommandResponse)(nil),                  // 36: trawl.command.TrawlerCommandResponse
-	(*person.TrawlerPersonMatchResponse)(nil),               // 37: trawl.person.TrawlerPersonMatchResponse
-	(*person.ExactPersonMessageCountResponse)(nil),          // 38: trawl.person.ExactPersonMessageCountResponse
-	(*conversation.ConversationListResponse)(nil),           // 39: trawl.conversation.ConversationListResponse
-	(*message.MessageListResponse)(nil),                     // 40: trawl.message.MessageListResponse
-	(*person.TrawlerPeopleSnapshot)(nil),                    // 41: trawl.person.TrawlerPeopleSnapshot
-	(*worker.Error)(nil),                                    // 42: trawl.worker.Error
-	(*worker.Progress)(nil),                                 // 43: trawl.worker.Progress
-	(*worker.Log)(nil),                                      // 44: trawl.worker.Log
-	(*index.ArchiveIndexChangeBatch)(nil),                   // 45: trawl.index.ArchiveIndexChangeBatch
+	(*SelfHostedNetworkHostApproval)(nil),                                // 0: trawl.plugin.SelfHostedNetworkHostApproval
+	(*PluginDeclaredCapabilities)(nil),                                   // 1: trawl.plugin.PluginDeclaredCapabilities
+	(*PluginManifestResponse)(nil),                                       // 2: trawl.plugin.PluginManifestResponse
+	(*PluginTrustRecord)(nil),                                            // 3: trawl.plugin.PluginTrustRecord
+	(*CachedPluginManifestRecord)(nil),                                   // 4: trawl.plugin.CachedPluginManifestRecord
+	(*PluginProxyConnectionGrant)(nil),                                   // 5: trawl.plugin.PluginProxyConnectionGrant
+	(*PluginSecretEntry)(nil),                                            // 6: trawl.plugin.PluginSecretEntry
+	(*PluginSecretMutation)(nil),                                         // 7: trawl.plugin.PluginSecretMutation
+	(*ResolvedLocalShortReferenceMapping)(nil),                           // 8: trawl.plugin.ResolvedLocalShortReferenceMapping
+	(*PluginManifestOperationRequest)(nil),                               // 9: trawl.plugin.PluginManifestOperationRequest
+	(*PluginStatusOperationRequest)(nil),                                 // 10: trawl.plugin.PluginStatusOperationRequest
+	(*PluginUpdateOperationRequest)(nil),                                 // 11: trawl.plugin.PluginUpdateOperationRequest
+	(*PluginSearchOperationRequest)(nil),                                 // 12: trawl.plugin.PluginSearchOperationRequest
+	(*PluginOpenRecordOperationRequest)(nil),                             // 13: trawl.plugin.PluginOpenRecordOperationRequest
+	(*PluginExportArchiveIndexChangesOperationRequest)(nil),              // 14: trawl.plugin.PluginExportArchiveIndexChangesOperationRequest
+	(*PluginBespokeCommandOperationRequest)(nil),                         // 15: trawl.plugin.PluginBespokeCommandOperationRequest
+	(*PluginWhoOperationRequest)(nil),                                    // 16: trawl.plugin.PluginWhoOperationRequest
+	(*PluginConversationsOperationRequest)(nil),                          // 17: trawl.plugin.PluginConversationsOperationRequest
+	(*PluginMessagesOperationRequest)(nil),                               // 18: trawl.plugin.PluginMessagesOperationRequest
+	(*PluginPeopleSnapshotOperationRequest)(nil),                         // 19: trawl.plugin.PluginPeopleSnapshotOperationRequest
+	(*PluginInvocationRequest)(nil),                                      // 20: trawl.plugin.PluginInvocationRequest
+	(*PluginOpenBrowserURLNotice)(nil),                                   // 21: trawl.plugin.PluginOpenBrowserURLNotice
+	(*PluginArchiveIndexExportCompleted)(nil),                            // 22: trawl.plugin.PluginArchiveIndexExportCompleted
+	(*PluginInvocationResult)(nil),                                       // 23: trawl.plugin.PluginInvocationResult
+	(*PluginStreamFrame)(nil),                                            // 24: trawl.plugin.PluginStreamFrame
+	(*federation.RegisteredTrawlerManifest)(nil),                         // 25: trawl.federation.RegisteredTrawlerManifest
+	(*identity.LocalTrawlerShortReference)(nil),                          // 26: trawl.identity.LocalTrawlerShortReference
+	(*identity.CanonicalArchiveRecordReference)(nil),                     // 27: trawl.identity.CanonicalArchiveRecordReference
+	(*timestamppb.Timestamp)(nil),                                        // 28: google.protobuf.Timestamp
+	(*person.ExactPersonFilterIdentifier)(nil),                           // 29: trawl.person.ExactPersonFilterIdentifier
+	(*identity.RecordAnchorIdentifier)(nil),                              // 30: trawl.identity.RecordAnchorIdentifier
+	(*person.PersonConversationFilterResolvedAcrossTrawlerArchives)(nil), // 31: trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives
+	(*person.ExactPersonMessageCountRequest)(nil),                        // 32: trawl.person.ExactPersonMessageCountRequest
+	(*status.TrawlerStatusResponse)(nil),                                 // 33: trawl.status.TrawlerStatusResponse
+	(*update.TrawlerArchiveUpdateReport)(nil),                            // 34: trawl.update.TrawlerArchiveUpdateReport
+	(*search.TrawlerSearchResponse)(nil),                                 // 35: trawl.search.TrawlerSearchResponse
+	(*open.OpenRecord)(nil),                                              // 36: trawl.open.OpenRecord
+	(*command.TrawlerCommandResponse)(nil),                               // 37: trawl.command.TrawlerCommandResponse
+	(*person.TrawlerPersonMatchResponse)(nil),                            // 38: trawl.person.TrawlerPersonMatchResponse
+	(*person.ExactPersonMessageCountResponse)(nil),                       // 39: trawl.person.ExactPersonMessageCountResponse
+	(*conversation.ConversationListResponse)(nil),                        // 40: trawl.conversation.ConversationListResponse
+	(*message.MessageListResponse)(nil),                                  // 41: trawl.message.MessageListResponse
+	(*person.TrawlerPeopleSnapshot)(nil),                                 // 42: trawl.person.TrawlerPeopleSnapshot
+	(*worker.Error)(nil),                                                 // 43: trawl.worker.Error
+	(*worker.Progress)(nil),                                              // 44: trawl.worker.Progress
+	(*worker.Log)(nil),                                                   // 45: trawl.worker.Log
+	(*index.ArchiveIndexChangeBatch)(nil),                                // 46: trawl.index.ArchiveIndexChangeBatch
 }
 var file_trawl_plugin_plugin_proto_depIdxs = []int32{
 	25, // 0: trawl.plugin.PluginManifestResponse.registered_trawler_manifest:type_name -> trawl.federation.RegisteredTrawlerManifest
@@ -2335,48 +2364,49 @@ var file_trawl_plugin_plugin_proto_depIdxs = []int32{
 	27, // 9: trawl.plugin.PluginOpenRecordOperationRequest.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	30, // 10: trawl.plugin.PluginOpenRecordOperationRequest.requested_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
 	29, // 11: trawl.plugin.PluginConversationsOperationRequest.exact_person_filter_identifiers:type_name -> trawl.person.ExactPersonFilterIdentifier
-	26, // 12: trawl.plugin.PluginMessagesOperationRequest.local_conversation_short_reference:type_name -> trawl.identity.LocalTrawlerShortReference
-	28, // 13: trawl.plugin.PluginMessagesOperationRequest.after_time:type_name -> google.protobuf.Timestamp
-	28, // 14: trawl.plugin.PluginMessagesOperationRequest.before_time:type_name -> google.protobuf.Timestamp
-	9,  // 15: trawl.plugin.PluginInvocationRequest.manifest:type_name -> trawl.plugin.PluginManifestOperationRequest
-	10, // 16: trawl.plugin.PluginInvocationRequest.status:type_name -> trawl.plugin.PluginStatusOperationRequest
-	11, // 17: trawl.plugin.PluginInvocationRequest.update:type_name -> trawl.plugin.PluginUpdateOperationRequest
-	12, // 18: trawl.plugin.PluginInvocationRequest.search:type_name -> trawl.plugin.PluginSearchOperationRequest
-	13, // 19: trawl.plugin.PluginInvocationRequest.open_record:type_name -> trawl.plugin.PluginOpenRecordOperationRequest
-	14, // 20: trawl.plugin.PluginInvocationRequest.export_archive_index_changes:type_name -> trawl.plugin.PluginExportArchiveIndexChangesOperationRequest
-	15, // 21: trawl.plugin.PluginInvocationRequest.bespoke_command:type_name -> trawl.plugin.PluginBespokeCommandOperationRequest
-	16, // 22: trawl.plugin.PluginInvocationRequest.who:type_name -> trawl.plugin.PluginWhoOperationRequest
-	31, // 23: trawl.plugin.PluginInvocationRequest.count_person_messages:type_name -> trawl.person.ExactPersonMessageCountRequest
-	17, // 24: trawl.plugin.PluginInvocationRequest.conversations:type_name -> trawl.plugin.PluginConversationsOperationRequest
-	18, // 25: trawl.plugin.PluginInvocationRequest.messages:type_name -> trawl.plugin.PluginMessagesOperationRequest
-	19, // 26: trawl.plugin.PluginInvocationRequest.people_snapshot:type_name -> trawl.plugin.PluginPeopleSnapshotOperationRequest
-	8,  // 27: trawl.plugin.PluginInvocationRequest.pre_resolved_local_short_references:type_name -> trawl.plugin.ResolvedLocalShortReferenceMapping
-	6,  // 28: trawl.plugin.PluginInvocationRequest.brokered_secrets:type_name -> trawl.plugin.PluginSecretEntry
-	5,  // 29: trawl.plugin.PluginInvocationRequest.network_proxy_grant:type_name -> trawl.plugin.PluginProxyConnectionGrant
-	2,  // 30: trawl.plugin.PluginInvocationResult.manifest:type_name -> trawl.plugin.PluginManifestResponse
-	32, // 31: trawl.plugin.PluginInvocationResult.status:type_name -> trawl.status.TrawlerStatusResponse
-	33, // 32: trawl.plugin.PluginInvocationResult.update:type_name -> trawl.update.TrawlerArchiveUpdateReport
-	34, // 33: trawl.plugin.PluginInvocationResult.search:type_name -> trawl.search.TrawlerSearchResponse
-	35, // 34: trawl.plugin.PluginInvocationResult.open_record:type_name -> trawl.open.OpenRecord
-	22, // 35: trawl.plugin.PluginInvocationResult.archive_index_export_completed:type_name -> trawl.plugin.PluginArchiveIndexExportCompleted
-	36, // 36: trawl.plugin.PluginInvocationResult.trawler_command_response:type_name -> trawl.command.TrawlerCommandResponse
-	37, // 37: trawl.plugin.PluginInvocationResult.who:type_name -> trawl.person.TrawlerPersonMatchResponse
-	38, // 38: trawl.plugin.PluginInvocationResult.count_person_messages:type_name -> trawl.person.ExactPersonMessageCountResponse
-	39, // 39: trawl.plugin.PluginInvocationResult.conversations:type_name -> trawl.conversation.ConversationListResponse
-	40, // 40: trawl.plugin.PluginInvocationResult.messages:type_name -> trawl.message.MessageListResponse
-	41, // 41: trawl.plugin.PluginInvocationResult.people_snapshot:type_name -> trawl.person.TrawlerPeopleSnapshot
-	42, // 42: trawl.plugin.PluginInvocationResult.error:type_name -> trawl.worker.Error
-	43, // 43: trawl.plugin.PluginStreamFrame.progress:type_name -> trawl.worker.Progress
-	44, // 44: trawl.plugin.PluginStreamFrame.log:type_name -> trawl.worker.Log
-	45, // 45: trawl.plugin.PluginStreamFrame.archive_index_change_batch:type_name -> trawl.index.ArchiveIndexChangeBatch
-	7,  // 46: trawl.plugin.PluginStreamFrame.secret_mutation:type_name -> trawl.plugin.PluginSecretMutation
-	21, // 47: trawl.plugin.PluginStreamFrame.open_browser_url:type_name -> trawl.plugin.PluginOpenBrowserURLNotice
-	23, // 48: trawl.plugin.PluginStreamFrame.result:type_name -> trawl.plugin.PluginInvocationResult
-	49, // [49:49] is the sub-list for method output_type
-	49, // [49:49] is the sub-list for method input_type
-	49, // [49:49] is the sub-list for extension type_name
-	49, // [49:49] is the sub-list for extension extendee
-	0,  // [0:49] is the sub-list for field type_name
+	31, // 12: trawl.plugin.PluginConversationsOperationRequest.resolved_person_conversation_filter:type_name -> trawl.person.PersonConversationFilterResolvedAcrossTrawlerArchives
+	26, // 13: trawl.plugin.PluginMessagesOperationRequest.local_conversation_short_reference:type_name -> trawl.identity.LocalTrawlerShortReference
+	28, // 14: trawl.plugin.PluginMessagesOperationRequest.after_time:type_name -> google.protobuf.Timestamp
+	28, // 15: trawl.plugin.PluginMessagesOperationRequest.before_time:type_name -> google.protobuf.Timestamp
+	9,  // 16: trawl.plugin.PluginInvocationRequest.manifest:type_name -> trawl.plugin.PluginManifestOperationRequest
+	10, // 17: trawl.plugin.PluginInvocationRequest.status:type_name -> trawl.plugin.PluginStatusOperationRequest
+	11, // 18: trawl.plugin.PluginInvocationRequest.update:type_name -> trawl.plugin.PluginUpdateOperationRequest
+	12, // 19: trawl.plugin.PluginInvocationRequest.search:type_name -> trawl.plugin.PluginSearchOperationRequest
+	13, // 20: trawl.plugin.PluginInvocationRequest.open_record:type_name -> trawl.plugin.PluginOpenRecordOperationRequest
+	14, // 21: trawl.plugin.PluginInvocationRequest.export_archive_index_changes:type_name -> trawl.plugin.PluginExportArchiveIndexChangesOperationRequest
+	15, // 22: trawl.plugin.PluginInvocationRequest.bespoke_command:type_name -> trawl.plugin.PluginBespokeCommandOperationRequest
+	16, // 23: trawl.plugin.PluginInvocationRequest.who:type_name -> trawl.plugin.PluginWhoOperationRequest
+	32, // 24: trawl.plugin.PluginInvocationRequest.count_person_messages:type_name -> trawl.person.ExactPersonMessageCountRequest
+	17, // 25: trawl.plugin.PluginInvocationRequest.conversations:type_name -> trawl.plugin.PluginConversationsOperationRequest
+	18, // 26: trawl.plugin.PluginInvocationRequest.messages:type_name -> trawl.plugin.PluginMessagesOperationRequest
+	19, // 27: trawl.plugin.PluginInvocationRequest.people_snapshot:type_name -> trawl.plugin.PluginPeopleSnapshotOperationRequest
+	8,  // 28: trawl.plugin.PluginInvocationRequest.pre_resolved_local_short_references:type_name -> trawl.plugin.ResolvedLocalShortReferenceMapping
+	6,  // 29: trawl.plugin.PluginInvocationRequest.brokered_secrets:type_name -> trawl.plugin.PluginSecretEntry
+	5,  // 30: trawl.plugin.PluginInvocationRequest.network_proxy_grant:type_name -> trawl.plugin.PluginProxyConnectionGrant
+	2,  // 31: trawl.plugin.PluginInvocationResult.manifest:type_name -> trawl.plugin.PluginManifestResponse
+	33, // 32: trawl.plugin.PluginInvocationResult.status:type_name -> trawl.status.TrawlerStatusResponse
+	34, // 33: trawl.plugin.PluginInvocationResult.update:type_name -> trawl.update.TrawlerArchiveUpdateReport
+	35, // 34: trawl.plugin.PluginInvocationResult.search:type_name -> trawl.search.TrawlerSearchResponse
+	36, // 35: trawl.plugin.PluginInvocationResult.open_record:type_name -> trawl.open.OpenRecord
+	22, // 36: trawl.plugin.PluginInvocationResult.archive_index_export_completed:type_name -> trawl.plugin.PluginArchiveIndexExportCompleted
+	37, // 37: trawl.plugin.PluginInvocationResult.trawler_command_response:type_name -> trawl.command.TrawlerCommandResponse
+	38, // 38: trawl.plugin.PluginInvocationResult.who:type_name -> trawl.person.TrawlerPersonMatchResponse
+	39, // 39: trawl.plugin.PluginInvocationResult.count_person_messages:type_name -> trawl.person.ExactPersonMessageCountResponse
+	40, // 40: trawl.plugin.PluginInvocationResult.conversations:type_name -> trawl.conversation.ConversationListResponse
+	41, // 41: trawl.plugin.PluginInvocationResult.messages:type_name -> trawl.message.MessageListResponse
+	42, // 42: trawl.plugin.PluginInvocationResult.people_snapshot:type_name -> trawl.person.TrawlerPeopleSnapshot
+	43, // 43: trawl.plugin.PluginInvocationResult.error:type_name -> trawl.worker.Error
+	44, // 44: trawl.plugin.PluginStreamFrame.progress:type_name -> trawl.worker.Progress
+	45, // 45: trawl.plugin.PluginStreamFrame.log:type_name -> trawl.worker.Log
+	46, // 46: trawl.plugin.PluginStreamFrame.archive_index_change_batch:type_name -> trawl.index.ArchiveIndexChangeBatch
+	7,  // 47: trawl.plugin.PluginStreamFrame.secret_mutation:type_name -> trawl.plugin.PluginSecretMutation
+	21, // 48: trawl.plugin.PluginStreamFrame.open_browser_url:type_name -> trawl.plugin.PluginOpenBrowserURLNotice
+	23, // 49: trawl.plugin.PluginStreamFrame.result:type_name -> trawl.plugin.PluginInvocationResult
+	50, // [50:50] is the sub-list for method output_type
+	50, // [50:50] is the sub-list for method input_type
+	50, // [50:50] is the sub-list for extension type_name
+	50, // [50:50] is the sub-list for extension extendee
+	0,  // [0:50] is the sub-list for field type_name
 }
 
 func init() { file_trawl_plugin_plugin_proto_init() }
