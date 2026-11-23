@@ -690,10 +690,59 @@ func formatParticipantsForIndex(participants []*indexcontract.ArchiveRecordParti
 		if p == nil {
 			continue
 		}
-		add(p.GetDisplayName())
-		add(p.GetAddressOrHandle())
+		displayName := strings.TrimSpace(p.GetDisplayName())
+		handle := strings.TrimSpace(p.GetAddressOrHandle())
+		add(displayName)
+		if displayName == "" || !isBareNumericIdentifier(handle) {
+			add(handle)
+		}
 	}
 	return TruncateRunes(strings.Join(parts, " "), 500)
+}
+
+func isBareNumericIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	digits := 0
+	for i, r := range s {
+		if i == 0 && r == '-' {
+			continue
+		}
+		if r < '0' || r > '9' {
+			return false
+		}
+		digits++
+	}
+	return digits >= 5
+}
+
+// CleanDisplayPeopleText removes trailing opaque numeric account IDs that older
+// index rows concatenated after a human display name (for example "Alex 12345678").
+func CleanDisplayPeopleText(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	segments := strings.Split(trimmed, ",")
+	cleaned := make([]string, 0, len(segments))
+	for _, seg := range segments {
+		fields := strings.Fields(strings.TrimSpace(seg))
+		if len(fields) == 0 {
+			continue
+		}
+		out := make([]string, 0, len(fields))
+		for _, tok := range fields {
+			if len(out) > 0 && isBareNumericIdentifier(tok) {
+				continue
+			}
+			out = append(out, tok)
+		}
+		if len(out) > 0 {
+			cleaned = append(cleaned, strings.Join(out, " "))
+		}
+	}
+	return strings.Join(cleaned, ", ")
 }
 
 func canonicalRefString(ref *identity.CanonicalArchiveRecordReference) string {

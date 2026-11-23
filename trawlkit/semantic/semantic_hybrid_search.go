@@ -52,6 +52,7 @@ type SemanticSearchHit struct {
 }
 
 type scoredSemanticChunk struct {
+	chunkID          int64
 	trawler          string
 	trawlerDisplay   string
 	recordKind       string
@@ -167,12 +168,16 @@ func SearchSemanticIndex(
 		return nil, err
 	}
 
+	queryTokens := unifiedindex.TokenizeSearchWords(queryText)
+	if indexDB != nil {
+		resolveBestSessionMemberRecords(ctx, semStore.DB(), indexDB, scored, queryTokens)
+	}
+
 	aliasesByTrawlerRef, err := resolveSemanticShortLinks(ctx, indexDB, scored)
 	if err != nil {
 		return nil, err
 	}
 
-	queryTokens := unifiedindex.TokenizeSearchWords(queryText)
 	hits := make([]SemanticSearchHit, 0, len(scored))
 	for _, s := range scored {
 		link := aliasesByTrawlerRef[s.trawler+"\x00"+s.repResolvedRef]
@@ -314,6 +319,7 @@ func hydrateSemanticChunksByID(
 				_ = rows.Close()
 				return nil, err
 			}
+			c.chunkID = chunkID
 			byID[chunkID] = c
 		}
 		rowErr := rows.Err()
@@ -444,7 +450,7 @@ func buildSemanticFederatedMatch(
 	if ctxTitle := strings.TrimSpace(s.displayContext); ctxTitle != "" && ctxTitle != displayName {
 		pres.DigitalContainerNamesNearestToBroadest = []string{ctxTitle}
 	}
-	if ppl := strings.TrimSpace(s.peopleText); ppl != "" {
+	if ppl := unifiedindex.CleanDisplayPeopleText(s.peopleText); ppl != "" {
 		pres.PeopleRelatedToMatchingRecord = []*personcontract.PersonRelatedToArchiveRecord{{
 			PersonDisplayName:         unifiedindex.TruncateRunes(ppl, 120),
 			PersonRoleInArchiveRecord: personcontract.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_PARTICIPANT,
@@ -480,7 +486,7 @@ func buildSemanticFederatedMatch(
 			fmt.Sprintf("%d msgs in session", s.messageCount),
 		)
 	}
-	if preview := strings.TrimSpace(s.bodyPreview); preview != "" {
+	if preview := cleanSemanticSessionPreview(s.bodyPreview); preview != "" {
 		fragments := unifiedindex.BuildHighlightedMatchFragments(preview, queryTokens, 220)
 		if len(fragments) > 0 {
 			pres.SearchMatchTextFieldsInDisplayOrder = []*searchcontract.SearchMatchTextField{{
@@ -500,6 +506,174 @@ func buildSemanticFederatedMatch(
 		SearchMatchPresentation: pres,
 		TrawlLink:               &identity.GloballyRoutableTrawlLink{GloballyRoutableTrawlLink: link},
 	}
+}
+
+// resolveBestSessionMemberRecords aligns multi-message semantic session hits to
+// the specific member message that best matches the query tokens so the row
+// snippet, timestamp, and opened record anchor all refer to the same message.
+func resolveBestSessionMemberRecords(
+	ctx context.Context,
+	semDB *sql.DB,
+	indexDB *sql.DB,
+	chunks []scoredSemanticChunk,
+	queryTokens []string,
+) {
+	if semDB == nil || indexDB == nil || len(chunks) == 0 {
+		return
+	}
+	sessionChunkIdx := make(map[int64]int, len(chunks))
+	chunkIDArgs := make([]any, 0, len(chunks))
+	for i := range chunks {
+		if chunks[i].messageCount > 1 && chunks[i].chunkID > 0 {
+			sessionChunkIdx[chunks[i].chunkID] = i
+			chunkIDArgs = append(chunkIDArgs, chunks[i].chunkID)
+		}
+	}
+	if len(chunkIDArgs) == 0 {
+		return
+	}
+
+	ph := strings.TrimSuffix(strings.Repeat("?,", len(chunkIDArgs)), ",")
+	memberRows, err := semDB.QueryContext(ctx, `
+		select chunk_id, trawler, canonical_ref
+		from semantic_chunk_members
+		where chunk_id in (`+ph+`)
+	`, chunkIDArgs...)
+	if err != nil {
+		return
+	}
+	type memberRef struct {
+		trawler      string
+		canonicalRef string
+	}
+	membersByChunk := make(map[int64][]memberRef, len(chunkIDArgs))
+	refsByTrawler := make(map[string]map[string]struct{}, 4)
+	for memberRows.Next() {
+		var cid int64
+		var tr, cref string
+		if err := memberRows.Scan(&cid, &tr, &cref); err != nil {
+			continue
+		}
+		membersByChunk[cid] = append(membersByChunk[cid], memberRef{trawler: tr, canonicalRef: cref})
+		if refsByTrawler[tr] == nil {
+			refsByTrawler[tr] = make(map[string]struct{})
+		}
+		refsByTrawler[tr][cref] = struct{}{}
+	}
+	_ = memberRows.Close()
+	if len(membersByChunk) == 0 {
+		return
+	}
+
+	type indexedMember struct {
+		resolvedRef      string
+		occurredUnix     int64
+		hasTimeOfDay     int
+		utcOffsetSeconds int
+		peopleText       string
+		bodyText         string
+	}
+	memberData := make(map[string]indexedMember, 256)
+	for tr, refSet := range refsByTrawler {
+		refs := make([]string, 0, len(refSet))
+		for r := range refSet {
+			refs = append(refs, r)
+		}
+		const batchSize = 400
+		for start := 0; start < len(refs); start += batchSize {
+			end := min(start+batchSize, len(refs))
+			batch := refs[start:end]
+			rph := strings.TrimSuffix(strings.Repeat("?,", len(batch)), ",")
+			args := make([]any, 0, len(batch)+1)
+			args = append(args, tr)
+			for _, r := range batch {
+				args = append(args, r)
+			}
+			rows, qErr := indexDB.QueryContext(ctx, `
+				select canonical_ref, resolved_ref, coalesce(occurred_unix, 0), has_time_of_day,
+				       utc_offset_seconds, people_text, body_text
+				from indexed_archive_records
+				where trawler = ? and canonical_ref in (`+rph+`)
+			`, args...)
+			if qErr != nil {
+				continue
+			}
+			for rows.Next() {
+				var cref string
+				var m indexedMember
+				if err := rows.Scan(&cref, &m.resolvedRef, &m.occurredUnix, &m.hasTimeOfDay, &m.utcOffsetSeconds, &m.peopleText, &m.bodyText); err != nil {
+					continue
+				}
+				memberData[tr+"\x00"+cref] = m
+			}
+			_ = rows.Close()
+		}
+	}
+
+	lowerTokens := make([]string, 0, len(queryTokens))
+	for _, tok := range queryTokens {
+		if t := strings.ToLower(strings.TrimSpace(tok)); t != "" {
+			lowerTokens = append(lowerTokens, t)
+		}
+	}
+
+	for cid, idx := range sessionChunkIdx {
+		members := membersByChunk[cid]
+		if len(members) == 0 {
+			continue
+		}
+		bestScore := 0
+		var best indexedMember
+		hasBest := false
+		for _, mr := range members {
+			m, ok := memberData[mr.trawler+"\x00"+mr.canonicalRef]
+			if !ok || strings.TrimSpace(m.resolvedRef) == "" {
+				continue
+			}
+			score := 0
+			lowerBody := strings.ToLower(m.bodyText)
+			for _, tok := range lowerTokens {
+				if strings.Contains(lowerBody, tok) {
+					score++
+				}
+			}
+			if score > bestScore || (score == bestScore && score > 0 && hasBest && m.occurredUnix < best.occurredUnix) {
+				bestScore = score
+				best = m
+				hasBest = true
+			}
+		}
+		if hasBest && bestScore > 0 {
+			chunks[idx].repResolvedRef = best.resolvedRef
+			chunks[idx].occurredUnix = best.occurredUnix
+			chunks[idx].hasTimeOfDay = best.hasTimeOfDay
+			chunks[idx].utcOffsetSeconds = best.utcOffsetSeconds
+			speaker := unifiedindex.CleanDisplayPeopleText(best.peopleText)
+			body := strings.TrimSpace(best.bodyText)
+			if speaker != "" && body != "" {
+				chunks[idx].bodyPreview = unifiedindex.TruncateRunes(speaker+": "+body, 240)
+			} else if body != "" {
+				chunks[idx].bodyPreview = unifiedindex.TruncateRunes(body, 240)
+			}
+		}
+	}
+}
+
+func cleanSemanticSessionPreview(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Split(trimmed, " · ")
+	for i, part := range parts {
+		if colon := strings.Index(part, ": "); colon > 0 && colon < 64 {
+			prefix := unifiedindex.CleanDisplayPeopleText(part[:colon])
+			if prefix != "" {
+				parts[i] = prefix + part[colon:]
+			}
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 func displayKindForSemanticRecord(kind string) string {

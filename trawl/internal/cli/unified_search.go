@@ -336,7 +336,6 @@ func mergeUnifiedAndFallbackSearchOperations(
 		fallbackMatches = fallbackResp.GetSearchMatchesInDisplayOrder()
 		op.OperationFailures = append(op.OperationFailures, fallbackResp.GetOperationFailures()...)
 		op.TrawlersSkippedFromOperation = append(op.TrawlersSkippedFromOperation, fallbackResp.GetTrawlersSkippedFromOperation()...)
-		op.TrawlerSearchResults = append(op.TrawlerSearchResults, fallbackResp.GetTrawlerSearchResults()...)
 	}
 
 	totalCandidatesBeforeCap := len(matches) + len(fallbackMatches)
@@ -363,6 +362,36 @@ func mergeUnifiedAndFallbackSearchOperations(
 	op.MoreSearchMatchesExist = unifiedOut.MoreMatchesExist ||
 		(fallbackResp != nil && fallbackResp.GetMoreSearchMatchesExist()) ||
 		totalCandidatesBeforeCap > len(matches)
+
+	if fallbackResp != nil {
+		keptLinks := make(map[string]struct{}, len(matches))
+		for _, match := range matches {
+			if link := strings.TrimSpace(match.GetTrawlLink().GetGloballyRoutableTrawlLink()); link != "" {
+				keptLinks[link] = struct{}{}
+			}
+		}
+		for _, ts := range fallbackResp.GetTrawlerSearchResults() {
+			kept := make([]*federationcontract.FederatedSearchMatch, 0, len(ts.GetSearchMatchesFromTrawlerInDisplayOrder()))
+			for _, match := range ts.GetSearchMatchesFromTrawlerInDisplayOrder() {
+				if link := strings.TrimSpace(match.GetTrawlLink().GetGloballyRoutableTrawlLink()); link != "" {
+					if _, ok := keptLinks[link]; ok {
+						kept = append(kept, match)
+					}
+				}
+			}
+			more := ts.GetMoreSearchMatchesExist() ||
+				ts.GetTotalSearchMatches() > uint64(len(kept)) ||
+				len(ts.GetSearchMatchesFromTrawlerInDisplayOrder()) > len(kept)
+			op.TrawlerSearchResults = append(op.TrawlerSearchResults, &federationcontract.TrawlerSearchResult{
+				RegisteredTrawler:                      ts.GetRegisteredTrawler(),
+				RegisteredTrawlerDisplayName:           ts.GetRegisteredTrawlerDisplayName(),
+				SearchMatchesFromTrawlerInDisplayOrder: kept,
+				TotalSearchMatches:                     ts.GetTotalSearchMatches(),
+				MoreSearchMatchesExist:                 more,
+				TotalSearchMatchesIsLowerBound:         ts.GetTotalSearchMatchesIsLowerBound(),
+			})
+		}
+	}
 
 	// Record one TrawlerSearchResult per indexed trawler that matched using its
 	// own source-specific count so per-app totals and more-matches flags stay

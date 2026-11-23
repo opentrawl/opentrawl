@@ -433,7 +433,7 @@ func candidateToFederatedSearchMatch(
 	if ctxTitle := strings.TrimSpace(c.displayContext); ctxTitle != "" && ctxTitle != pres.MatchingRecordDisplayName {
 		pres.DigitalContainerNamesNearestToBroadest = []string{ctxTitle}
 	}
-	if ppl := strings.TrimSpace(c.peopleText); ppl != "" {
+	if ppl := CleanDisplayPeopleText(c.peopleText); ppl != "" {
 		pres.PeopleRelatedToMatchingRecord = []*personcontract.PersonRelatedToArchiveRecord{{
 			PersonDisplayName:         TruncateRunes(ppl, 120),
 			PersonRoleInArchiveRecord: personcontract.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_PARTICIPANT,
