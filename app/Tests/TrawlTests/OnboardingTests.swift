@@ -38,22 +38,18 @@ struct OnboardingTests {
   }
 
   @MainActor
-  @Test func aNewBuildStartsAtWelcomeInsteadOfRestoringAnOldCheckpoint() {
+  @Test func onboardingCheckpointSurvivesAnAppUpdate() {
     let suite = "OnboardingTests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     defaults.set(OnboardingStage.permission.rawValue, forKey: OnboardingModel.checkpointKey)
-    defaults.set("old-build", forKey: OnboardingModel.checkpointOwnerKey)
 
     let onboarding = OnboardingModel(
       defaults: defaults,
-      checkpointOwner: "new-build",
       openFullDiskAccess: {}
     )
 
-    #expect(onboarding.stage == .welcome)
-    #expect(defaults.string(forKey: OnboardingModel.checkpointKey) == nil)
-    #expect(defaults.string(forKey: OnboardingModel.checkpointOwnerKey) == nil)
+    #expect(onboarding.stage == .permission)
   }
 
   @MainActor
@@ -63,7 +59,6 @@ struct OnboardingTests {
     defer { defaults.removePersistentDomain(forName: suite) }
     let onboarding = OnboardingModel(
       defaults: defaults,
-      checkpointOwner: "build",
       openFullDiskAccess: {}
     )
     onboarding.complete()
@@ -74,7 +69,6 @@ struct OnboardingTests {
     #expect(onboarding.stage == .welcome)
     #expect(!defaults.bool(forKey: OnboardingModel.completionKey))
     #expect(defaults.string(forKey: OnboardingModel.checkpointKey) == nil)
-    #expect(defaults.string(forKey: OnboardingModel.checkpointOwnerKey) == nil)
   }
 
   @Test func aiInstructionNamesItsIntentAndDoesNotClaimToChangeConfiguration() {

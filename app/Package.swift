@@ -44,6 +44,8 @@ let package = Package(
                 .linkedFramework("Vision"),
                 .linkedFramework("Security"),
                 .linkedFramework("LocalAuthentication"),
+                .linkedFramework("WebKit"),
+                .linkedFramework("ServiceManagement"),
                 .unsafeFlags([
                     "-Xlinker", "-rpath",
                     "-Xlinker", "@executable_path/../Frameworks",

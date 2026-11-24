@@ -49,8 +49,11 @@ public final class AppModel {
   public private(set) var updateProgress:
     [RegisteredTrawlerIdentity: TrawlerArchiveUpdateProgressState] = [:]
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
+  public private(set) var fullDiskAccessChoice: FullDiskAccessChoice
   private var automaticUpdateFailureCounts: [RegisteredTrawlerIdentity: Int] = [:]
   private var refreshGeneration: UInt64 = 0
+  private var hostRevision: UInt64 = 0
+  private let defaults: UserDefaults
 
   public var restingTrawlers: [RestingTrawler] {
     let runtimeTrawlers = TrawlerRestingCopy.trawlers(
@@ -104,11 +107,17 @@ public final class AppModel {
   }
 
   public var needsFullDiskAccessRecovery: Bool {
+    if fullDiskAccessChoice == .leftOut { return false }
     if diskAccess == .denied { return true }
     return diskAccess != .granted
       && (statusOperationFailures + updateOperationFailures).contains {
         $0.failureCode == .permission
       }
+  }
+
+  public func setFullDiskAccessChoice(_ choice: FullDiskAccessChoice) {
+    fullDiskAccessChoice = choice
+    choice.save(to: defaults)
   }
 
   public var fullDiskAccessTrawlers: [RegisteredTrawlerIdentity] {
@@ -138,6 +147,7 @@ public final class AppModel {
   public init(
     client: any TrawlClient,
     permissionProbe: FullDiskAccessProbe = FullDiskAccessProbe(),
+    defaults: UserDefaults = .standard,
     automaticUpdateBaseDelay: Duration = .seconds(3_600),
     automaticUpdateSleep: @escaping @Sendable (Duration) async throws -> Void = {
       try await Task.sleep(for: $0)
@@ -148,13 +158,17 @@ public final class AppModel {
   ) {
     self.client = client
     self.permissionProbe = permissionProbe
+    self.defaults = defaults
+    self.fullDiskAccessChoice = FullDiskAccessChoice.load(from: defaults)
     self.automaticUpdateBaseDelay = automaticUpdateBaseDelay
     self.automaticUpdateSleep = automaticUpdateSleep
     self.prepareSourceAppsForUpdate = prepareSourceAppsForUpdate
   }
 
   public func clearForConnectionSwitch() {
+    hostRevision &+= 1
     refreshGeneration &+= 1
+    isUpdating = false
     phase = .loading
     trawlerStatuses = []
     registeredTrawlerCatalog = []
@@ -168,6 +182,7 @@ public final class AppModel {
     trawlerArchiveUpdateResults = []
     updateOperationFailures = []
     updateProgress = [:]
+    automaticUpdateFailureCounts = [:]
   }
 
   public func refresh() async {
@@ -255,6 +270,7 @@ public final class AppModel {
     trigger: TrawlerArchiveUpdateTrigger = .manual
   ) async {
     guard !isUpdating else { return }
+    let originatingHostRevision = hostRevision
     // Record disk access so the UI can surface optional Full Disk Access
     // recovery without blocking zero-FDA apps from updating.
     _ = checkDiskAccess()
@@ -285,7 +301,11 @@ public final class AppModel {
     for registeredTrawler in requestedTrawlers {
       updateProgress[registeredTrawler] = .waiting
     }
-    defer { isUpdating = false }
+    defer {
+      if hostRevision == originatingHostRevision {
+        isUpdating = false
+      }
+    }
 
     do {
       if keepSourceAppsRunningForAutomaticUpdates {
@@ -298,7 +318,12 @@ public final class AppModel {
           await prepareSourceAppsForUpdate(manifestsRequiringRunningSourceApp)
         }
       }
-      let result = try await updateWithProgress(registeredTrawlers: requestedTrawlers)
+      guard hostRevision == originatingHostRevision else { return }
+      let result = try await updateWithProgress(
+        registeredTrawlers: requestedTrawlers,
+        originatingHostRevision: originatingHostRevision
+      )
+      guard hostRevision == originatingHostRevision else { return }
       trawlerArchiveUpdateResults = mergeUpdateResults(
         trawlerArchiveUpdateResults,
         replacing: result.trawlerArchiveUpdateResults)
@@ -359,24 +384,28 @@ public final class AppModel {
         checkDiskAccess()
       }
       await refresh()
+      guard hostRevision == originatingHostRevision else { return }
       // Published after the closing status refresh so the home toolbar's
       // completion confirmation starts when the update visibly ends.
       if let archiveUpdateCompletionTime {
         lastSuccessfullyCompletedArchiveUpdateTime = archiveUpdateCompletionTime
       }
     } catch is CancellationError {
+      guard hostRevision == originatingHostRevision else { return }
       updateMessage = previousUpdateMessage
       trawlerArchiveUpdateResults = previousUpdateResults
       updateOperationFailures = previousUpdateFailures
       updateProgress = previousUpdateProgress
       return
     } catch TrawlClientError.cancelled {
+      guard hostRevision == originatingHostRevision else { return }
       updateMessage = previousUpdateMessage
       trawlerArchiveUpdateResults = previousUpdateResults
       updateOperationFailures = previousUpdateFailures
       updateProgress = previousUpdateProgress
       return
     } catch {
+      guard hostRevision == originatingHostRevision else { return }
       updateMessage = error.localizedDescription
       recordAutomaticUpdate(
         successfullyUpdatedTrawlers: [],
@@ -454,7 +483,8 @@ public final class AppModel {
   }
 
   private func updateWithProgress(
-    registeredTrawlers: [RegisteredTrawlerIdentity]
+    registeredTrawlers: [RegisteredTrawlerIdentity],
+    originatingHostRevision: UInt64
   ) async throws -> FederatedTrawlerArchiveUpdateOperation {
     let client = self.client
     let (events, continuation) = AsyncStream<TrawlerArchiveUpdateProgress>.makeStream()
@@ -468,6 +498,7 @@ public final class AppModel {
     }
     return try await withTaskCancellationHandler {
       for await event in events {
+        guard hostRevision == originatingHostRevision else { continue }
         applyUpdateProgress(event)
       }
       return try await task.value

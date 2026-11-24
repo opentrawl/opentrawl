@@ -30,6 +30,7 @@ enum TrawlStatus: Sendable, Equatable {
 
 enum OnboardingPage: Int, CaseIterable {
   case welcome
+  case chooseApps
   case access
   case archive
   case commandDemo

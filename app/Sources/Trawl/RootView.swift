@@ -6,25 +6,28 @@ import TrawlCore
 
 struct RootView: View {
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.openSettings) private var openSettings
   @Bindable var model: AppModel
 
   let client: any TrawlClient
   let connectionStore: ArchiveConnectionStore
+  let runtimeConfiguration: TrawlRuntimeConfiguration
   let featureFlags: AppFeatureFlags
   let buildIdentity: BuildIdentity
   let aiInstruction: String
-  let terminalCommand: String
   let openFullDiskAccess: @MainActor () -> Void
+  let onOpenSettingsPane: @MainActor (SettingsPane) -> Void
 
   @State private var onboarding: OnboardingModel
   @State private var appInstallations: MacAppInstallations
   @State private var trawlerIconStore = TrawlerIconStore()
+  @State private var destination: WorkspaceDestination = .overview
   @State private var searchFocusRequestToken = 0
   @State private var isShowingConnectionPopover = false
+  @State private var isShowingXSignInSheet = false
+  @State private var accountConnectionError: String?
   @State private var hasCopiedAIInstructions = false
   @State private var aiPromptCopyResetTask: Task<Void, Never>?
-  @State private var hasCopiedTerminalCommand = false
-  @State private var terminalCommandCopyResetTask: Task<Void, Never>?
   @State private var isShowingRecentUpdateCompletion = false
   @State private var updateCompletionLingerTask: Task<Void, Never>?
 
@@ -33,35 +36,44 @@ struct RootView: View {
     client: any TrawlClient,
     connectionStore: ArchiveConnectionStore = ArchiveConnectionStore(
       runtimeConfiguration: TrawlRuntimeConfiguration()),
+    runtimeConfiguration: TrawlRuntimeConfiguration = TrawlRuntimeConfiguration(),
     onboarding: OnboardingModel = OnboardingModel(),
     featureFlags: AppFeatureFlags = .current(),
     appInstallations: MacAppInstallations = MacAppInstallations(),
     buildIdentity: BuildIdentity = .current,
     aiInstruction: String = AgentPrompts.connectAI,
-    terminalCommand: String = TrawlTerminalHandoff.executableHelpCommand(
-      helperURL: TrawlRuntimeConfiguration().helperURL),
     openFullDiskAccess: @escaping @MainActor () -> Void =
-      PermissionGuideController.openSystemSettings
+      PermissionGuideController.openSystemSettings,
+    onOpenSettingsPane: @escaping @MainActor (SettingsPane) -> Void = { _ in }
   ) {
     self.model = model
     self.client = client
     self.connectionStore = connectionStore
+    self.runtimeConfiguration = runtimeConfiguration
     self.featureFlags = featureFlags
     self.buildIdentity = buildIdentity
     self.aiInstruction = aiInstruction
-    self.terminalCommand = terminalCommand
     self.openFullDiskAccess = openFullDiskAccess
+    self.onOpenSettingsPane = onOpenSettingsPane
     _onboarding = State(initialValue: onboarding)
     _appInstallations = State(initialValue: appInstallations)
+  }
+
+  /// Remote archive connections show the workspace directly without falsely
+  /// marking local Mac setup complete, so switching back to "This Mac" resumes
+  /// local setup cleanly if it never ran.
+  private var showsWorkspace: Bool {
+    onboarding.isComplete || connectionStore.isRemote
   }
 
   var body: some View {
     VStack(spacing: 0) {
       ZStack {
         CanvasBackground()
-        if onboarding.isComplete {
+        if showsWorkspace {
           home
           Button("") {
+            destination = .search
             searchFocusRequestToken &+= 1
           }
           .keyboardShortcut("k", modifiers: .command)
@@ -69,6 +81,7 @@ struct RootView: View {
           .frame(width: 0, height: 0)
           .accessibilityHidden(true)
           Button("") {
+            destination = .search
             searchFocusRequestToken &+= 1
           }
           .keyboardShortcut("f", modifiers: .command)
@@ -86,13 +99,15 @@ struct RootView: View {
             connectionStore: connectionStore,
             onConnectedToRemoteArchive: {
               handleArchiveConnectionChanged()
-              finishOnboarding()
             },
+            onSignInGmail: signInGmail,
+            onSignInX: { isShowingXSignInSheet = true },
+            onOpenSourceApp: openSourceApp(bundleIdentifier:),
             onFinish: finishOnboarding
           )
         }
       }
-      if onboarding.isComplete {
+      if showsWorkspace {
         Divider()
         BuildIdentityFooter(
           identity: buildIdentity,
@@ -102,54 +117,59 @@ struct RootView: View {
     }
     .background(
       WindowBehavior(
-        isOnboarding: !onboarding.isComplete
+        isOnboarding: !showsWorkspace
       )
     )
     .environment(trawlerIconStore)
+    .sheet(isPresented: $isShowingXSignInSheet) {
+      XWebSignInSheet(
+        runtimeConfiguration: runtimeConfiguration,
+        onConnected: {
+          Task {
+            await model.refresh()
+            await model.updateNow(
+              registeredTrawlers: [RegisteredTrawlerIdentity(registeredTrawlerIdentity: "twitter")]
+            )
+          }
+        },
+        onDismiss: {
+          isShowingXSignInSheet = false
+        }
+      )
+    }
+    .alert(
+      "Could not connect account",
+      isPresented: Binding(
+        get: { accountConnectionError != nil },
+        set: { if !$0 { accountConnectionError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { accountConnectionError = nil }
+    } message: {
+      Text(accountConnectionError ?? "")
+    }
     .toolbar {
-      if onboarding.isComplete {
-        ToolbarItem {
+      if showsWorkspace {
+        ToolbarItem(placement: .principal) {
+          Picker("View", selection: $destination) {
+            ForEach(WorkspaceDestination.allCases) { tab in
+              Text(tab.title).tag(tab)
+            }
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+          .frame(width: 176)
+        }
+
+        ToolbarItemGroup(placement: .primaryAction) {
           archiveConnectionButton
-        }
-        if !connectionStore.isRemote {
-          ToolbarItem {
-            Button {
-              NSPasteboard.general.clearContents()
-              NSPasteboard.general.setString(aiInstruction, forType: .string)
-              confirmAIPromptCopied()
-            } label: {
-              Label(
-                hasCopiedAIInstructions
-                  ? OperationalCopy.Home.copiedAIPromptConfirmation
-                  : OperationalCopy.Home.copyAIPromptAction,
-                systemImage: hasCopiedAIInstructions ? "checkmark" : "sparkles"
-              )
-              .labelStyle(.titleAndIcon)
-            }
-          }
-          ToolbarItem {
-            Button {
-              NSPasteboard.general.clearContents()
-              NSPasteboard.general.setString(terminalCommand, forType: .string)
-              confirmTerminalCommandCopied()
-            } label: {
-              Label {
-                Text(
-                  markdownStyled(
-                    hasCopiedTerminalCommand
-                      ? OperationalCopy.Home.copiedTerminalCommandConfirmation
-                      : OperationalCopy.Home.copyTerminalCommandAction)
-                )
-              } icon: {
-                Image(
-                  systemName: hasCopiedTerminalCommand ? "checkmark" : "apple.terminal")
-              }
-              .labelStyle(.titleAndIcon)
-            }
-          }
-        }
-        ToolbarItem {
           archiveUpdateButton
+          Button {
+            openSettingsPane(.general)
+          } label: {
+            Label("Settings", systemImage: "gearshape")
+          }
+          .help("Open Settings (⌘,)")
         }
       }
     }
@@ -166,7 +186,7 @@ struct RootView: View {
     .onChange(of: scenePhase) {
       guard scenePhase == .active else { return }
       refreshAppMetadata()
-      if onboarding.isComplete {
+      if showsWorkspace {
         Task {
           if connectionStore.isRemote {
             await model.refresh()
@@ -182,7 +202,7 @@ struct RootView: View {
       }
     }
     .task {
-      if onboarding.isComplete {
+      if showsWorkspace {
         if connectionStore.isRemote {
           await model.refresh()
         } else {
@@ -200,8 +220,14 @@ struct RootView: View {
     }
   }
 
+  private func openSettingsPane(_ pane: SettingsPane) {
+    onOpenSettingsPane(pane)
+    openSettings()
+  }
+
   private func handleArchiveConnectionChanged() {
     model.clearForConnectionSwitch()
+    destination = .overview
     Task {
       await model.refresh()
     }
@@ -219,8 +245,8 @@ struct RootView: View {
     }
     .help(
       connectionStore.isRemote
-        ? "Connected to remote archive \(connectionStore.activeHostDisplayName)"
-        : "Reading archive on this Mac. Click to connect to a remote archive."
+        ? "Connected to archive on \(connectionStore.activeHostDisplayName)"
+        : "Reading archive on this Mac. Click to switch archive host."
     )
     .popover(isPresented: $isShowingConnectionPopover, arrowEdge: .bottom) {
       RemoteArchiveConnectionView(
@@ -235,10 +261,16 @@ struct RootView: View {
   }
 
   private var trawlersToUpdate: [RegisteredTrawlerIdentity] {
-    featureFlags.trawlersToUpdate(
+    let candidates = featureFlags.trawlersToUpdate(
       reportedTrawlers: model.updateCandidateTrawlers,
       unavailableTrawlers: appInstallations.unavailableTrawlers
     )
+    if model.fullDiskAccessChoice == .leftOut {
+      return candidates.filter {
+        !AppOperabilityState.fullDiskAccessTrawlerIDs.contains($0.registeredTrawlerIdentity)
+      }
+    }
+    return candidates
   }
 
   private func refreshAppMetadata() {
@@ -246,6 +278,51 @@ struct RootView: View {
       registeredTrawlerCatalog: model.registeredTrawlerCatalog)
     trawlerIconStore.update(
       registeredTrawlerCatalog: model.registeredTrawlerCatalog)
+  }
+
+  private var operabilityByID: [RegisteredTrawlerIdentity: AppOperabilityState] {
+    let statusesByID = Dictionary(
+      uniqueKeysWithValues: model.trawlerStatuses.map { ($0.id, $0) }
+    )
+    let failuresByID = Dictionary(
+      (model.statusOperationFailures + model.updateOperationFailures).map {
+        ($0.failedTrawler, $0)
+      },
+      uniquingKeysWith: { _, latest in latest }
+    )
+    return Dictionary(
+      uniqueKeysWithValues: homeTrawlers.map { trawler in
+        (
+          trawler.id,
+          AppOperabilityState.resolve(
+            trawler: trawler,
+            status: statusesByID[trawler.id],
+            updateProgress: model.updateProgress[trawler.id],
+            operationFailure: failuresByID[trawler.id],
+            isRemoteArchive: connectionStore.isRemote,
+            isInstalledOnThisMac: appInstallations.isAvailable(trawler.id),
+            fullDiskAccessChoice: model.fullDiskAccessChoice
+          )
+        )
+      }
+    )
+  }
+
+  private var freshnessLine: String {
+    if connectionStore.isRemote {
+      return "Read-only archive"
+    }
+    if model.isUpdating {
+      return "Updating…"
+    }
+    if let updateTime = model.lastSuccessfullyCompletedArchiveUpdateTime {
+      return "Updated at \(updateTime.formatted(date: .omitted, time: .shortened))"
+    }
+    if let latest = model.trawlerStatuses.compactMap(\.lastSuccessfullyCompletedArchiveUpdateTime).max() {
+      let relative = RelativeDateTimeFormatter().localizedString(for: latest, relativeTo: Date())
+      return "Updated \(relative)"
+    }
+    return "On this Mac"
   }
 
   @ViewBuilder
@@ -287,24 +364,86 @@ struct RootView: View {
           }
         )
       } else {
-        ArchiveTimelineWorkspaceView(
+        ArchiveWorkspaceView(
           client: client,
           trawlers: homeTrawlers,
           searchableTrawlers: searchableHomeTrawlers,
           trawlerStatuses: model.trawlerStatuses.filter {
             featureFlags.includes($0.id)
           },
-          detailOverrides: HomeTrawlerPresentation.detailOverrides(
-            for: homeTrawlers,
-            appInstallations: appInstallations,
-            isRemoteArchive: connectionStore.isRemote
-          ),
-          updatingTrawlers: connectionStore.isRemote ? [] : activelyUpdatingTrawlers,
-          focusRequestToken: searchFocusRequestToken
+          operabilityByID: operabilityByID,
+          hostDisplayName: connectionStore.activeHostDisplayName,
+          freshnessLine: freshnessLine,
+          isRemoteArchive: connectionStore.isRemote,
+          hasCopiedAIPrompt: hasCopiedAIInstructions,
+          focusRequestToken: searchFocusRequestToken,
+          destination: $destination,
+          onCopyAIPrompt: {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(aiInstruction, forType: .string)
+            confirmAIPromptCopied()
+          },
+          onOpenAIAppsSettings: { openSettingsPane(.aiApps) },
+          onOpenOtherMacsSettings: { openSettingsPane(.otherMacs) },
+          onOpenPluginsSettings: { openSettingsPane(.apps) },
+          onOpenHostSwitcher: { isShowingConnectionPopover = true },
+          onRunAttentionAction: { trawlerID, action in
+            handleAttentionAction(action, for: trawlerID)
+          }
         )
         .id(connectionStore.connectionRevision)
       }
     }
+  }
+
+  private func handleAttentionAction(
+    _ action: AppAttentionAction,
+    for trawlerID: RegisteredTrawlerIdentity
+  ) {
+    switch action {
+    case .openFullDiskAccessSettings:
+      model.setFullDiskAccessChoice(.included)
+      openFullDiskAccess()
+    case .openPrivacySettings(let paneAnchor):
+      if let url = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?\(paneAnchor)"
+      ) {
+        NSWorkspace.shared.open(url)
+      }
+    case .openSourceApp(let bundleIdentifier, _):
+      openSourceApp(bundleIdentifier: bundleIdentifier)
+    case .signInGmail:
+      signInGmail()
+    case .signInX:
+      isShowingXSignInSheet = true
+    case .retryUpdate:
+      Task {
+        await model.updateNow(registeredTrawlers: [trawlerID])
+      }
+    }
+  }
+
+  private func signInGmail() {
+    Task {
+      do {
+        try await TrawlerAccountConnector.connectGmail(configuration: runtimeConfiguration)
+        await model.refresh()
+        await model.updateNow(
+          registeredTrawlers: [RegisteredTrawlerIdentity(registeredTrawlerIdentity: "gmail")]
+        )
+      } catch {
+        accountConnectionError = error.localizedDescription
+      }
+    }
+  }
+
+  private func openSourceApp(bundleIdentifier: String) {
+    guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+      return
+    }
+    let config = NSWorkspace.OpenConfiguration()
+    config.activates = true
+    NSWorkspace.shared.openApplication(at: appURL, configuration: config)
   }
 
   private var homeTrawlers: [RestingTrawler] {
@@ -315,25 +454,10 @@ struct RootView: View {
     homeTrawlers.filter { $0.state != .comingSoon }
   }
 
-  private var activelyUpdatingTrawlers: Set<RegisteredTrawlerIdentity> {
-    guard model.isUpdating else { return [] }
-    return Set(
-      model.updateProgress.compactMap { registeredTrawler, progressState in
-        switch progressState {
-        case .waiting, .building, .finalising:
-          registeredTrawler
-        case .finished, .failed:
-          nil
-        }
-      })
-  }
-
   private func finishOnboarding() {
     onboarding.complete()
   }
 
-  /// The archive keeps itself up to date. This button shows that state and
-  /// lets people start an update themselves.
   @ViewBuilder
   private var archiveUpdateButton: some View {
     if connectionStore.isRemote {
@@ -393,27 +517,6 @@ struct RootView: View {
       try? await Task.sleep(for: .seconds(5))
       guard !Task.isCancelled else { return }
       hasCopiedAIInstructions = false
-    }
-  }
-
-  /// Renders locked copy that uses markdown code spans, such as `trawl`,
-  /// with monospaced styling. The strings are compile-time constants, so a
-  /// parse failure is a programming error.
-  private func markdownStyled(_ lockedCopy: String) -> AttributedString {
-    do {
-      return try AttributedString(markdown: lockedCopy)
-    } catch {
-      preconditionFailure("Locked copy is not valid markdown: \(lockedCopy)")
-    }
-  }
-
-  private func confirmTerminalCommandCopied() {
-    hasCopiedTerminalCommand = true
-    terminalCommandCopyResetTask?.cancel()
-    terminalCommandCopyResetTask = Task { @MainActor in
-      try? await Task.sleep(for: .seconds(5))
-      guard !Task.isCancelled else { return }
-      hasCopiedTerminalCommand = false
     }
   }
 }

@@ -320,7 +320,9 @@ public struct TrawlerSearchResult: Sendable, Equatable {
 }
 
 public struct TrawlArchiveSearchRequest: Sendable, Equatable {
-  public static let defaultMaximumReturnedSearchMatchCount: UInt32 = 20
+  public static let defaultMaximumReturnedSearchMatchCount: UInt32 = 50
+  public static let pageStepSize: UInt32 = 50
+  public static let maximumSupportedSearchMatchCount: UInt32 = 500
 
   public let searchQueryText: String
   public let onlySearchThisRegisteredTrawler: RegisteredTrawlerIdentity?

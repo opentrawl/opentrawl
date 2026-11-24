@@ -70,7 +70,7 @@ struct RootViewTests {
   }
 
   @MainActor
-  @Test func returningLaunchUsesResizableWindowWithMinimum1200By820() {
+  @Test func returningLaunchUsesResizableWindowWithMinimum720By680() {
     let window = NSWindow(
       contentRect: NSRect(origin: .zero, size: TrawlDesign.minimumWindow),
       styleMask: [.titled, .closable, .miniaturizable],

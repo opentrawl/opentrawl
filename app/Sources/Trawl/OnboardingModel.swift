@@ -6,6 +6,7 @@ import TrawlCore
 
 enum OnboardingStage: String, Sendable, Equatable {
   case welcome
+  case chooseApps
   case permission
   case building
   case commandDemo
@@ -24,10 +25,10 @@ enum PermissionCheckState: Sendable, Equatable {
 final class OnboardingModel {
   static let completionKey = "OpenTrawlOnboardingComplete"
   static let checkpointKey = "OpenTrawlOnboardingCheckpoint"
-  static let checkpointOwnerKey = "OpenTrawlOnboardingCheckpointOwner"
 
   private enum OnboardingFlowState: Equatable {
     case welcome(archiveBuildHasStarted: Bool)
+    case chooseApps(archiveBuildHasStarted: Bool)
     case permission(
       checkState: PermissionCheckState,
       awaitingReturnFromSystemSettings: Bool,
@@ -39,7 +40,6 @@ final class OnboardingModel {
   }
 
   private let defaults: UserDefaults
-  private let checkpointOwner: String
   private let openFullDiskAccess: @MainActor () -> Void
   private var permissionTask: Task<Void, Never>?
   private var updateTask: Task<Void, Never>?
@@ -48,12 +48,13 @@ final class OnboardingModel {
   private(set) var hasCopiedAIInstructions = false
   /// The docked guide is showing in System Settings, holding the app tile.
   private(set) var permissionGuideIsOpen = false
-  /// The person explicitly chose to continue without Full Disk Access for now.
+  /// The person explicitly chose to leave out the five Full Disk Access apps for now.
   private(set) var skippedFullDiskAccess = false
 
   var stage: OnboardingStage {
     switch flowState {
     case .welcome: .welcome
+    case .chooseApps: .chooseApps
     case .permission: .permission
     case .building: .building
     case .commandDemo: .commandDemo
@@ -67,7 +68,7 @@ final class OnboardingModel {
       checkState
     case .building, .commandDemo, .complete:
       .confirmed
-    case .welcome:
+    case .welcome, .chooseApps:
       .idle
     }
   }
@@ -77,6 +78,7 @@ final class OnboardingModel {
   private var archiveBuildHasStarted: Bool {
     switch flowState {
     case .welcome(let archiveBuildHasStarted),
+      .chooseApps(let archiveBuildHasStarted),
       .permission(_, _, let archiveBuildHasStarted):
       archiveBuildHasStarted
     case .building, .commandDemo, .complete:
@@ -86,32 +88,68 @@ final class OnboardingModel {
 
   init(
     defaults: UserDefaults = .standard,
-    checkpointOwner: String = OnboardingModel.currentCheckpointOwner,
     openFullDiskAccess: @escaping @MainActor () -> Void =
       PermissionGuideController.openSystemSettings
   ) {
     self.defaults = defaults
-    self.checkpointOwner = checkpointOwner
     self.openFullDiskAccess = openFullDiskAccess
+    self.skippedFullDiskAccess = FullDiskAccessChoice.load(from: defaults) == .leftOut
     if defaults.bool(forKey: Self.completionKey) {
       flowState = .complete
-    } else if defaults.string(forKey: Self.checkpointOwnerKey) != checkpointOwner {
-      defaults.removeObject(forKey: Self.checkpointKey)
-      defaults.removeObject(forKey: Self.checkpointOwnerKey)
-      flowState = .welcome(archiveBuildHasStarted: false)
-    } else if defaults.string(forKey: Self.checkpointKey) == OnboardingStage.commandDemo.rawValue {
-      flowState = .commandDemo
-    } else if defaults.string(forKey: Self.checkpointKey) == OnboardingStage.building.rawValue {
-      flowState = .building(needsInitialUpdateResume: true)
-    } else if defaults.string(forKey: Self.checkpointKey) != nil {
-      flowState = .permission(
-        checkState: .idle,
-        awaitingReturnFromSystemSettings: false,
-        archiveBuildHasStarted: false
-      )
+    } else if let saved = defaults.string(forKey: Self.checkpointKey),
+      let savedStage = OnboardingStage(rawValue: saved)
+    {
+      switch savedStage {
+      case .welcome:
+        flowState = .welcome(archiveBuildHasStarted: false)
+      case .chooseApps:
+        flowState = .chooseApps(archiveBuildHasStarted: false)
+      case .permission:
+        flowState = .permission(
+          checkState: .idle,
+          awaitingReturnFromSystemSettings: false,
+          archiveBuildHasStarted: false
+        )
+      case .building:
+        flowState = .building(needsInitialUpdateResume: true)
+      case .commandDemo:
+        flowState = .commandDemo
+      case .complete:
+        flowState = .complete
+      }
     } else {
       flowState = .welcome(archiveBuildHasStarted: false)
     }
+  }
+
+  func showChooseApps() {
+    FullDiskAccessGuide.dismiss()
+    permissionTask?.cancel()
+    permissionTask = nil
+    let buildStarted = archiveBuildHasStarted
+    flowState = .chooseApps(archiveBuildHasStarted: buildStarted)
+    if !buildStarted {
+      saveCheckpoint(.chooseApps)
+    }
+  }
+
+  func includeFullDiskAccessApps(appModel: AppModel) {
+    skippedFullDiskAccess = false
+    appModel.setFullDiskAccessChoice(.included)
+    showPermission(appModel: appModel)
+  }
+
+  func leaveOutFullDiskAccessApps(
+    appModel: AppModel,
+    registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
+  ) {
+    skippedFullDiskAccess = true
+    appModel.setFullDiskAccessChoice(.leftOut)
+    FullDiskAccessGuide.dismiss()
+    continueAfterVerifiedAccess(
+      appModel: appModel,
+      registeredTrawlers: registeredTrawlers
+    )
   }
 
   func showPermission() {
@@ -143,7 +181,6 @@ final class OnboardingModel {
     updateTask?.cancel()
     updateTask = nil
     defaults.removeObject(forKey: Self.checkpointKey)
-    defaults.removeObject(forKey: Self.checkpointOwnerKey)
   }
 
   func returnToBuilding() {
@@ -166,6 +203,8 @@ final class OnboardingModel {
     appModel: AppModel,
     registeredTrawlers: @escaping @MainActor () -> [RegisteredTrawlerIdentity]
   ) {
+    appModel.setFullDiskAccessChoice(.included)
+    skippedFullDiskAccess = false
     showPermission()
     if appModel.checkDiskAccess() == .granted {
       setPermissionCheckState(.confirmed, awaitingReturnFromSystemSettings: false)
@@ -236,6 +275,7 @@ final class OnboardingModel {
   ) {
     guard case .permission(checkState: .confirmed, _, _) = flowState else { return }
     skippedFullDiskAccess = false
+    appModel.setFullDiskAccessChoice(.included)
     continueAfterVerifiedAccess(
       appModel: appModel, registeredTrawlers: registeredTrawlers)
   }
@@ -246,6 +286,7 @@ final class OnboardingModel {
   ) {
     guard case .permission = flowState else { return }
     skippedFullDiskAccess = true
+    appModel.setFullDiskAccessChoice(.leftOut)
     FullDiskAccessGuide.dismiss()
     continueAfterVerifiedAccess(
       appModel: appModel, registeredTrawlers: registeredTrawlers)
@@ -327,7 +368,6 @@ final class OnboardingModel {
   func complete() {
     defaults.set(true, forKey: Self.completionKey)
     defaults.removeObject(forKey: Self.checkpointKey)
-    defaults.removeObject(forKey: Self.checkpointOwnerKey)
     flowState = .complete
   }
 
@@ -342,7 +382,7 @@ final class OnboardingModel {
     skippedFullDiskAccess = false
     defaults.removeObject(forKey: Self.completionKey)
     defaults.removeObject(forKey: Self.checkpointKey)
-    defaults.removeObject(forKey: Self.checkpointOwnerKey)
+    defaults.removeObject(forKey: FullDiskAccessChoice.defaultsKey)
     flowState = .welcome(archiveBuildHasStarted: false)
   }
 
@@ -441,15 +481,5 @@ final class OnboardingModel {
 
   private func saveCheckpoint(_ stage: OnboardingStage) {
     defaults.set(stage.rawValue, forKey: Self.checkpointKey)
-    defaults.set(checkpointOwner, forKey: Self.checkpointOwnerKey)
-  }
-
-  static var currentCheckpointOwner: String {
-    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-    let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-    let commit = Bundle.main.object(forInfoDictionaryKey: "GitCommit") as? String
-    return [version, build, commit]
-      .compactMap { $0 }
-      .joined(separator: ":")
   }
 }

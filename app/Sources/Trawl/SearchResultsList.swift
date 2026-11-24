@@ -11,11 +11,34 @@ enum SearchResultBounds {
     default: "Showing \(shown) results"
     }
   }
+
+  static func summary(
+    shownCount: Int,
+    totalCount: UInt64,
+    isLowerBound: Bool,
+    isTruncated: Bool
+  ) -> String {
+    guard shownCount > 0 else { return "Showing no results" }
+    let effectiveTotal = max(UInt64(shownCount), totalCount)
+    if isTruncated || effectiveTotal > UInt64(shownCount) {
+      if isLowerBound {
+        return "Showing \(shownCount.formatted()) of at least \(effectiveTotal.formatted())"
+      }
+      return "Showing \(shownCount.formatted()) of \(effectiveTotal.formatted())"
+    }
+    return shownCount == 1 ? "Showing 1 result" : "Showing \(shownCount.formatted()) results"
+  }
 }
 
 struct SearchResultsList: View {
   let phase: SearchPhase
   let searchMatches: [SearchMatch]
+  let totalMatchedRecordCount: UInt64
+  let totalMatchedCountIsLowerBound: Bool
+  let isTruncated: Bool
+  let isLoadingMore: Bool
+  let canLoadMore: Bool
+  let loadMoreFailureMessage: String?
   let trawlerDisplayName: (RegisteredTrawlerIdentity?) -> String
   let showsTrawlerDisplayName: Bool
   let committedQuery: String?
@@ -27,39 +50,103 @@ struct SearchResultsList: View {
   let onEscape: () -> Void
   let onOpen: (SearchMatch) -> Void
   let onSelectionChanged: (SearchMatch) -> Void
+  let onLoadMore: () -> Void
+
+  private struct MonthSection: Identifiable {
+    let id: String
+    let title: String
+    let matches: [SearchMatch]
+  }
+
+  private var groupedSections: [MonthSection] {
+    var sections: [MonthSection] = []
+    var currentKey: String?
+    var currentMatches: [SearchMatch] = []
+
+    for match in searchMatches {
+      let key: String
+      if let time = match.time {
+        key = time.formatted(.dateTime.month(.wide).year())
+      } else {
+        key = "Undated"
+      }
+      if key == currentKey {
+        currentMatches.append(match)
+      } else {
+        if let existingKey = currentKey {
+          sections.append(
+            MonthSection(
+              id: "\(sections.count)-\(existingKey)",
+              title: existingKey,
+              matches: currentMatches
+            )
+          )
+        }
+        currentKey = key
+        currentMatches = [match]
+      }
+    }
+    if let existingKey = currentKey {
+      sections.append(
+        MonthSection(
+          id: "\(sections.count)-\(existingKey)",
+          title: existingKey,
+          matches: currentMatches
+        )
+      )
+    }
+    return sections
+  }
 
   var body: some View {
     GeometryReader { proxy in
       ScrollViewReader { scrollProxy in
         ScrollView {
-          LazyVStack(spacing: 0) {
+          LazyVStack(alignment: .leading, spacing: 0) {
             SearchResultsContext(
               phase: phase,
               resultCount: searchMatches.count,
+              totalMatchedRecordCount: totalMatchedRecordCount,
+              totalMatchedCountIsLowerBound: totalMatchedCountIsLowerBound,
+              isTruncated: isTruncated,
               resultLimit: resultLimit,
               committedQuery: committedQuery
             )
-            ForEach(searchMatches) { searchMatch in
-              Button {
-                selectedSearchMatchIdentifier = searchMatch.id
-                onOpen(searchMatch)
-              } label: {
-                SearchResultRow(
-                  searchMatch: searchMatch,
-                  title: title(searchMatch),
-                  registeredTrawlerDisplayName: trawlerDisplayName(
-                    searchMatch.registeredTrawler),
-                  showsTrawlerDisplayName: showsTrawlerDisplayName,
-                  isSelected: selectedSearchMatchIdentifier == searchMatch.id
-                )
+            ForEach(groupedSections) { section in
+              HStack {
+                Text(section.title)
+                  .font(.system(size: 11, weight: .semibold))
+                  .foregroundStyle(TrawlDesign.Colors.mutedInk)
+                Spacer()
               }
-              .id(searchMatch.id)
-              .buttonStyle(.plain)
-              Rectangle()
-                .fill(TrawlDesign.Colors.hairline.opacity(0.75))
-                .frame(height: 0.5)
-                .padding(.leading, 44)
+              .padding(.horizontal, 14)
+              .padding(.vertical, 6)
+              .background(TrawlDesign.Colors.surface.opacity(0.65))
+
+              ForEach(section.matches) { searchMatch in
+                Button {
+                  selectedSearchMatchIdentifier = searchMatch.id
+                  onOpen(searchMatch)
+                } label: {
+                  SearchResultRow(
+                    searchMatch: searchMatch,
+                    title: title(searchMatch),
+                    registeredTrawlerDisplayName: trawlerDisplayName(
+                      searchMatch.registeredTrawler),
+                    showsTrawlerDisplayName: showsTrawlerDisplayName,
+                    isSelected: selectedSearchMatchIdentifier == searchMatch.id
+                  )
+                }
+                .id(searchMatch.id)
+                .buttonStyle(.plain)
+                Rectangle()
+                  .fill(TrawlDesign.Colors.hairline.opacity(0.75))
+                  .frame(height: 0.5)
+                  .padding(.leading, 44)
+              }
             }
+
+            paginationFooter
           }
           .frame(
             width: min(proxy.size.width, TrawlDesign.recordReadingWidth),
@@ -93,6 +180,44 @@ struct SearchResultsList: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
+  @ViewBuilder
+  private var paginationFooter: some View {
+    if let loadMoreFailureMessage {
+      HStack(spacing: 8) {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .foregroundStyle(TrawlDesign.Colors.warningAmber)
+        Text(loadMoreFailureMessage)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Spacer()
+        Button("Try again", action: onLoadMore)
+          .buttonStyle(.bordered)
+          .controlSize(.small)
+      }
+      .padding(12)
+    } else if isLoadingMore {
+      HStack(spacing: 8) {
+        Spacer()
+        ProgressView()
+          .controlSize(.small)
+        Text("Loading more results…")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Spacer()
+      }
+      .padding(.vertical, 14)
+    } else if canLoadMore {
+      HStack {
+        Spacer()
+        Button("Load 50 more", action: onLoadMore)
+          .buttonStyle(.bordered)
+          .controlSize(.small)
+        Spacer()
+      }
+      .padding(.vertical, 14)
+    }
+  }
+
   private func moveSelection(by offset: Int) {
     guard !searchMatches.isEmpty else { return }
     let currentIndex =
@@ -108,6 +233,9 @@ struct SearchResultsList: View {
 private struct SearchResultsContext: View {
   let phase: SearchPhase
   let resultCount: Int
+  let totalMatchedRecordCount: UInt64
+  let totalMatchedCountIsLowerBound: Bool
+  let isTruncated: Bool
   let resultLimit: UInt32
   let committedQuery: String?
 
@@ -120,7 +248,14 @@ private struct SearchResultsContext: View {
       ) {
         Label(retained, systemImage: "magnifyingglass")
       } else if resultLimit > 0 {
-        Text(SearchResultBounds.copy(resultCount: resultCount, resultLimit: resultLimit))
+        Text(
+          SearchResultBounds.summary(
+            shownCount: resultCount,
+            totalCount: totalMatchedRecordCount,
+            isLowerBound: totalMatchedCountIsLowerBound,
+            isTruncated: isTruncated
+          )
+        )
       }
       if case .partial = phase {
         Label(OperationalCopy.Search.partialResults, systemImage: "exclamationmark.triangle")
@@ -147,7 +282,7 @@ private struct SearchResultRow: View {
   var body: some View {
     HStack(alignment: .top, spacing: 10) {
       if let registeredTrawler = searchMatch.registeredTrawler {
-        TrawlerIconView(registeredTrawler: registeredTrawler, size: 24)
+        TrawlerIconView(registeredTrawler: registeredTrawler, size: 22)
       }
       VStack(alignment: .leading, spacing: 3) {
         if showsTrawlerDisplayName {
@@ -205,9 +340,9 @@ private struct SearchResultRow: View {
         }
       }
     }
-    .padding(.vertical, 10)
+    .padding(.vertical, 9)
     .padding(.horizontal, 12)
-    .frame(minHeight: 68, alignment: .topLeading)
+    .frame(minHeight: 62, alignment: .topLeading)
     .background(
       isSelected ? TrawlDesign.Colors.selectBlueSurface : .clear,
       in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control)

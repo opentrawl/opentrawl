@@ -14,6 +14,9 @@ struct BuildStep: View {
   let onRetryApp: (RegisteredTrawlerIdentity) -> Void
   let onRetryInitialLoad: () -> Void
   let onPermissionRecovery: () -> Void
+  var onSignInGmail: (() -> Void)? = nil
+  var onSignInX: (() -> Void)? = nil
+  var onOpenSourceApp: ((String) -> Void)? = nil
   let onStop: () -> Void
   let onFinish: () -> Void
 
@@ -57,7 +60,7 @@ struct BuildStep: View {
 
   var body: some View {
     TrawlFlowScaffold(page: .archive) {
-      VStack(alignment: .leading, spacing: TrawlDesign.onboardingSectionSpacing) {
+      VStack(alignment: .leading, spacing: 18) {
         OnboardingProse(
           title: archiveIsReady
             ? HumanCopy.ArchiveBuild.readyTitle
@@ -66,7 +69,6 @@ struct BuildStep: View {
             ? HumanCopy.ArchiveBuild.readyBody
             : HumanCopy.ArchiveBuild.body
         )
-        .frame(height: 100, alignment: .topLeading)
         AIConnectionPanel(
           hasCopied: hasCopiedAIInstructions,
           onCopy: copyAIInstructions
@@ -74,11 +76,13 @@ struct BuildStep: View {
         ArchiveBuildStatus(
           appModel: appModel,
           appInstallations: appInstallations,
-          comingSoonEntries: comingSoonEntries,
           hasGlobalPermissionFailure: hasGlobalPermissionFailure,
           onRetryApp: onRetryApp,
           onRetryInitialLoad: onRetryInitialLoad,
-          onPermissionRecovery: onPermissionRecovery
+          onPermissionRecovery: onPermissionRecovery,
+          onSignInGmail: onSignInGmail,
+          onSignInX: onSignInX,
+          onOpenSourceApp: onOpenSourceApp
         )
       }
     } actions: {
@@ -98,36 +102,35 @@ struct BuildStep: View {
     NSPasteboard.general.setString(aiInstruction, forType: .string)
     onCopyAIInstructions()
   }
-
-  private var comingSoonEntries: [RegisteredTrawlerCatalogEntry] {
-    appModel.registeredTrawlerCatalog.filter {
-      $0.registeredTrawlerReleaseState == .comingSoon
-    }
-  }
 }
 
 private struct ArchiveBuildStatus: View {
   let appModel: AppModel
   let appInstallations: MacAppInstallations
-  let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
   let hasGlobalPermissionFailure: Bool
   let onRetryApp: (RegisteredTrawlerIdentity) -> Void
   let onRetryInitialLoad: () -> Void
   let onPermissionRecovery: () -> Void
+  let onSignInGmail: (() -> Void)?
+  let onSignInX: (() -> Void)?
+  let onOpenSourceApp: ((String) -> Void)?
 
   var body: some View {
     if appModel.blockingFailureMessage != nil, appModel.displayedTrawlers.isEmpty {
       InitialLoadRecovery(action: onRetryInitialLoad)
     } else {
-      VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 12) {
         if hasGlobalPermissionFailure {
           PermissionRecoveryBanner(action: onPermissionRecovery)
         }
         ArchiveTrawlerSummary(
           appModel: appModel,
           appInstallations: appInstallations,
-          comingSoonEntries: comingSoonEntries,
-          onRetryApp: onRetryApp
+          onRetryApp: onRetryApp,
+          onPermissionRecovery: onPermissionRecovery,
+          onSignInGmail: onSignInGmail,
+          onSignInX: onSignInX,
+          onOpenSourceApp: onOpenSourceApp
         )
       }
     }
@@ -137,83 +140,146 @@ private struct ArchiveBuildStatus: View {
 private struct ArchiveTrawlerSummary: View {
   let appModel: AppModel
   let appInstallations: MacAppInstallations
-  let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
   let onRetryApp: (RegisteredTrawlerIdentity) -> Void
+  let onPermissionRecovery: () -> Void
+  let onSignInGmail: (() -> Void)?
+  let onSignInX: (() -> Void)?
+  let onOpenSourceApp: ((String) -> Void)?
 
-  private var availableTrawlers: [RegisteredTrawlerIdentity] {
-    appModel.displayedTrawlers.filter {
-      appModel.catalogEntry(for: $0)?.registeredTrawlerReleaseState != .comingSoon
-    }
+  private var statusesByID: [RegisteredTrawlerIdentity: TrawlerStatus] {
+    Dictionary(uniqueKeysWithValues: appModel.trawlerStatuses.map { ($0.id, $0) })
   }
 
-  private var presentations: [(RegisteredTrawlerIdentity, AppBuildRowPresentation)] {
-    availableTrawlers.map {
-      (
-        $0,
-        AppBuildRowPresentation.resolve(
-          for: $0,
-          in: appModel,
-          appInstallations: appInstallations,
-          suppressPermissionFailure: false
-        )
-      )
-    }
+  private var failuresByID: [RegisteredTrawlerIdentity: TrawlerOperationFailure] {
+    Dictionary(
+      (appModel.statusOperationFailures + appModel.updateOperationFailures).map {
+        ($0.failedTrawler, $0)
+      },
+      uniquingKeysWith: { _, latest in latest }
+    )
+  }
+
+  private var availableTrawlers: [RestingTrawler] {
+    appModel.homeTrawlers.filter { $0.state != .comingSoon }
   }
 
   private var searchableCount: Int {
-    presentations.count { $0.1.status == .success || $0.1.status == .warning }
+    availableTrawlers.count { trawler in
+      let op = operability(for: trawler)
+      return op.archivedItemCount > 0 && !op.needsAttention
+    }
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 8) {
       HStack(alignment: .firstTextBaseline) {
         Text(HumanCopy.ArchiveBuild.yourAppsTitle)
           .trawlText(.sectionHeader)
         Spacer()
-        ArchiveProgressSummary(
-          searchableCount: searchableCount,
-          totalCount: presentations.count
+        Text(
+          String(
+            format: HumanCopy.ArchiveBuild.progressFormat,
+            searchableCount,
+            availableTrawlers.count
+          )
         )
+        .trawlText(.meta)
+        .foregroundStyle(.secondary)
       }
-      if !availableTrawlers.isEmpty {
-        AppBuildList(
-          registeredTrawlers: availableTrawlers,
-          comingSoonEntries: [],
-          appModel: appModel,
-          appInstallations: appInstallations,
-          suppressPermissionFailures: false,
-          onRetryApp: onRetryApp
-        )
+
+      ScrollView {
+        VStack(spacing: 0) {
+          ForEach(Array(availableTrawlers.enumerated()), id: \.element.id) { index, trawler in
+            let state = operability(for: trawler)
+            ArchiveBuildRow(
+              trawler: trawler,
+              state: state,
+              isUpdating: appModel.isUpdating,
+              onAction: { action in
+                perform(action, for: trawler.id)
+              }
+            )
+            if index < availableTrawlers.count - 1 {
+              Divider()
+            }
+          }
+        }
       }
-      if !comingSoonEntries.isEmpty {
-        Text(HumanCopy.ArchiveBuild.moreAppsTitle)
-          .trawlText(.sectionHeader)
-          .padding(.top, TrawlDesign.onboardingSubgroupSpacing)
-        AppBuildList(
-          registeredTrawlers: [],
-          comingSoonEntries: comingSoonEntries,
-          appModel: appModel,
-          appInstallations: appInstallations,
-          suppressPermissionFailures: false,
-          onRetryApp: onRetryApp
-        )
+      .frame(maxHeight: 310)
+      .background(
+        TrawlDesign.Colors.paper,
+        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
+      )
+    }
+  }
+
+  private func operability(for trawler: RestingTrawler) -> AppOperabilityState {
+    AppOperabilityState.resolve(
+      trawler: trawler,
+      status: statusesByID[trawler.id],
+      updateProgress: appModel.updateProgress[trawler.id],
+      operationFailure: failuresByID[trawler.id],
+      isRemoteArchive: false,
+      isInstalledOnThisMac: appInstallations.isAvailable(trawler.id),
+      fullDiskAccessChoice: appModel.fullDiskAccessChoice
+    )
+  }
+
+  private func perform(_ action: AppAttentionAction, for trawlerID: RegisteredTrawlerIdentity) {
+    switch action {
+    case .openFullDiskAccessSettings:
+      onPermissionRecovery()
+    case .openPrivacySettings(let paneAnchor):
+      if let url = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?\(paneAnchor)"
+      ) {
+        NSWorkspace.shared.open(url)
       }
+    case .openSourceApp(let bundleID, _):
+      onOpenSourceApp?(bundleID)
+    case .signInGmail:
+      onSignInGmail?()
+    case .signInX:
+      onSignInX?()
+    case .retryUpdate:
+      onRetryApp(trawlerID)
     }
   }
 }
 
-private struct ArchiveProgressSummary: View {
-  let searchableCount: Int
-  let totalCount: Int
+private struct ArchiveBuildRow: View {
+  let trawler: RestingTrawler
+  let state: AppOperabilityState
+  let isUpdating: Bool
+  let onAction: (AppAttentionAction) -> Void
 
   var body: some View {
-    Text(summary)
-      .trawlText(.meta)
-      .foregroundStyle(.secondary)
-  }
-
-  private var summary: String {
-    String(format: HumanCopy.ArchiveBuild.progressFormat, searchableCount, totalCount)
+    HStack(spacing: 10) {
+      TrawlerIconView(registeredTrawler: trawler.id, size: 22)
+      Text(trawler.registeredTrawlerDisplayName)
+        .font(.system(size: 13.5, weight: .medium))
+        .foregroundStyle(TrawlDesign.Colors.ink)
+      Spacer(minLength: 10)
+      Text(state.statusLine)
+        .font(.system(size: 12))
+        .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmber : .secondary)
+        .lineLimit(1)
+        .truncationMode(.tail)
+      if let actionTitle = state.actionTitle, let action = state.action {
+        Button(actionTitle) {
+          onAction(action)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(isUpdating && action == .retryUpdate)
+      }
+    }
+    .padding(.horizontal, 12)
+    .frame(minHeight: 38)
   }
 }
 
@@ -238,137 +304,31 @@ private struct AIConnectionPanel: View {
   let onCopy: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(HumanCopy.ConnectAI.title)
-        .trawlText(.sectionHeader)
-      Text(HumanCopy.ConnectAI.body)
-        .trawlText(.body)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-      copyButton
-    }
-  }
-
-  private var copyButton: some View {
-    Button(action: onCopy) {
-      Label(
-        HumanCopy.ConnectAI.copyAction,
-        systemImage: hasCopied ? "checkmark" : "doc.on.doc"
-      )
-    }
-    .buttonStyle(.bordered)
-    .buttonBorderShape(.capsule)
-    .controlSize(.small)
-    .tint(.primary)
-  }
-}
-
-private struct AppBuildList: View {
-  let registeredTrawlers: [RegisteredTrawlerIdentity]
-  let comingSoonEntries: [RegisteredTrawlerCatalogEntry]
-  let appModel: AppModel
-  let appInstallations: MacAppInstallations
-  let suppressPermissionFailures: Bool
-  let onRetryApp: (RegisteredTrawlerIdentity) -> Void
-
-  private var columns: [GridItem] {
-    if registeredTrawlers.count > 6 {
-      return [
-        GridItem(.flexible(), spacing: 28, alignment: .leading),
-        GridItem(.flexible(), spacing: 28, alignment: .leading),
-      ]
-    }
-    return [GridItem(.flexible(), alignment: .leading)]
-  }
-
-  var body: some View {
-    VStack(spacing: 0) {
-      LazyVGrid(columns: columns, alignment: .leading, spacing: 0) {
-        ForEach(registeredTrawlers, id: \.self) { registeredTrawler in
-          let presentation = AppBuildRowPresentation.resolve(
-            for: registeredTrawler,
-            in: appModel,
-            appInstallations: appInstallations,
-            suppressPermissionFailure: suppressPermissionFailures
-          )
-          VStack(spacing: 0) {
-            ArchiveAppRow(
-              registeredTrawler: registeredTrawler,
-              name: presentation.name,
-              status: presentation.status,
-              statusLabel: presentation.statusLabel,
-              recoveryTitle: presentation.canRetry ? HumanCopy.AppStatus.retry : nil,
-              recovery: presentation.canRetry ? { onRetryApp(registeredTrawler) } : nil,
-              recoveryDisabled: appModel.isUpdating
-            )
-            Divider()
-          }
-        }
-      }
-      ForEach(comingSoonEntries, id: \.id) { entry in
-        ArchiveAppRow(
-          registeredTrawler: entry.id,
-          name: entry.registeredTrawlerManifest.registeredTrawlerDisplayName,
-          status: .neutral,
-          statusLabel: HumanCopy.AppStatus.comingSoon,
-          accessibilityStatus: HumanCopy.AppStatus.comingSoon,
-          symbolOverride: "clock",
-          recoveryTitle: nil,
-          recovery: nil,
-          recoveryDisabled: true
-        )
-        Divider()
-      }
-    }
-  }
-}
-
-private struct ArchiveAppRow: View {
-  let registeredTrawler: RegisteredTrawlerIdentity
-  let name: String
-  let status: TrawlStatus
-  let statusLabel: String?
-  var accessibilityStatus: String?
-  var symbolOverride: String?
-  let recoveryTitle: String?
-  let recovery: (() -> Void)?
-  let recoveryDisabled: Bool
-
-  var body: some View {
-    HStack(spacing: 8) {
-      TrawlerIconView(
-        registeredTrawler: registeredTrawler,
-        size: 22)
-      Text(name)
-        .trawlText(.body)
-      Spacer(minLength: 12)
-      if status == .working {
-        Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+    HStack(alignment: .center, spacing: 14) {
+      VStack(alignment: .leading, spacing: 4) {
+        Text(HumanCopy.ConnectAI.title)
+          .trawlText(.sectionHeader)
+        Text(HumanCopy.ConnectAI.body)
+          .font(.system(size: 12.5))
           .foregroundStyle(.secondary)
-          .accessibilityHidden(true)
-      } else if statusLabel != nil, status != .neutral || symbolOverride != nil {
-        Image(systemName: symbolOverride ?? status.symbol)
-          .foregroundStyle(status.colour)
-          .accessibilityHidden(true)
+          .fixedSize(horizontal: false, vertical: true)
       }
-      if let statusLabel {
-        Text(statusLabel)
-          .trawlText(.meta)
-          .foregroundStyle(status == .success ? Color.secondary : status.colour)
+      Spacer(minLength: 8)
+      Button(action: onCopy) {
+        Label(
+          hasCopied ? "Copied" : HumanCopy.ConnectAI.copyAction,
+          systemImage: hasCopied ? "checkmark" : "doc.on.doc"
+        )
       }
-      if let recoveryTitle, let recovery {
-        Button(recoveryTitle, action: recovery)
-          .controlSize(.small)
-          .disabled(recoveryDisabled)
-      }
+      .buttonStyle(.bordered)
+      .buttonBorderShape(.capsule)
+      .controlSize(.small)
+      .tint(.primary)
     }
-    .frame(
-      maxWidth: .infinity,
-      minHeight: TrawlDesign.onboardingRowHeight,
-      alignment: .leading
+    .padding(12)
+    .background(
+      TrawlDesign.Colors.surface.opacity(0.65),
+      in: RoundedRectangle(cornerRadius: 10, style: .continuous)
     )
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(name)
-    .accessibilityValue(accessibilityStatus ?? statusLabel ?? "")
   }
 }

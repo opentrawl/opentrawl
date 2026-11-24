@@ -4,8 +4,11 @@ import SwiftUI
 
 enum TrawlDesign {
   static let defaultWindow = CGSize(width: 1_360, height: 860)
-  static let minimumWindow = CGSize(width: 1_200, height: 820)
-  static let onboardingWindow = CGSize(width: 1_200, height: 820)
+  static let minimumWindow = CGSize(width: 720, height: 680)
+  static let onboardingWindow = CGSize(width: 960, height: 740)
+  static let compactRailBreakpoint: CGFloat = 960
+  static let wideSidebarWidth: CGFloat = 224
+  static let compactSidebarWidth: CGFloat = 56
 
   static func clampedDefaultWindowSize(for visibleFrame: CGRect?) -> CGSize {
     guard let visibleFrame else { return defaultWindow }
@@ -83,11 +86,11 @@ enum TrawlDesign {
   static let brandRed = Colors.matchRed
   static let contentInset: CGFloat = Space.lg
   static let onboardingFooterHeight: CGFloat = 72
-  static let onboardingTopInset: CGFloat = 76
-  static let onboardingPageWidth: CGFloat = 920
+  static let onboardingTopInset: CGFloat = 44
+  static let onboardingPageWidth: CGFloat = 860
   static let commandDemoPageWidth: CGFloat =
     onboardingWindow.width - 30 * 2
-  static let commandDemoTerminalHeight: CGFloat = 668
+  static let commandDemoTerminalHeight: CGFloat = 560
   static let commandDemoTerminalContentInset: CGFloat = 18
   static let commandDemoOutputFontSize: CGFloat = 18
   static let onboardingReadingWidth: CGFloat = onboardingPageWidth

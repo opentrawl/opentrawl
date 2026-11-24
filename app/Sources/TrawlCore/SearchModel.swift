@@ -25,6 +25,7 @@ public struct SearchStateInput: Sendable, Equatable {
 
   public var hasSearchCriteria: Bool {
     !query.isEmpty
+      || registeredTrawler != nil
       || earliestMatchingArchiveRecordTimeInclusive != nil
       || latestMatchingArchiveRecordTimeInclusive != nil
   }
@@ -116,9 +117,25 @@ public final class SearchModel {
     [RegisteredTrawlerIdentity: String] = [:]
   public private(set) var resultLimit: UInt32 = 0
   public private(set) var isTruncated = false
+  public private(set) var isLoadingMore = false
+  public private(set) var loadMoreFailureMessage: String?
   public private(set) var openPhase: SearchOpenPhase = .idle
   public private(set) var committedInput: SearchStateInput?
   public private(set) var timedOutLocally = false
+
+  public var canLoadMore: Bool {
+    isTruncated
+      && !isLoadingMore
+      && resultLimit < TrawlArchiveSearchRequest.maximumSupportedSearchMatchCount
+  }
+
+  public var totalMatchedRecordCount: UInt64 {
+    trawlerSearchResults.reduce(UInt64(0)) { $0 + $1.totalSearchMatches }
+  }
+
+  public var totalMatchedCountIsLowerBound: Bool {
+    trawlerSearchResults.contains(where: \.totalSearchMatchesIsLowerBound)
+  }
 
   public init(
     client: any TrawlClient,
@@ -147,7 +164,8 @@ public final class SearchModel {
     _ rawQuery: String,
     registeredTrawler: RegisteredTrawlerIdentity?,
     earliestMatchingArchiveRecordTimeInclusive: Date? = nil,
-    latestMatchingArchiveRecordTimeInclusive: Date? = nil
+    latestMatchingArchiveRecordTimeInclusive: Date? = nil,
+    allowEmptyBrowse: Bool = false
   ) async {
     generation &+= 1
     let token = generation
@@ -159,12 +177,26 @@ public final class SearchModel {
       latestMatchingArchiveRecordTimeInclusive: latestMatchingArchiveRecordTimeInclusive,
       limit: TrawlArchiveSearchRequest.defaultMaximumReturnedSearchMatchCount
     )
-    guard input.hasSearchCriteria else {
+    let isUndatedContactsBrowse =
+      query.isEmpty
+      && earliestMatchingArchiveRecordTimeInclusive == nil
+      && latestMatchingArchiveRecordTimeInclusive == nil
+      && registeredTrawler?.registeredTrawlerIdentity == "contacts"
+    guard (!isUndatedContactsBrowse && (input.hasSearchCriteria || allowEmptyBrowse)) else {
       clearCommittedSearch()
       return
     }
 
+    let effectiveEarliest =
+      (query.isEmpty
+        && earliestMatchingArchiveRecordTimeInclusive == nil
+        && latestMatchingArchiveRecordTimeInclusive == nil)
+      ? Date(timeIntervalSince1970: 0)
+      : earliestMatchingArchiveRecordTimeInclusive
+
     timedOutLocally = false
+    isLoadingMore = false
+    loadMoreFailureMessage = nil
     phase = .loading
     observe(.loading(input))
 
@@ -174,7 +206,7 @@ public final class SearchModel {
       let request = TrawlArchiveSearchRequest(
         searchQueryText: query,
         onlySearchThisRegisteredTrawler: registeredTrawler,
-        earliestMatchingArchiveRecordTimeInclusive: earliestMatchingArchiveRecordTimeInclusive,
+        earliestMatchingArchiveRecordTimeInclusive: effectiveEarliest,
         latestMatchingArchiveRecordTimeInclusive: latestMatchingArchiveRecordTimeInclusive,
         maximumReturnedSearchMatchCount: input.limit
       )
@@ -182,35 +214,7 @@ public final class SearchModel {
       observe(.response(input, response))
       try Task.checkCancellation()
       guard token == generation else { return }
-
-      searchMatches = response.searchMatchesInDisplayOrder
-      operationFailures = response.operationFailures
-      trawlersSkippedFromOperation = response.trawlersSkippedFromOperation
-      trawlerSearchResults = response.trawlerSearchResults
-      trawlerDisplayNamesByRegisteredTrawler = Dictionary(
-        uniqueKeysWithValues: response.trawlerSearchResults.map {
-          ($0.registeredTrawler, $0.registeredTrawlerDisplayName)
-        })
-      resultLimit = response.resultLimit
-      isTruncated = response.moreSearchMatchesExist
-      committedInput = input
-      switch response.outcome {
-      case .complete:
-        phase = .complete
-      case .partial:
-        phase =
-          response.searchMatchesInDisplayOrder.isEmpty
-            && response.operationFailures.isEmpty
-            && !response.trawlersSkippedFromOperation.isEmpty
-          ? .skipped : .partial
-      case .failed:
-        timedOutLocally = false
-        phase =
-          response.searchMatchesInDisplayOrder.isEmpty
-            && !response.operationFailures.isEmpty
-            && response.operationFailures.allSatisfy({ $0.failureCode == .timeout })
-          ? .timedOut : .failed(failureGuidance ?? "No trawler returned search results.")
-      }
+      applySearchResponse(response, for: input)
     } catch is CancellationError {
       return
     } catch is SearchWaitExpired {
@@ -229,6 +233,95 @@ public final class SearchModel {
       guard token == generation else { return }
       observe(.searchFailed(input, error.localizedDescription))
       phase = .failed(error.localizedDescription)
+    }
+  }
+
+  /// Loads the next 50 results for the currently committed search while keeping
+  /// already loaded rows and the active selection intact if loading fails.
+  public func loadMore() async {
+    guard canLoadMore, let baseInput = committedInput else { return }
+    let nextLimit = min(
+      TrawlArchiveSearchRequest.maximumSupportedSearchMatchCount,
+      max(baseInput.limit, resultLimit) + TrawlArchiveSearchRequest.pageStepSize
+    )
+    guard nextLimit > resultLimit else { return }
+    let token = generation
+    let nextInput = SearchStateInput(
+      query: baseInput.query,
+      registeredTrawler: baseInput.registeredTrawler,
+      earliestMatchingArchiveRecordTimeInclusive:
+        baseInput.earliestMatchingArchiveRecordTimeInclusive,
+      latestMatchingArchiveRecordTimeInclusive:
+        baseInput.latestMatchingArchiveRecordTimeInclusive,
+      limit: nextLimit
+    )
+    isLoadingMore = true
+    loadMoreFailureMessage = nil
+    defer {
+      if token == generation {
+        isLoadingMore = false
+      }
+    }
+    do {
+      let effectiveEarliest =
+        (nextInput.query.isEmpty
+          && nextInput.earliestMatchingArchiveRecordTimeInclusive == nil
+          && nextInput.latestMatchingArchiveRecordTimeInclusive == nil)
+        ? Date(timeIntervalSince1970: 0)
+        : nextInput.earliestMatchingArchiveRecordTimeInclusive
+      let request = TrawlArchiveSearchRequest(
+        searchQueryText: nextInput.query,
+        onlySearchThisRegisteredTrawler: nextInput.registeredTrawler,
+        earliestMatchingArchiveRecordTimeInclusive: effectiveEarliest,
+        latestMatchingArchiveRecordTimeInclusive:
+          nextInput.latestMatchingArchiveRecordTimeInclusive,
+        maximumReturnedSearchMatchCount: nextInput.limit
+      )
+      let response = try await searchWithinLimit(request)
+      try Task.checkCancellation()
+      guard token == generation else { return }
+      applySearchResponse(response, for: nextInput)
+    } catch is CancellationError {
+      return
+    } catch TrawlClientError.cancelled {
+      return
+    } catch {
+      guard token == generation else { return }
+      loadMoreFailureMessage = "Could not load more results. Earlier results are still shown."
+    }
+  }
+
+  private func applySearchResponse(
+    _ response: FederatedTrawlerSearchOperation,
+    for input: SearchStateInput
+  ) {
+    searchMatches = response.searchMatchesInDisplayOrder
+    operationFailures = response.operationFailures
+    trawlersSkippedFromOperation = response.trawlersSkippedFromOperation
+    trawlerSearchResults = response.trawlerSearchResults
+    trawlerDisplayNamesByRegisteredTrawler = Dictionary(
+      uniqueKeysWithValues: response.trawlerSearchResults.map {
+        ($0.registeredTrawler, $0.registeredTrawlerDisplayName)
+      })
+    resultLimit = response.resultLimit
+    isTruncated = response.moreSearchMatchesExist
+    committedInput = input
+    switch response.outcome {
+    case .complete:
+      phase = .complete
+    case .partial:
+      phase =
+        response.searchMatchesInDisplayOrder.isEmpty
+          && response.operationFailures.isEmpty
+          && !response.trawlersSkippedFromOperation.isEmpty
+        ? .skipped : .partial
+    case .failed:
+      timedOutLocally = false
+      phase =
+        response.searchMatchesInDisplayOrder.isEmpty
+          && !response.operationFailures.isEmpty
+          && response.operationFailures.allSatisfy({ $0.failureCode == .timeout })
+        ? .timedOut : .failed(failureGuidance ?? "No app returned search results.")
     }
   }
 
@@ -388,7 +481,9 @@ public final class SearchInteraction {
   }
 
   public var hasSearchCriteria: Bool {
-    !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasActiveDateRange
+    !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      || registeredTrawler != nil
+      || hasActiveDateRange
   }
 
   public init(model: SearchModel, registeredTrawler: RegisteredTrawlerIdentity?) {

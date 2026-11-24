@@ -9,17 +9,17 @@ enum HumanCopy {
   enum Welcome {
     static let title = "Meet OpenTrawl."
     static let body = "OpenTrawl lets your apps work for you. Search your apps, and let your AI search them too (if you want)."
-    static let privacy = "Your data stays on your Mac. The OpenTrawl app doesn't send your data anywhere."
+    static let privacy = "Your data stays on your Mac. The OpenTrawl app doesn't send your data anywhere unless you connect an external AI."
     static let primaryAction = "Continue"
     static let appsTitle = "OpenTrawl searches these apps"
   }
 
   enum FullDiskAccess {
-    static let title = "OpenTrawl needs Full Disk Access."
-    static let body = "Your apps (e.g. Messages, Notes, Contacts, Calendar) store their data in small databases on your Mac. We need Full Disk Access to read these databases, build your archive, and let you search it."
-    static let purpose = "The OpenTrawl app doesn't send your data anywhere. We don't change your apps. It's all read-only."
+    static let title = "Turn on Full Disk Access."
+    static let body = "Messages, Mail, Notes, WhatsApp and Telegram store their data in small databases on your Mac. We need Full Disk Access to read these databases, build your archive, and let you search it."
+    static let purpose = "The OpenTrawl app doesn't send your data anywhere unless you connect an external AI. We don't change your apps. It's all read-only."
     static let trustGroupTitle = "Check for yourself"
-    static let trustGroupBody = "Opentrawl is Open Source software. You can read the code yourself to check what's going on, or you can copy a prompt and ask your AI (Codex, Claude, etc) to check it for you."
+    static let trustGroupBody = "OpenTrawl is Open Source software. You can read the code yourself to check what's going on, or you can copy a prompt and ask your AI (Codex, Claude, etc) to check it for you."
     static let readCodeAction = "Read the code on GitHub"
     static let copyAuditPromptAction = "Click to copy AI review prompt"
     static let copiedAuditPromptAction = "Prompt copied"
