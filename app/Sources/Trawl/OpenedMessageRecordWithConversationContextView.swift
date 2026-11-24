@@ -11,13 +11,27 @@ struct OpenedMessageRecordWithConversationContextView: View {
   }
 
   var body: some View {
+    VStack(spacing: 0) {
+      OpenedMessageConversationHeader(
+        conversationDisplayName: openedMessage.conversationDisplayName,
+        participantDisplayNames: openedMessage.conversationParticipantDisplayNames,
+        conversationTrawlLink: openedMessage.conversationTrawlLink
+      )
+      .padding(.horizontal, 18)
+      .padding(.vertical, 12)
+      .frame(maxWidth: TrawlDesign.recordReadingWidth, alignment: .leading)
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      Divider()
+
+      conversationContext
+    }
+  }
+
+  private var conversationContext: some View {
     ScrollViewReader { proxy in
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
-          OpenedMessageConversationHeader(
-            conversationDisplayName: openedMessage.conversationDisplayName,
-            participantDisplayNames: openedMessage.conversationParticipantDisplayNames,
-            conversationTrawlLink: openedMessage.conversationTrawlLink)
           if openedMessage.earlierConversationContextMessagesOmitted {
             OpenedMessageBoundaryNotice(
               text: "Earlier messages are not shown.")
