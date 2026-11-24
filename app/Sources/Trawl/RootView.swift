@@ -299,34 +299,45 @@ struct RootView: View {
   }
 
   @ViewBuilder
+  private var statusBanners: some View {
+    if !connectionStore.isRemote && model.needsFullDiskAccessRecovery {
+      PermissionRecoveryBanner {
+        openFullDiskAccess()
+      }
+      .padding(.horizontal, TrawlDesign.contentInset)
+      .padding(.top, TrawlDesign.Space.md)
+    }
+    if let refreshFailure = model.statusRefreshFailure, !model.trawlerStatuses.isEmpty {
+      StaleStatusBanner(
+        message: refreshFailure,
+        showsConnectionAction: connectionStore.isRemote,
+        onRetry: { Task { await model.refresh() } },
+        onOpenConnection: { isShowingConnectionPopover = true }
+      )
+      .padding(.horizontal, TrawlDesign.contentInset)
+      .padding(.top, TrawlDesign.Space.sm)
+    }
+  }
+
+  @ViewBuilder
   private var home: some View {
-    VStack(spacing: 0) {
-      if !connectionStore.isRemote && model.needsFullDiskAccessRecovery {
-        PermissionRecoveryBanner {
-          openFullDiskAccess()
-        }
-        .padding(.horizontal, TrawlDesign.contentInset)
-        .padding(.top, TrawlDesign.Space.md)
-      }
-      if let refreshFailure = model.statusRefreshFailure, !model.trawlerStatuses.isEmpty {
-        StaleStatusBanner(
-          message: refreshFailure,
-          showsConnectionAction: connectionStore.isRemote,
-          onRetry: { Task { await model.refresh() } },
-          onOpenConnection: { isShowingConnectionPopover = true }
-        )
-        .padding(.horizontal, TrawlDesign.contentInset)
-        .padding(.top, TrawlDesign.Space.sm)
-      }
-      if case .loading = model.phase, model.trawlerStatuses.isEmpty {
+    if case .loading = model.phase, model.trawlerStatuses.isEmpty {
+      VStack(spacing: 0) {
+        statusBanners
         ProgressView("Loading apps")
           .controlSize(.large)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if !connectionStore.isRemote, model.needsFullDiskAccessRecovery,
-        model.restingTrawlers.isEmpty
-      {
+      }
+    } else if !connectionStore.isRemote, model.needsFullDiskAccessRecovery,
+      model.restingTrawlers.isEmpty
+    {
+      VStack(spacing: 0) {
+        statusBanners
         Spacer()
-      } else if let failureMessage = model.blockingFailureMessage {
+      }
+    } else if let failureMessage = model.blockingFailureMessage {
+      VStack(spacing: 0) {
+        statusBanners
         FailureView(
           detail: connectionStore.isRemote ? failureMessage : nil,
           onOpenConnection: connectionStore.isRemote
@@ -336,36 +347,37 @@ struct RootView: View {
             Task { await model.refresh() }
           }
         )
-      } else {
-        ArchiveWorkspaceView(
-          client: client,
-          trawlers: homeTrawlers,
-          searchableTrawlers: searchableHomeTrawlers,
-          trawlerStatuses: model.trawlerStatuses.filter {
-            featureFlags.includes($0.id)
-          },
-          operabilityByID: operabilityByID,
-          hostDisplayName: connectionStore.activeHostShortDisplayName,
-          freshnessLine: freshnessLine,
-          isRemoteArchive: connectionStore.isRemote,
-          hasCopiedAIPrompt: hasCopiedAIInstructions,
-          focusRequestToken: searchFocusRequestToken,
-          destination: $destination,
-          onCopyAIPrompt: {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(aiInstruction, forType: .string)
-            confirmAIPromptCopied()
-          },
-          onOpenAIAppsSettings: { openSettingsPane(.aiApps) },
-          onOpenOtherMacsSettings: { openSettingsPane(.otherMacs) },
-          onOpenPluginsSettings: { openSettingsPane(.apps) },
-          onOpenHostSwitcher: { isShowingConnectionPopover = true },
-          onRunAttentionAction: { trawlerID, action in
-            handleAttentionAction(action, for: trawlerID)
-          }
-        )
-        .id(connectionStore.connectionRevision)
       }
+    } else {
+      ArchiveWorkspaceView(
+        client: client,
+        trawlers: homeTrawlers,
+        searchableTrawlers: searchableHomeTrawlers,
+        trawlerStatuses: model.trawlerStatuses.filter {
+          featureFlags.includes($0.id)
+        },
+        operabilityByID: operabilityByID,
+        hostDisplayName: connectionStore.activeHostShortDisplayName,
+        freshnessLine: freshnessLine,
+        isRemoteArchive: connectionStore.isRemote,
+        hasCopiedAIPrompt: hasCopiedAIInstructions,
+        focusRequestToken: searchFocusRequestToken,
+        destination: $destination,
+        onCopyAIPrompt: {
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(aiInstruction, forType: .string)
+          confirmAIPromptCopied()
+        },
+        onOpenAIAppsSettings: { openSettingsPane(.aiApps) },
+        onOpenOtherMacsSettings: { openSettingsPane(.otherMacs) },
+        onOpenPluginsSettings: { openSettingsPane(.apps) },
+        onOpenHostSwitcher: { isShowingConnectionPopover = true },
+        onRunAttentionAction: { trawlerID, action in
+          handleAttentionAction(action, for: trawlerID)
+        },
+        detailBanners: { statusBanners }
+      )
+      .id(connectionStore.connectionRevision)
     }
   }
 

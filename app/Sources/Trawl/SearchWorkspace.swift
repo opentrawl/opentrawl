@@ -47,7 +47,7 @@ enum SearchWorkspaceFieldContent: Equatable {
 
 /// Main archive workspace built on native macOS `NavigationSplitView`,
 /// `.listStyle(.sidebar)`, and toolbar `.searchable`.
-struct ArchiveWorkspaceView: View {
+struct ArchiveWorkspaceView<DetailBanners: View>: View {
   let client: any TrawlClient
   let trawlers: [RestingTrawler]
   let searchableTrawlers: [RestingTrawler]
@@ -66,6 +66,9 @@ struct ArchiveWorkspaceView: View {
   let onOpenPluginsSettings: () -> Void
   let onOpenHostSwitcher: () -> Void
   let onRunAttentionAction: (RegisteredTrawlerIdentity, AppAttentionAction) -> Void
+  /// Shown above the content column. A banner placed above the whole split view
+  /// pushes the sidebar and the content under the toolbar.
+  let detailBanners: DetailBanners
 
   @State private var model: SearchModel
   @State private var interaction: SearchInteraction
@@ -96,7 +99,8 @@ struct ArchiveWorkspaceView: View {
     onOpenOtherMacsSettings: @escaping () -> Void,
     onOpenPluginsSettings: @escaping () -> Void,
     onOpenHostSwitcher: @escaping () -> Void,
-    onRunAttentionAction: @escaping (RegisteredTrawlerIdentity, AppAttentionAction) -> Void
+    onRunAttentionAction: @escaping (RegisteredTrawlerIdentity, AppAttentionAction) -> Void,
+    @ViewBuilder detailBanners: () -> DetailBanners
   ) {
     self.client = client
     self.trawlers = trawlers
@@ -115,6 +119,7 @@ struct ArchiveWorkspaceView: View {
     self.onOpenPluginsSettings = onOpenPluginsSettings
     self.onOpenHostSwitcher = onOpenHostSwitcher
     self.onRunAttentionAction = onRunAttentionAction
+    self.detailBanners = detailBanners()
 
     let searchModel = SearchModel(client: client)
     _model = State(initialValue: searchModel)
@@ -188,61 +193,64 @@ struct ArchiveWorkspaceView: View {
         onOpenPluginsSettings: onOpenPluginsSettings
       )
     } detail: {
-      GeometryReader { proxy in
-        Group {
-          switch destination {
-          case .overview:
-            ArchiveOverviewView(
-              trawlers: trawlers,
-              statusesByID: statusesByID,
-              operabilityByID: operabilityByID,
-              hostDisplayName: hostDisplayName,
-              freshnessLine: freshnessLine,
-              isRemoteArchive: isRemoteArchive,
-              hasCopiedAIPrompt: hasCopiedAIPrompt,
-              onCopyAIPrompt: onCopyAIPrompt,
-              onOpenAIAppsSettings: onOpenAIAppsSettings,
-              onOpenOtherMacsSettings: onOpenOtherMacsSettings,
-              onOpenHostSwitcher: onOpenHostSwitcher,
-              onRunAttentionAction: onRunAttentionAction,
-              onBrowseApp: { trawlerID in
-                interaction.query = ""
-                interaction.applyScopeAndDateRange(
-                  registeredTrawler: trawlerID,
-                  earliestInclusive: nil,
-                  latestInclusive: nil
-                )
-                sidebarSelection = .app(trawlerID)
-                destination = .search
-              },
-              onBrowseAllItems: {
-                interaction.query = ""
-                interaction.applyScopeAndDateRange(
-                  registeredTrawler: nil,
-                  earliestInclusive: nil,
-                  latestInclusive: nil
-                )
-                sidebarSelection = .allItems
-                destination = .search
-              },
-              onSelectDateRange: { trawlerID, start, end in
-                interaction.applyScopeAndDateRange(
-                  registeredTrawler: trawlerID,
-                  earliestInclusive: start,
-                  latestInclusive: end
-                )
-                sidebarSelection = trawlerID.map { .app($0) } ?? .allItems
-                destination = .search
-              }
-            )
-          case .search:
-            searchBody(availableWidth: proxy.size.width)
+      VStack(spacing: 0) {
+        detailBanners
+        GeometryReader { proxy in
+          Group {
+            switch destination {
+            case .overview:
+              ArchiveOverviewView(
+                trawlers: trawlers,
+                statusesByID: statusesByID,
+                operabilityByID: operabilityByID,
+                hostDisplayName: hostDisplayName,
+                freshnessLine: freshnessLine,
+                isRemoteArchive: isRemoteArchive,
+                hasCopiedAIPrompt: hasCopiedAIPrompt,
+                onCopyAIPrompt: onCopyAIPrompt,
+                onOpenAIAppsSettings: onOpenAIAppsSettings,
+                onOpenOtherMacsSettings: onOpenOtherMacsSettings,
+                onOpenHostSwitcher: onOpenHostSwitcher,
+                onRunAttentionAction: onRunAttentionAction,
+                onBrowseApp: { trawlerID in
+                  interaction.query = ""
+                  interaction.applyScopeAndDateRange(
+                    registeredTrawler: trawlerID,
+                    earliestInclusive: nil,
+                    latestInclusive: nil
+                  )
+                  sidebarSelection = .app(trawlerID)
+                  destination = .search
+                },
+                onBrowseAllItems: {
+                  interaction.query = ""
+                  interaction.applyScopeAndDateRange(
+                    registeredTrawler: nil,
+                    earliestInclusive: nil,
+                    latestInclusive: nil
+                  )
+                  sidebarSelection = .allItems
+                  destination = .search
+                },
+                onSelectDateRange: { trawlerID, start, end in
+                  interaction.applyScopeAndDateRange(
+                    registeredTrawler: trawlerID,
+                    earliestInclusive: start,
+                    latestInclusive: end
+                  )
+                  sidebarSelection = trawlerID.map { .app($0) } ?? .allItems
+                  destination = .search
+                }
+              )
+            case .search:
+              searchBody(availableWidth: proxy.size.width)
+            }
           }
-        }
-        .frame(width: proxy.size.width, height: proxy.size.height)
-        .onAppear { lastDetailWidth = proxy.size.width }
-        .onChange(of: proxy.size.width) { _, newWidth in
-          lastDetailWidth = newWidth
+          .frame(width: proxy.size.width, height: proxy.size.height)
+          .onAppear { lastDetailWidth = proxy.size.width }
+          .onChange(of: proxy.size.width) { _, newWidth in
+            lastDetailWidth = newWidth
+          }
         }
       }
       .navigationTitle(navigationTitleText)
