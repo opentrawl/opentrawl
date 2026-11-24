@@ -26,7 +26,7 @@ var canonicalOpenTrawlSkillMarkdown string
 // optional SKILL.md) configuration diff, and writes the configuration with
 // per-agent source-scoped bearer tokens when --write is set.
 type ConnectCmd struct {
-	Agent     string `arg:"" optional:"" name:"agent" help:"Agent to connect (claude-code, claude-desktop, codex, executor, openclaw, hermes, cursor, t3, or all); omit to auto-detect installed agents"`
+	Agent     string `arg:"" optional:"" name:"agent" help:"Agent to connect (claude-code, claude-desktop, codex, openclaw, hermes, cursor, t3, or all); omit to auto-detect installed agents"`
 	Sources   string `name:"sources" default:"all" placeholder:"TRAWLERS" help:"Sources each agent may read, separated by commas, or all"`
 	Transport string `name:"transport" default:"stdio" enum:"stdio,http" placeholder:"MODE" help:"stdio runs trawl mcp locally (default); http connects to trawl mcp --http"`
 	Port      int    `name:"port" default:"7391" placeholder:"PORT" help:"Port trawl mcp --http listens on"`
@@ -58,7 +58,6 @@ var connectableAgents = []connectableAgent{
 	{agentCommandName: "claude-code", agentDisplayName: "Claude Code", configFormat: connectableAgentConfigFormatJSON},
 	{agentCommandName: "claude-desktop", agentDisplayName: "Claude Desktop", configFormat: connectableAgentConfigFormatJSON},
 	{agentCommandName: "codex", agentDisplayName: "Codex", configFormat: connectableAgentConfigFormatCodexTOML},
-	{agentCommandName: "executor", agentDisplayName: "executor.sh", configFormat: connectableAgentConfigFormatJSON},
 	{agentCommandName: "openclaw", agentDisplayName: "OpenClaw", configFormat: connectableAgentConfigFormatJSON},
 	{agentCommandName: "hermes", agentDisplayName: "Hermes Agent", configFormat: connectableAgentConfigFormatHermesYAML},
 	{agentCommandName: "cursor", agentDisplayName: "Cursor", configFormat: connectableAgentConfigFormatJSON},
@@ -272,7 +271,6 @@ func detectInstalledLocalAgents(home string) map[string]bool {
 	detected["claude-code"] = binaryOnPath("claude") || pathExists(filepath.Join(home, ".claude")) || pathExists(filepath.Join(home, ".claude.json"))
 	detected["claude-desktop"] = pathExists(claudeDesktopConfigDir(home)) || (runtime.GOOS == "darwin" && pathExists("/Applications/Claude.app"))
 	detected["codex"] = binaryOnPath("codex") || pathExists(filepath.Join(home, ".codex"))
-	detected["executor"] = binaryOnPath("executor") || pathExists(filepath.Join(home, ".executor")) || pathExists(filepath.Join(home, ".config", "executor"))
 	detected["openclaw"] = binaryOnPath("openclaw") || pathExists(filepath.Join(home, ".openclaw"))
 	detected["hermes"] = binaryOnPath("hermes") || pathExists(filepath.Join(home, ".hermes"))
 	detected["cursor"] = binaryOnPath("cursor") || pathExists(filepath.Join(home, ".cursor")) || (runtime.GOOS == "darwin" && pathExists("/Applications/Cursor.app"))
@@ -305,11 +303,6 @@ func agentConfigFilePath(agentCommandName, home string) string {
 		return filepath.Join(claudeDesktopConfigDir(home), "claude_desktop_config.json")
 	case "codex":
 		return filepath.Join(home, ".codex", "config.toml")
-	case "executor":
-		if pathExists(filepath.Join(home, ".executor")) {
-			return filepath.Join(home, ".executor", "mcp.json")
-		}
-		return filepath.Join(home, ".config", "executor", "mcp.json")
 	case "openclaw":
 		return filepath.Join(home, ".openclaw", "mcp.json")
 	case "hermes":
