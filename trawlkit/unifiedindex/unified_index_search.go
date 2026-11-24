@@ -272,7 +272,7 @@ func buildPersonFilterSQLClause(terms []string) (string, []any) {
 	args := make([]any, 0, len(cleaned)*2)
 	for _, term := range cleaned {
 		like := "%" + term + "%"
-		parts = append(parts, `(lower(r.people_text) LIKE ? OR lower(r.display_context) LIKE ?)`)
+		parts = append(parts, `(lower(r.people_text) LIKE ? OR lower(r.meta_text) LIKE ?)`)
 		args = append(args, like, like)
 	}
 	return "(" + strings.Join(parts, " OR ") + ")", args
@@ -429,7 +429,7 @@ func candidateToFederatedSearchMatch(
 	if ctxTitle := strings.TrimSpace(c.displayContext); ctxTitle != "" && ctxTitle != pres.MatchingRecordDisplayName {
 		pres.DigitalContainerNamesNearestToBroadest = []string{ctxTitle}
 	}
-	if ppl := CleanDisplayPeopleText(c.peopleText); ppl != "" {
+	if ppl := strings.TrimSpace(c.peopleText); ppl != "" {
 		pres.PeopleRelatedToMatchingRecord = []*personcontract.PersonRelatedToArchiveRecord{{
 			PersonDisplayName:         TruncateRunes(ppl, 120),
 			PersonRoleInArchiveRecord: personcontract.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_PARTICIPANT,
@@ -570,15 +570,7 @@ func associatedTimeForCandidate(c indexedRecordCandidate) *presentation.ArchiveR
 	}
 	t := time.Unix(c.occurredUnix.Int64, 0).UTC()
 	if c.hasTimeOfDay == 0 {
-		return &presentation.ArchiveRecordAssociatedTimeForDisplay{
-			ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{
-				CalendarDate: &presentation.CalendarDate{
-					CalendarYear:        int32(t.Year()),
-					CalendarMonthNumber: int32(t.Month()),
-					CalendarDayOfMonth:  int32(t.Day()),
-				},
-			},
-		}
+		return CalendarDateOfRecordWithoutTimeOfDay(c.occurredUnix.Int64, c.utcOffsetSeconds)
 	}
 	out := &presentation.ArchiveRecordAssociatedTimeForDisplay{
 		ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
@@ -589,6 +581,22 @@ func associatedTimeForCandidate(c indexedRecordCandidate) *presentation.ArchiveR
 		out.EventUtcOffsetSecondsRecordedBySourceArchive = proto.Int32(int32(c.utcOffsetSeconds))
 	}
 	return out
+}
+
+// CalendarDateOfRecordWithoutTimeOfDay reads the date in the record's own
+// time zone: an all-day event stored as local midnight is otherwise a day
+// early east of UTC.
+func CalendarDateOfRecordWithoutTimeOfDay(occurredUnixSeconds int64, utcOffsetSeconds int) *presentation.ArchiveRecordAssociatedTimeForDisplay {
+	localDate := time.Unix(occurredUnixSeconds, 0).In(time.FixedZone("", utcOffsetSeconds))
+	return &presentation.ArchiveRecordAssociatedTimeForDisplay{
+		ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{
+			CalendarDate: &presentation.CalendarDate{
+				CalendarYear:        int32(localDate.Year()),
+				CalendarMonthNumber: int32(localDate.Month()),
+				CalendarDayOfMonth:  int32(localDate.Day()),
+			},
+		},
+	}
 }
 
 func buildFTS5QueryExpression(raw string) string {

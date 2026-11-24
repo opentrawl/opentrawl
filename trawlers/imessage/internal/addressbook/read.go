@@ -61,8 +61,23 @@ func (l Lookup) Match(raw string) (ContactName, bool) {
 	if !ok {
 		return ContactName{}, false
 	}
-	name, ok := l[mappingKey(kind, handle)]
-	return name, ok
+	if name, ok := l[mappingKey(kind, handle)]; ok {
+		return name, true
+	}
+	if kind != KindPhone {
+		return ContactName{}, false
+	}
+	// Messages keeps numbers in international form, while a person often
+	// saves the national form, with a trunk 0 and no country code, in Contacts.
+	for _, countryCode := range trunkZeroCountryCodes {
+		subscriberNumber, found := strings.CutPrefix(handle, countryCode)
+		if !found || len(subscriberNumber) < 6 {
+			continue
+		}
+		name, ok := l[mappingKey(KindPhone, "0"+subscriberNumber)]
+		return name, ok
+	}
+	return ContactName{}, false
 }
 
 func NormalizeHandle(raw string) (kind, handle string, ok bool) {

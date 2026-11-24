@@ -51,7 +51,7 @@ func (s *Store) ExportArchiveIndexChanges(
 			return fmt.Errorf("scan contact person for unified index: %w", err)
 		}
 		ref := trawlkit.NewCanonicalArchiveRecordReference(PersonRef(id))
-		participants := buildContactParticipants(name, akaJSON, valuesByPerson[id])
+		participants := buildContactParticipants(name, akaJSON)
 		fullBody := strings.TrimSpace(strings.Join([]string{contextDesc, body}, "\n"))
 		upserts = append(upserts, &indexcontract.IndexedArchiveRecordUpsert{
 			StableRecordReference:          ref,
@@ -60,6 +60,7 @@ func (s *Store) ExportArchiveIndexChanges(
 			ConversationOrThreadIdentifier: PersonRef(id),
 			Title:                          strings.TrimSpace(name),
 			BodyText:                       fullBody,
+			MetadataText:                   strings.Join(valuesByPerson[id], " "),
 			Participants:                   participants,
 		})
 	}
@@ -90,7 +91,7 @@ func (s *Store) loadContactValuesByPerson(ctx context.Context) (map[string][]str
 	return out, rows.Err()
 }
 
-func buildContactParticipants(name, akaJSON string, values []string) []*indexcontract.ArchiveRecordParticipant {
+func buildContactParticipants(name, akaJSON string) []*indexcontract.ArchiveRecordParticipant {
 	out := []*indexcontract.ArchiveRecordParticipant{{
 		DisplayName:     strings.TrimSpace(name),
 		ParticipantRole: "person",
@@ -105,12 +106,6 @@ func buildContactParticipants(name, akaJSON string, values []string) []*indexcon
 				})
 			}
 		}
-	}
-	for _, val := range values {
-		out = append(out, &indexcontract.ArchiveRecordParticipant{
-			AddressOrHandle: val,
-			ParticipantRole: "contact",
-		})
 	}
 	return out
 }

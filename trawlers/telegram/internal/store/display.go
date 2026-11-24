@@ -12,20 +12,25 @@ import (
 // so display resolves it here.
 const savedMessagesName = "Saved Messages"
 
+// deletedAccountName is what Telegram shows for a user peer whose names are
+// all empty, which is how Telegram keeps a deleted account.
+const deletedAccountName = "Deleted Account"
+
+const displayContactColumns = `jid,coalesce(peer_type,''),coalesce(phone,''),coalesce(full_name,''),coalesce(first_name,''),coalesce(last_name,''),coalesce(business_name,''),coalesce(username,''),coalesce(lid,''),coalesce(about_text,''),coalesce(avatar_path,''),coalesce(updated_at,0)`
+
 func (s *Store) humanizeMessages(ctx context.Context, messages []Message) error {
-	if len(messages) == 0 {
-		return nil
-	}
 	contacts := map[string]Contact{}
+	humanizeMessagesWithContacts(messages, func(jid string) Contact {
+		contact, _ := s.contactForDisplay(ctx, contacts, jid)
+		return contact
+	})
+	return nil
+}
+
+func humanizeMessagesWithContacts(messages []Message, contactForJID func(jid string) Contact) {
 	for i := range messages {
-		sender, err := s.contactForDisplay(ctx, contacts, messages[i].SenderJID)
-		if err != nil {
-			return err
-		}
-		chat, err := s.contactForDisplay(ctx, contacts, messages[i].ChatJID)
-		if err != nil {
-			return err
-		}
+		sender := contactForJID(messages[i].SenderJID)
+		chat := contactForJID(messages[i].ChatJID)
 		messages[i].SenderName = humanPeerName(messages[i].SenderName, sender, messages[i].SenderJID)
 		if messages[i].FromMe &&
 			strings.TrimSpace(messages[i].SenderJID) != "" &&
@@ -34,8 +39,12 @@ func (s *Store) humanizeMessages(ctx context.Context, messages []Message) error 
 			continue
 		}
 		messages[i].ChatName = humanPeerName(messages[i].ChatName, chat, messages[i].ChatJID)
+		// Telegram leaves the sender of an incoming direct message empty:
+		// the other person in the chat sent it.
+		if !messages[i].FromMe && messages[i].SenderName == "" && strings.TrimSpace(messages[i].SenderJID) == "" && chat.PeerType == "user" {
+			messages[i].SenderName = messages[i].ChatName
+		}
 	}
-	return nil
 }
 
 // nameSelfChat renders the owner's self-chat as Saved Messages in chat lists.
@@ -67,6 +76,25 @@ func (s *Store) nameSelfChat(ctx context.Context, chats []Chat) error {
 	return nil
 }
 
+// allContactsForDisplay reads every contact up front so a caller streaming
+// messages from the same database never needs a second connection.
+func (s *Store) allContactsForDisplay(ctx context.Context) (map[string]Contact, error) {
+	rows, err := s.db.QueryContext(ctx, `select `+displayContactColumns+` from contacts`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	contacts := map[string]Contact{}
+	for rows.Next() {
+		contact, err := scanDisplayContact(rows)
+		if err != nil {
+			return nil, err
+		}
+		contacts[strings.TrimSpace(contact.JID)] = contact
+	}
+	return contacts, rows.Err()
+}
+
 func (s *Store) contactForDisplay(ctx context.Context, cache map[string]Contact, jid string) (Contact, error) {
 	jid = strings.TrimSpace(jid)
 	if jid == "" {
@@ -75,7 +103,7 @@ func (s *Store) contactForDisplay(ctx context.Context, cache map[string]Contact,
 	if contact, ok := cache[jid]; ok {
 		return contact, nil
 	}
-	row := s.db.QueryRowContext(ctx, `select jid,coalesce(peer_type,''),coalesce(phone,''),coalesce(full_name,''),coalesce(first_name,''),coalesce(last_name,''),coalesce(business_name,''),coalesce(username,''),coalesce(lid,''),coalesce(about_text,''),coalesce(avatar_path,''),coalesce(updated_at,0) from contacts where jid=?`, jid)
+	row := s.db.QueryRowContext(ctx, `select `+displayContactColumns+` from contacts where jid=?`, jid)
 	contact, err := scanDisplayContact(row)
 	if err != nil {
 		cache[jid] = Contact{}
@@ -112,7 +140,13 @@ func humanPeerName(stored string, contact Contact, refs ...string) string {
 	if username := cleanPeerUsername(contact.Username); username != "" {
 		return username
 	}
-	return cleanPeerFirstName(contact.FirstName, contact)
+	if firstName := cleanPeerFirstName(contact.FirstName, contact); firstName != "" {
+		return firstName
+	}
+	if contact.PeerType == "user" && strings.TrimSpace(contact.LastName) == "" && strings.TrimSpace(contact.BusinessName) == "" {
+		return deletedAccountName
+	}
+	return ""
 }
 
 func ContactDisplayName(contact Contact) string {

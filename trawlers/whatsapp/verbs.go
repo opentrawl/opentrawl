@@ -192,7 +192,7 @@ func whatsappMessageCommandPeople(message store.Message) []*person.PersonRelated
 		}
 		return people
 	}
-	if senderDisplayName := whatsappCounterpartyDisplayName(message.SenderName, message.SenderJID); senderDisplayName != "" {
+	if senderDisplayName := whatsappMessageSenderDisplayName(message); senderDisplayName != "" {
 		people = append(people, &person.PersonRelatedToArchiveRecord{
 			PersonDisplayName:         senderDisplayName,
 			PersonRoleInArchiveRecord: person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER,

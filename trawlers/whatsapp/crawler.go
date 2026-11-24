@@ -1,15 +1,12 @@
 package whatsapp
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
-	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
 	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 )
 
@@ -67,19 +64,6 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		},
 		SourceFreshnessDependency: federation.SourceFreshnessDependency_SOURCE_FRESHNESS_DEPENDENCY_SOURCE_APP_RUNNING,
 	}
-}
-
-func (c *Crawler) ExportArchiveIndexChanges(
-	ctx context.Context,
-	req *trawlkit.TrawlerCommandExecutionRequest,
-	sinceOpaqueCursor string,
-	emit func(*indexcontract.ArchiveIndexChangeBatch) error,
-) error {
-	st, err := store.UseExisting(ctx, req.OpenedTrawlerArchiveStore, req.TrawlerArchivePaths.TrawlerArchivePath)
-	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	return st.ExportArchiveIndexChanges(ctx, sinceOpaqueCursor, emit)
 }
 
 func (c *Crawler) LoadTrawlerConfiguration(trawlerConfigurationFilePath trawlkit.TrawlerConfigurationFilePath) error {

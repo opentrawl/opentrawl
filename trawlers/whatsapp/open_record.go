@@ -3,7 +3,6 @@ package whatsapp
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -62,13 +61,7 @@ func validateOpenTimestamps(value openValue) error {
 
 func projectOpenedMessageRecordWithConversationContext(value openValue) *message.OpenedMessageRecordWithConversationContext {
 	participantDisplayNames := resolvedParticipantNames(value.participants)
-	title := strings.TrimSpace(messageWhere(value.target))
-	if (title == "" || title == "Unknown conversation" || title == "WhatsApp conversation") && len(participantDisplayNames) == 1 {
-		title = participantDisplayNames[0]
-	}
-	if title == "" || title == "Unknown conversation" {
-		title = "WhatsApp conversation"
-	}
+	title := whatsappConversationDisplayName(value.target, participantDisplayNames)
 	contextMessageRecords := make([]*message.MessageRecord, 0, len(value.context))
 	for _, message := range value.context {
 		contextMessageRecords = append(contextMessageRecords, projectMessageRecord(message))

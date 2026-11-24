@@ -452,7 +452,7 @@ func buildSemanticFederatedMatch(
 	if ctxTitle := strings.TrimSpace(s.displayContext); ctxTitle != "" && ctxTitle != displayName {
 		pres.DigitalContainerNamesNearestToBroadest = []string{ctxTitle}
 	}
-	if ppl := unifiedindex.CleanDisplayPeopleText(s.peopleText); ppl != "" {
+	if ppl := strings.TrimSpace(s.peopleText); ppl != "" {
 		pres.PeopleRelatedToMatchingRecord = []*personcontract.PersonRelatedToArchiveRecord{{
 			PersonDisplayName:         unifiedindex.TruncateRunes(ppl, 120),
 			PersonRoleInArchiveRecord: personcontract.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_PARTICIPANT,
@@ -461,15 +461,7 @@ func buildSemanticFederatedMatch(
 	if s.occurredUnix > 0 {
 		t := time.Unix(s.occurredUnix, 0).UTC()
 		if s.hasTimeOfDay == 0 {
-			pres.MatchingRecordAssociatedTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{
-				ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_CalendarDate{
-					CalendarDate: &presentation.CalendarDate{
-						CalendarYear:        int32(t.Year()),
-						CalendarMonthNumber: int32(t.Month()),
-						CalendarDayOfMonth:  int32(t.Day()),
-					},
-				},
-			}
+			pres.MatchingRecordAssociatedTime = unifiedindex.CalendarDateOfRecordWithoutTimeOfDay(s.occurredUnix, s.utcOffsetSeconds)
 		} else {
 			assoc := &presentation.ArchiveRecordAssociatedTimeForDisplay{
 				ArchiveRecordAssociatedTime: &presentation.ArchiveRecordAssociatedTimeForDisplay_ExactTime{
@@ -488,7 +480,7 @@ func buildSemanticFederatedMatch(
 			fmt.Sprintf("%d msgs in session", s.messageCount),
 		)
 	}
-	if preview := cleanSemanticSessionPreview(s.bodyPreview); preview != "" {
+	if preview := strings.TrimSpace(s.bodyPreview); preview != "" {
 		fragments := unifiedindex.BuildHighlightedMatchFragments(preview, queryTokens, 220)
 		if len(fragments) > 0 {
 			pres.SearchMatchTextFieldsInDisplayOrder = []*searchcontract.SearchMatchTextField{{
@@ -513,6 +505,8 @@ func buildSemanticFederatedMatch(
 // resolveBestSessionMemberRecords aligns multi-message semantic session hits to
 // the specific member message that best matches the query tokens so the row
 // snippet, timestamp, and opened record anchor all refer to the same message.
+// It also reads every hit's people and conversation names from index.db, so a
+// name fixed in index.db shows without re-embedding the chunk.
 func resolveBestSessionMemberRecords(
 	ctx context.Context,
 	semDB *sql.DB,
@@ -524,11 +518,11 @@ func resolveBestSessionMemberRecords(
 	if semDB == nil || indexDB == nil || len(chunks) == 0 {
 		return
 	}
-	sessionChunkIdx := make(map[int64]int, len(chunks))
+	chunkIndexByChunkID := make(map[int64]int, len(chunks))
 	chunkIDArgs := make([]any, 0, len(chunks))
 	for i := range chunks {
-		if chunks[i].messageCount > 1 && chunks[i].chunkID > 0 {
-			sessionChunkIdx[chunks[i].chunkID] = i
+		if chunks[i].chunkID > 0 {
+			chunkIndexByChunkID[chunks[i].chunkID] = i
 			chunkIDArgs = append(chunkIDArgs, chunks[i].chunkID)
 		}
 	}
@@ -573,6 +567,7 @@ func resolveBestSessionMemberRecords(
 		occurredUnix     int64
 		hasTimeOfDay     int
 		utcOffsetSeconds int
+		displayContext   string
 		peopleText       string
 		bodyText         string
 	}
@@ -594,7 +589,7 @@ func resolveBestSessionMemberRecords(
 			}
 			rows, qErr := indexDB.QueryContext(ctx, `
 				select canonical_ref, resolved_ref, coalesce(occurred_unix, 0), has_time_of_day,
-				       utc_offset_seconds, people_text, body_text
+				       utc_offset_seconds, display_context, people_text, body_text
 				from indexed_archive_records
 				where trawler = ? and canonical_ref in (`+rph+`)
 			`, args...)
@@ -604,7 +599,7 @@ func resolveBestSessionMemberRecords(
 			for rows.Next() {
 				var cref string
 				var m indexedMember
-				if err := rows.Scan(&cref, &m.resolvedRef, &m.occurredUnix, &m.hasTimeOfDay, &m.utcOffsetSeconds, &m.peopleText, &m.bodyText); err != nil {
+				if err := rows.Scan(&cref, &m.resolvedRef, &m.occurredUnix, &m.hasTimeOfDay, &m.utcOffsetSeconds, &m.displayContext, &m.peopleText, &m.bodyText); err != nil {
 					continue
 				}
 				memberData[tr+"\x00"+cref] = m
@@ -620,11 +615,42 @@ func resolveBestSessionMemberRecords(
 		}
 	}
 
-	for cid, idx := range sessionChunkIdx {
+	for cid, idx := range chunkIndexByChunkID {
 		members := membersByChunk[cid]
 		if len(members) == 0 {
 			continue
 		}
+		namedMembers := make([]indexedMember, 0, len(members))
+		for _, mr := range members {
+			if m, ok := memberData[mr.trawler+"\x00"+mr.canonicalRef]; ok {
+				namedMembers = append(namedMembers, m)
+			}
+		}
+		if len(namedMembers) == 0 {
+			// index.db no longer holds the record, so the hit has nothing to open.
+			chunks[idx].repResolvedRef = ""
+			continue
+		}
+		sort.SliceStable(namedMembers, func(i, j int) bool { return namedMembers[i].occurredUnix < namedMembers[j].occurredUnix })
+		peopleSeen := make(map[string]struct{}, 4)
+		var peopleList []string
+		for _, m := range namedMembers {
+			for _, name := range strings.Split(m.peopleText, ", ") {
+				if name = strings.TrimSpace(name); name == "" {
+					continue
+				}
+				if _, seen := peopleSeen[name]; !seen {
+					peopleSeen[name] = struct{}{}
+					peopleList = append(peopleList, name)
+				}
+			}
+		}
+		chunks[idx].peopleText = strings.Join(peopleList, ", ")
+		chunks[idx].displayContext = strings.TrimSpace(namedMembers[len(namedMembers)-1].displayContext)
+		if !isSessionChunkedTrawlerRecord(chunks[idx].trawler, chunks[idx].recordKind) {
+			continue
+		}
+		chunks[idx].title = firstNonEmptySemantic(chunks[idx].displayContext, chunks[idx].trawlerDisplay)
 		bestScore := 0
 		var best indexedMember
 		hasBest := false
@@ -649,12 +675,28 @@ func resolveBestSessionMemberRecords(
 				hasBest = true
 			}
 		}
+		if !hasBest || bestScore == 0 {
+			previewLines := make([]string, 0, len(namedMembers))
+			for _, m := range namedMembers {
+				body := strings.TrimSpace(m.bodyText)
+				if body == "" {
+					continue
+				}
+				if speaker := strings.TrimSpace(m.peopleText); speaker != "" {
+					body = speaker + ": " + body
+				}
+				previewLines = append(previewLines, body)
+			}
+			if len(previewLines) > 0 {
+				chunks[idx].bodyPreview = unifiedindex.TruncateRunes(strings.Join(previewLines, " · "), 240)
+			}
+		}
 		if hasBest && bestScore > 0 {
 			chunks[idx].repResolvedRef = best.resolvedRef
 			chunks[idx].occurredUnix = best.occurredUnix
 			chunks[idx].hasTimeOfDay = best.hasTimeOfDay
 			chunks[idx].utcOffsetSeconds = best.utcOffsetSeconds
-			speaker := unifiedindex.CleanDisplayPeopleText(best.peopleText)
+			speaker := strings.TrimSpace(best.peopleText)
 			body := strings.TrimSpace(best.bodyText)
 			if speaker != "" && body != "" {
 				chunks[idx].bodyPreview = unifiedindex.TruncateRunes(speaker+": "+body, 240)
@@ -663,23 +705,6 @@ func resolveBestSessionMemberRecords(
 			}
 		}
 	}
-}
-
-func cleanSemanticSessionPreview(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return ""
-	}
-	parts := strings.Split(trimmed, " · ")
-	for i, part := range parts {
-		if colon := strings.Index(part, ": "); colon > 0 && colon < 64 {
-			prefix := unifiedindex.CleanDisplayPeopleText(part[:colon])
-			if prefix != "" {
-				parts[i] = prefix + part[colon:]
-			}
-		}
-	}
-	return strings.Join(parts, " · ")
 }
 
 func displayKindForSemanticRecord(kind string) string {

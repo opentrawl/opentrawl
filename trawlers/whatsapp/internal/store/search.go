@@ -442,18 +442,26 @@ func scanMessages(ctx context.Context, db *sql.DB, query string, args ...any) ([
 	defer func() { _ = rows.Close() }()
 	var out []Message
 	for rows.Next() {
-		var m Message
-		var ts int64
-		var fromMe, starred int
-		if err := rows.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &m.SenderJID, &m.SenderName, &ts, &fromMe, &m.Text, &m.RawType, &m.MessageType, &m.MediaType, &m.MediaTitle, &m.MediaPath, &m.MediaURL, &m.MediaSize, &starred, &m.ChatKind, &m.Snippet); err != nil {
+		m, err := scanMessageRow(rows)
+		if err != nil {
 			return nil, err
 		}
-		m.Timestamp = fromUnix(ts)
-		m.FromMe = fromMe != 0
-		m.Starred = starred != 0
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+func scanMessageRow(rows *sql.Rows) (Message, error) {
+	var m Message
+	var ts int64
+	var fromMe, starred int
+	if err := rows.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &m.SenderJID, &m.SenderName, &ts, &fromMe, &m.Text, &m.RawType, &m.MessageType, &m.MediaType, &m.MediaTitle, &m.MediaPath, &m.MediaURL, &m.MediaSize, &starred, &m.ChatKind, &m.Snippet); err != nil {
+		return Message{}, err
+	}
+	m.Timestamp = fromUnix(ts)
+	m.FromMe = fromMe != 0
+	m.Starred = starred != 0
+	return m, nil
 }
 
 func messageSnippetText(message Message) string {

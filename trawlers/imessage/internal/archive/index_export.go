@@ -11,9 +11,18 @@ import (
 )
 
 const (
+	ownerSenderDisplayName     = "me"
 	imessageIndexBatchSize     = 5000
 	appleCoreDataEpochUnixSecs = int64(978307200)
 )
+
+// IndexedMessageHumanDisplayNames carries the names a person sees for
+// archived conversations and senders, so index.db shows the same names as
+// the iMessage conversation and message commands.
+type IndexedMessageHumanDisplayNames struct {
+	ConversationDisplayNameByChatRowID        map[int64]string
+	SenderDisplayNameFromContactNameAndHandle func(contactDisplayName, handle string) string
+}
 
 // ExportArchiveIndexChanges streams iMessage messages (with explicit opaque
 // chat_identifier conversation keys separate from display names) and chat
@@ -21,6 +30,7 @@ const (
 func (s *Store) ExportArchiveIndexChanges(
 	ctx context.Context,
 	sinceOpaqueCursor string,
+	humanDisplayNames IndexedMessageHumanDisplayNames,
 	emit func(*indexcontract.ArchiveIndexChangeBatch) error,
 ) error {
 	var maxMsgRow, msgCount, maxChatRow, chatCount int64
@@ -59,8 +69,7 @@ func (s *Store) ExportArchiveIndexChanges(
 		select m.source_rowid, m.date, coalesce(m.text, ''), m.is_from_me,
 		       coalesce(nullif(h.display_name, ''), ''), coalesce(nullif(h.handle, ''), ''),
 		       coalesce(ch.source_rowid, 0),
-		       coalesce(nullif(ch.chat_identifier, ''), ''),
-		       coalesce(nullif(ch.display_name, ''), '')
+		       coalesce(nullif(ch.chat_identifier, ''), '')
 		from messages m
 		left join handles h on h.source_rowid = m.handle_rowid
 		left join chat_messages cm on cm.message_rowid = m.source_rowid
@@ -102,11 +111,11 @@ func (s *Store) ExportArchiveIndexChanges(
 	for rows.Next() {
 		var rowID, rawDate, chatRowID int64
 		var isFromMe int
-		var text, senderName, senderHandle, chatIdent, chatDisplay string
+		var text, senderContactName, senderHandle, chatIdent string
 		if err := rows.Scan(
 			&rowID, &rawDate, &text, &isFromMe,
-			&senderName, &senderHandle,
-			&chatRowID, &chatIdent, &chatDisplay,
+			&senderContactName, &senderHandle,
+			&chatRowID, &chatIdent,
 		); err != nil {
 			return fmt.Errorf("scan imessage row for unified index: %w", err)
 		}
@@ -125,15 +134,28 @@ func (s *Store) ExportArchiveIndexChanges(
 		}
 		occUnix, hasTime := decodeAppleIMessageDate(rawDate)
 		convKey := opaqueIMessageConversationID(chatIdent, chatRowID, senderHandle, rowID)
-		displayCtx := firstNonEmptyIMessage(chatDisplay, chatIdent, senderName, senderHandle)
+		senderDisplayName := ""
+		if senderContactName != "" || senderHandle != "" {
+			senderDisplayName = humanDisplayNames.SenderDisplayNameFromContactNameAndHandle(senderContactName, senderHandle)
+		}
+		conversationDisplayName := humanDisplayNames.ConversationDisplayNameByChatRowID[chatRowID]
+		if chatRowID == 0 && isFromMe == 0 {
+			conversationDisplayName = senderDisplayName
+		}
 		role := indexcontract.ObservedArchiveRecordRole_OBSERVED_ARCHIVE_RECORD_ROLE_RECEIVED
 		if isFromMe != 0 {
 			role = indexcontract.ObservedArchiveRecordRole_OBSERVED_ARCHIVE_RECORD_ROLE_AUTHORED
 		}
 		var participants []*indexcontract.ArchiveRecordParticipant
-		if senderName != "" || senderHandle != "" {
+		switch {
+		case isFromMe != 0:
 			participants = []*indexcontract.ArchiveRecordParticipant{{
-				DisplayName:     senderName,
+				DisplayName:     ownerSenderDisplayName,
+				ParticipantRole: "sender",
+			}}
+		case senderDisplayName != "" || senderHandle != "":
+			participants = []*indexcontract.ArchiveRecordParticipant{{
+				DisplayName:     senderDisplayName,
 				AddressOrHandle: senderHandle,
 				ParticipantRole: "sender",
 			}}
@@ -144,7 +166,7 @@ func (s *Store) ExportArchiveIndexChanges(
 			RecordKind:                     indexcontract.ArchiveRecordKind_ARCHIVE_RECORD_KIND_CHAT_MESSAGE,
 			ObservedSourceRole:             role,
 			ConversationOrThreadIdentifier: convKey,
-			DisplayContextTitle:            displayCtx,
+			DisplayContextTitle:            conversationDisplayName,
 			OccurredUnixSeconds:            occUnix,
 			HasOccurredTime:                hasTime,
 			HasTimeOfDay:                   true,
@@ -221,13 +243,4 @@ func opaqueIMessageConversationID(chatIdent string, chatRowID int64, senderHandl
 		return "imessage:handle/" + senderHandle
 	}
 	return "imessage:msg/" + strconv.FormatInt(msgRowID, 10)
-}
-
-func firstNonEmptyIMessage(values ...string) string {
-	for _, v := range values {
-		if trimmed := strings.TrimSpace(v); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }

@@ -3,6 +3,7 @@ package imessage
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,7 +72,29 @@ func (c *Crawler) ExportArchiveIndexChanges(
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	return st.ExportArchiveIndexChanges(ctx, sinceOpaqueCursor, emit)
+	conversations, err := st.Chats(ctx, archive.ChatListOptions{})
+	if err != nil {
+		return archiveErr(fmt.Errorf("read conversations for index: %w", err))
+	}
+	conversationDisplayNameByChatRowID := make(map[int64]string, len(conversations))
+	for _, conversation := range conversations {
+		chatRowID, err := strconv.ParseInt(conversation.ChatID, 10, 64)
+		if err != nil {
+			return archiveErr(fmt.Errorf("read conversation id %q for index: %w", conversation.ChatID, err))
+		}
+		conversationDisplayNameByChatRowID[chatRowID] = messageRecordConversationDisplayName(conversation)
+	}
+	return st.ExportArchiveIndexChanges(ctx, sinceOpaqueCursor, archive.IndexedMessageHumanDisplayNames{
+		ConversationDisplayNameByChatRowID:        conversationDisplayNameByChatRowID,
+		SenderDisplayNameFromContactNameAndHandle: senderDisplayNameFromContactNameAndHandle,
+	}, emit)
+}
+
+func senderDisplayNameFromContactNameAndHandle(contactDisplayName, handle string) string {
+	if name := humanParticipantDisplayIdentity(contactDisplayName); name != "" {
+		return name
+	}
+	return humanParticipantDisplayIdentity(handle)
 }
 
 func (*Crawler) LoadTrawlerConfiguration(trawlkit.TrawlerConfigurationFilePath) error {

@@ -589,10 +589,14 @@ func applySingleUpsert(
 			moneyPending = 1
 		}
 	}
-	peopleText := formatParticipantsForIndex(upsert.GetParticipants())
+	peopleText := formatParticipantDisplayNamesForIndex(upsert.GetParticipants())
 	title := ExpandEastAsianBigrams(CleanIndexedPlainText(upsert.GetTitle(), 500))
 	body := ExpandEastAsianBigrams(CleanIndexedPlainText(upsert.GetBodyText(), 6000))
-	meta := TruncateRunes(strings.TrimSpace(strings.Join(nonEmptyStrings(upsert.GetDisplayContextTitle(), upsert.GetMetadataText()), " ")), 1000)
+	meta := TruncateRunes(strings.TrimSpace(strings.Join(nonEmptyStrings(
+		upsert.GetDisplayContextTitle(),
+		upsert.GetMetadataText(),
+		formatParticipantAddressesForIndex(upsert.GetParticipants()),
+	), " ")), 1000)
 	labelsText := strings.Join(upsert.GetObservedSourceLabels(), " ")
 	statusText := strings.Join(upsert.GetStatusLabels(), "\n")
 
@@ -673,81 +677,36 @@ func applySingleUpsert(
 	return nil
 }
 
-func formatParticipantsForIndex(participants []*indexcontract.ArchiveRecordParticipant) string {
-	if len(participants) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(participants)*2)
-	seen := make(map[string]struct{}, len(participants)*2)
-	add := func(s string) {
-		trimmed := strings.TrimSpace(s)
-		if trimmed == "" {
-			return
+// formatParticipantDisplayNamesForIndex keeps only the names a person reads.
+// A participant's address or handle stands in for a missing name.
+func formatParticipantDisplayNamesForIndex(participants []*indexcontract.ArchiveRecordParticipant) string {
+	displayNames := make([]string, 0, len(participants))
+	seen := make(map[string]struct{}, len(participants))
+	for _, participant := range participants {
+		displayName := strings.TrimSpace(participant.GetDisplayName())
+		if displayName == "" {
+			displayName = strings.TrimSpace(participant.GetAddressOrHandle())
 		}
-		key := strings.ToLower(trimmed)
-		if _, dup := seen[key]; dup {
-			return
+		key := strings.ToLower(displayName)
+		if _, duplicate := seen[key]; duplicate || displayName == "" {
+			continue
 		}
 		seen[key] = struct{}{}
-		parts = append(parts, trimmed)
+		displayNames = append(displayNames, displayName)
 	}
-	for _, p := range participants {
-		if p == nil {
-			continue
-		}
-		displayName := strings.TrimSpace(p.GetDisplayName())
-		handle := strings.TrimSpace(p.GetAddressOrHandle())
-		add(displayName)
-		if displayName == "" || !isBareNumericIdentifier(handle) {
-			add(handle)
-		}
-	}
-	return TruncateRunes(strings.Join(parts, " "), 500)
+	return TruncateRunes(strings.Join(displayNames, ", "), 500)
 }
 
-func isBareNumericIdentifier(s string) bool {
-	if s == "" {
-		return false
-	}
-	digits := 0
-	for i, r := range s {
-		if i == 0 && r == '-' {
-			continue
-		}
-		if r < '0' || r > '9' {
-			return false
-		}
-		digits++
-	}
-	return digits >= 5
-}
-
-// CleanDisplayPeopleText removes trailing opaque numeric account IDs that older
-// index rows concatenated after a human display name (for example "Alex 12345678").
-func CleanDisplayPeopleText(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return ""
-	}
-	segments := strings.Split(trimmed, ",")
-	cleaned := make([]string, 0, len(segments))
-	for _, seg := range segments {
-		fields := strings.Fields(strings.TrimSpace(seg))
-		if len(fields) == 0 {
-			continue
-		}
-		out := make([]string, 0, len(fields))
-		for _, tok := range fields {
-			if len(out) > 0 && isBareNumericIdentifier(tok) {
-				continue
-			}
-			out = append(out, tok)
-		}
-		if len(out) > 0 {
-			cleaned = append(cleaned, strings.Join(out, " "))
+// formatParticipantAddressesForIndex keeps participant addresses and handles
+// searchable without showing them as names.
+func formatParticipantAddressesForIndex(participants []*indexcontract.ArchiveRecordParticipant) string {
+	addresses := make([]string, 0, len(participants))
+	for _, participant := range participants {
+		if address := strings.TrimSpace(participant.GetAddressOrHandle()); address != "" {
+			addresses = append(addresses, address)
 		}
 	}
-	return strings.Join(cleaned, ", ")
+	return strings.Join(addresses, " ")
 }
 
 func canonicalRefString(ref *identity.CanonicalArchiveRecordReference) string {

@@ -8,6 +8,7 @@ import (
 	conversation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/conversation"
 	message "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/message"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -36,6 +37,34 @@ func messageWhere(message store.Message) string {
 		}
 	}
 	return "WhatsApp conversation"
+}
+
+// whatsappConversationDisplayName names an untitled group by its members, as
+// WhatsApp does.
+func whatsappConversationDisplayName(message store.Message, groupParticipantDisplayNames []string) string {
+	title := messageWhere(message)
+	if title != "WhatsApp conversation" || len(groupParticipantDisplayNames) == 0 {
+		return title
+	}
+	return render.ConversationParticipantDisplayNamesPreviewForHumanOutput(
+		groupParticipantDisplayNames,
+		uint64(len(groupParticipantDisplayNames)),
+	)
+}
+
+// whatsappMessageSenderDisplayName returns "" when WhatsApp kept only an
+// opaque privacy identifier for the sender of a group message.
+func whatsappMessageSenderDisplayName(message store.Message) string {
+	if message.FromMe {
+		return "me"
+	}
+	senderDisplayName := whatsappCounterpartyDisplayName(message.SenderName, message.SenderJID)
+	if message.ChatKind == "dm" && humanDisplayName(senderDisplayName) == "" {
+		if conversationDisplayName := whatsappCounterpartyDisplayName(message.ChatName, message.ChatJID); conversationDisplayName != "" {
+			return conversationDisplayName
+		}
+	}
+	return senderDisplayName
 }
 
 func messageSnippet(message store.Message) string {
@@ -119,9 +148,8 @@ func messageTextIsKnownProviderMetadata(message store.Message, text string) bool
 	switch messageKind(message) {
 	case "system", "group_event", "reaction":
 		return containsProviderInternalMetadataToken(text)
-	default:
-		return false
 	}
+	return messageCarriesMedia(message) && len(strings.Fields(text)) == 1 && opaqueProviderToken(text)
 }
 
 func safeMediaTitle(message store.Message) string {

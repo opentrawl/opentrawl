@@ -12,11 +12,17 @@ import (
 
 const whatsappIndexBatchSize = 5000
 
+// IndexedMessageProjection turns one archived message, with the names a
+// person sees already applied, into its index.db record. It returns nil for a
+// message without searchable text.
+type IndexedMessageProjection func(Message) *indexcontract.IndexedArchiveRecordUpsert
+
 // ExportArchiveIndexChanges streams WhatsApp messages and chat short references
 // incrementally into core index.db.
 func (s *Store) ExportArchiveIndexChanges(
 	ctx context.Context,
 	sinceOpaqueCursor string,
+	projectIndexedMessage IndexedMessageProjection,
 	emit func(*indexcontract.ArchiveIndexChangeBatch) error,
 ) error {
 	var maxMsgRow, msgCount, chatCount int64
@@ -44,10 +50,11 @@ func (s *Store) ExportArchiveIndexChanges(
 		return err
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
-		select msg_id, ts, coalesce(text, ''), from_me,
-		       coalesce(chat_jid, ''), coalesce(chat_name, ''),
-		       coalesce(sender_jid, ''), coalesce(sender_name, '')
+	humanDisplayNames, err := s.canonicalWhatsAppMessageDisplayNames(ctx)
+	if err != nil {
+		return fmt.Errorf("read whatsapp display names for unified index: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `select `+messageSelectColumns+`
 		from messages
 		where rowid > ? and trim(msg_id) <> ''
 		order by rowid
@@ -83,49 +90,22 @@ func (s *Store) ExportArchiveIndexChanges(
 	}
 
 	for rows.Next() {
-		var msgID, text, chatJID, chatName, senderJID, senderName string
-		var tsUnix int64
-		var fromMe int
-		if err := rows.Scan(&msgID, &tsUnix, &text, &fromMe, &chatJID, &chatName, &senderJID, &senderName); err != nil {
+		archivedMessage, err := scanMessageRow(rows)
+		if err != nil {
 			return fmt.Errorf("scan whatsapp message for unified index: %w", err)
 		}
-		canonical := trawlkit.NewCanonicalArchiveRecordReference(MessageRefPrefix + msgID)
-		if strings.TrimSpace(text) == "" {
+		namedMessages := []Message{archivedMessage}
+		humanDisplayNames.applyToMessages(namedMessages)
+		archivedMessage = namedMessages[0]
+		if upsert := projectIndexedMessage(archivedMessage); upsert != nil {
+			upserts = append(upserts, upsert)
+		} else {
+			canonical := trawlkit.NewCanonicalArchiveRecordReference(MessageRefPrefix + archivedMessage.MessageID)
 			shortRefOnly = append(shortRefOnly, &indexcontract.ShortReferenceOnlyRegistrationEntry{
 				StableRecordReference:   canonical,
 				ResolvedRecordReference: canonical,
 			})
-			continue
 		}
-		role := indexcontract.ObservedArchiveRecordRole_OBSERVED_ARCHIVE_RECORD_ROLE_RECEIVED
-		if fromMe != 0 {
-			role = indexcontract.ObservedArchiveRecordRole_OBSERVED_ARCHIVE_RECORD_ROLE_AUTHORED
-		}
-		displayCtx := strings.TrimSpace(chatName)
-		if displayCtx == "" {
-			displayCtx = strings.TrimSpace(chatJID)
-		}
-		var participants []*indexcontract.ArchiveRecordParticipant
-		if strings.TrimSpace(senderName) != "" || strings.TrimSpace(senderJID) != "" {
-			participants = []*indexcontract.ArchiveRecordParticipant{{
-				DisplayName:     strings.TrimSpace(senderName),
-				AddressOrHandle: strings.TrimSpace(senderJID),
-				ParticipantRole: "sender",
-			}}
-		}
-		upserts = append(upserts, &indexcontract.IndexedArchiveRecordUpsert{
-			StableRecordReference:          canonical,
-			ResolvedRecordReference:        canonical,
-			RecordKind:                     indexcontract.ArchiveRecordKind_ARCHIVE_RECORD_KIND_CHAT_MESSAGE,
-			ObservedSourceRole:             role,
-			ConversationOrThreadIdentifier: ChatRef(chatJID),
-			DisplayContextTitle:            displayCtx,
-			OccurredUnixSeconds:            tsUnix,
-			HasOccurredTime:                tsUnix > 0,
-			HasTimeOfDay:                   true,
-			BodyText:                       strings.TrimSpace(text),
-			Participants:                   participants,
-		})
 		if len(upserts)+len(shortRefOnly) >= whatsappIndexBatchSize {
 			if err := flush(false); err != nil {
 				return err

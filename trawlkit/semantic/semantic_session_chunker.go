@@ -313,10 +313,14 @@ func collectSemanticChunksFromUnifiedIndex(
 }
 
 func isSessionChunkedRecord(r sourceRecordForChunking) bool {
-	if r.recordKind == "message" {
+	return isSessionChunkedTrawlerRecord(r.trawler, r.recordKind)
+}
+
+func isSessionChunkedTrawlerRecord(trawler, recordKind string) bool {
+	if recordKind == "message" {
 		return true
 	}
-	return r.trawler == "imessage" || r.trawler == "whatsapp" || r.trawler == "telegram"
+	return trawler == "imessage" || trawler == "whatsapp" || trawler == "telegram"
 }
 
 func shouldBreakChatSession(session []sourceRecordForChunking, next sourceRecordForChunking) bool {
@@ -353,7 +357,7 @@ func buildChatSessionChunk(messages []sourceRecordForChunking) (semanticChunkCan
 		if text == "" {
 			continue
 		}
-		speaker := firstNonEmptySemantic(m.peopleText, m.displayContext)
+		speaker := strings.TrimSpace(m.peopleText)
 		if speaker != "" {
 			if _, ok := peopleSeen[speaker]; !ok {
 				peopleSeen[speaker] = struct{}{}
@@ -367,7 +371,7 @@ func buildChatSessionChunk(messages []sourceRecordForChunking) (semanticChunkCan
 	if len(lines) == 0 {
 		return semanticChunkCandidate{}, false
 	}
-	header := firstNonEmptySemantic(last.displayContext, last.conversationKey, last.trawlerDisplay)
+	header := firstNonEmptySemantic(last.displayContext, last.trawlerDisplay)
 	joined := unifiedindex.TruncateRunes(strings.Join(lines, "\n"), chatSessionMaximumChars)
 	embedText := header + "\n" + joined
 	preview := unifiedindex.TruncateRunes(strings.Join(lines, " · "), 240)

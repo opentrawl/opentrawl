@@ -44,6 +44,10 @@ func (s *Store) ExportArchiveIndexChanges(
 		return err
 	}
 
+	contactsByJID, err := s.allContactsForDisplay(ctx)
+	if err != nil {
+		return fmt.Errorf("read telegram contacts for unified index: %w", err)
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		select source_pk, ts, coalesce(text, ''), from_me,
 		       coalesce(chat_jid, ''), coalesce(chat_name, ''),
@@ -101,18 +105,25 @@ func (s *Store) ExportArchiveIndexChanges(
 		if fromMe != 0 {
 			role = indexcontract.ObservedArchiveRecordRole_OBSERVED_ARCHIVE_RECORD_ROLE_AUTHORED
 		}
-		displayCtx := strings.TrimSpace(chatName)
-		if displayCtx == "" {
-			displayCtx = strings.TrimSpace(chatJID)
-		}
+		namedMessages := []Message{{
+			ChatJID:    chatJID,
+			ChatName:   chatName,
+			SenderJID:  senderJID,
+			SenderName: senderName,
+			FromMe:     fromMe != 0,
+		}}
+		humanizeMessagesWithContacts(namedMessages, func(jid string) Contact {
+			return contactsByJID[strings.TrimSpace(jid)]
+		})
+		displayCtx := strings.TrimSpace(namedMessages[0].ChatName)
 		convKey := "telegram:chat/" + strings.TrimSpace(chatJID)
 		if strings.TrimSpace(chatJID) == "" {
 			convKey = "telegram:chat/" + displayCtx
 		}
 		var participants []*indexcontract.ArchiveRecordParticipant
-		if strings.TrimSpace(senderName) != "" || strings.TrimSpace(senderJID) != "" {
+		if senderDisplayName := strings.TrimSpace(namedMessages[0].SenderName); senderDisplayName != "" {
 			participants = []*indexcontract.ArchiveRecordParticipant{{
-				DisplayName:     strings.TrimSpace(senderName),
+				DisplayName:     senderDisplayName,
 				AddressOrHandle: strings.TrimSpace(senderJID),
 				ParticipantRole: "sender",
 			}}

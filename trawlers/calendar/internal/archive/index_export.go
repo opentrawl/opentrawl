@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
@@ -42,7 +43,7 @@ func (s *Store) ExportArchiveIndexChanges(
 	}
 
 	rows, err := s.store.DB().QueryContext(ctx, `
-		select event_uid, calendar_id, calendar_title, start_unix, end_unix, all_day,
+		select event_uid, calendar_id, calendar_title, start_time, start_unix, end_unix, all_day,
 		       summary, description, organizer_name, organizer_email,
 		       location_title, location_address, participants_text, url, status
 		from events
@@ -79,11 +80,11 @@ func (s *Store) ExportArchiveIndexChanges(
 	}
 
 	for rows.Next() {
-		var uid, calID, calTitle, summary, desc, orgName, orgEmail, locTitle, locAddr, participants, rawURL, status string
+		var uid, calID, calTitle, startTime, summary, desc, orgName, orgEmail, locTitle, locAddr, participants, rawURL, status string
 		var startUnix, endUnix int64
 		var allDay int
 		if err := rows.Scan(
-			&uid, &calID, &calTitle, &startUnix, &endUnix, &allDay,
+			&uid, &calID, &calTitle, &startTime, &startUnix, &endUnix, &allDay,
 			&summary, &desc, &orgName, &orgEmail,
 			&locTitle, &locAddr, &participants, &rawURL, &status,
 		); err != nil {
@@ -97,6 +98,7 @@ func (s *Store) ExportArchiveIndexChanges(
 			ConversationOrThreadIdentifier: "calendar:event/" + uid,
 			DisplayContextTitle:            strings.TrimSpace(calTitle),
 			OccurredUnixSeconds:            startUnix,
+			UtcOffsetSeconds:               eventStartUTCOffsetSeconds(startTime),
 			HasOccurredTime:                startUnix != 0,
 			HasTimeOfDay:                   allDay == 0,
 			EndUnixSeconds:                 endUnix,
@@ -122,6 +124,17 @@ func (s *Store) ExportArchiveIndexChanges(
 		return err
 	}
 	return flush(true)
+}
+
+// eventStartUTCOffsetSeconds keeps the offset of the event's own time zone.
+// An all-day event starts at local midnight, so its date depends on it.
+func eventStartUTCOffsetSeconds(storedStartTime string) int32 {
+	startTime, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(storedStartTime))
+	if err != nil {
+		return 0
+	}
+	_, utcOffsetSeconds := startTime.Zone()
+	return int32(utcOffsetSeconds)
 }
 
 func (s *Store) loadCalendarShortReferenceOnlyEntries(ctx context.Context) ([]*indexcontract.ShortReferenceOnlyRegistrationEntry, error) {
