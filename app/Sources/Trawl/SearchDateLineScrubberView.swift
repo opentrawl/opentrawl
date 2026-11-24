@@ -72,27 +72,38 @@ struct SearchDateLineScrubberView: View {
   private func anchorFraction(forDragStartingAt startX: CGFloat, width: CGFloat) -> CGFloat {
     let startFraction = min(max(startX / width, 0), 1)
     guard let committedFractions else { return startFraction }
-    if abs(startX - committedFractions.lower * width) <= Self.brushHandleGrabDistance {
-      return committedFractions.upper
+    let distanceToLowerHandle = abs(startX - committedFractions.lower * width)
+    let distanceToUpperHandle = abs(startX - committedFractions.upper * width)
+    guard min(distanceToLowerHandle, distanceToUpperHandle) <= Self.brushHandleGrabDistance else {
+      return startFraction
     }
-    if abs(startX - committedFractions.upper * width) <= Self.brushHandleGrabDistance {
-      return committedFractions.lower
-    }
-    return startFraction
+    return distanceToUpperHandle <= distanceToLowerHandle
+      ? committedFractions.lower : committedFractions.upper
   }
 
   private var rangeBadgeText: String? {
     guard let fractions = activeFractions else { return nil }
-    let axis = timeAxis
-    let range = axis.inclusiveCalendarDayRange(
-      fromNormalizedPosition: Double(fractions.lower),
-      toNormalizedPosition: Double(fractions.upper)
-    )
-    let rangeStr =
-      ArchiveTimelineDateRangeFormatting.label(
-        earliestInclusive: range.earliestInclusive,
-        latestInclusive: range.latestInclusive
-      ) ?? ""
+    // The committed range is named from its own dates, so it reads the same
+    // here as in the toolbar and the date chip. Only a drag in progress is
+    // named from the pointer position.
+    let rangeStr: String
+    if isDragging {
+      let range = timeAxis.inclusiveCalendarDayRange(
+        fromNormalizedPosition: Double(fractions.lower),
+        toNormalizedPosition: Double(fractions.upper)
+      )
+      rangeStr =
+        ArchiveTimelineDateRangeFormatting.label(
+          earliestInclusive: range.earliestInclusive,
+          latestInclusive: range.latestInclusive
+        ) ?? ""
+    } else {
+      rangeStr =
+        ArchiveTimelineDateRangeFormatting.label(
+          earliestInclusive: earliestDateInclusive,
+          latestInclusive: latestDateInclusive
+        ) ?? ""
+    }
     if isDragging || resultSummaryText.isEmpty {
       return rangeStr
     }
