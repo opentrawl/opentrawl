@@ -97,7 +97,7 @@ struct ArchiveOverviewView: View {
   private func constellationSection(isHorizontalFlow: Bool) -> some View {
     VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
       Text("Your archive")
-        .font(.headline)
+        .font(TrawlDesign.Typography.pageTitle)
         .foregroundStyle(.primary)
 
       Group {
@@ -253,9 +253,9 @@ struct ArchiveOverviewView: View {
         onBrowseApp(trawler.id)
       } label: {
         HStack(spacing: TrawlDesign.Space.sm) {
-          TrawlerIconView(registeredTrawler: trawler.id, size: 18)
+          TrawlerIconView(registeredTrawler: trawler.id, size: 20)
           Text(trawler.registeredTrawlerDisplayName)
-            .font(.callout)
+            .font(TrawlDesign.Typography.body)
             .foregroundStyle(.primary)
             .lineLimit(1)
           if needsAttention && inlineActionTitle == nil {
@@ -264,7 +264,7 @@ struct ArchiveOverviewView: View {
               .frame(width: 6, height: 6)
           }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 5)
         .padding(.horizontal, 6)
         .contentShape(Rectangle())
       }
@@ -312,15 +312,15 @@ struct ArchiveOverviewView: View {
         VStack(alignment: .leading, spacing: 2) {
           HStack(spacing: 4) {
             Text(hostDisplayName)
-              .font(.headline)
+              .font(TrawlDesign.Typography.itemTitle)
               .foregroundStyle(.primary)
               .lineLimit(1)
             Image(systemName: "chevron.up.chevron.down")
-              .font(.caption2)
+              .font(TrawlDesign.Typography.smallLabel)
               .foregroundStyle(.secondary)
           }
           Text(freshnessLine)
-            .font(.caption)
+            .font(TrawlDesign.Typography.meta)
             .foregroundStyle(.secondary)
             .lineLimit(1)
         }
@@ -355,11 +355,11 @@ struct ArchiveOverviewView: View {
 
       VStack(alignment: .leading, spacing: 2) {
         Text(title)
-          .font(.subheadline.weight(.semibold))
+          .font(TrawlDesign.Typography.bodyEmphasis)
           .foregroundStyle(.primary)
           .lineLimit(1)
         Text(subtitle)
-          .font(.caption)
+          .font(TrawlDesign.Typography.meta)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -397,12 +397,12 @@ struct ArchiveOverviewView: View {
         .font(.title3)
         .foregroundStyle(isProminent ? Color.accentColor : .secondary)
       Text(title)
-        .font(.subheadline.weight(.semibold))
+        .font(TrawlDesign.Typography.bodyEmphasis)
         .foregroundStyle(.primary)
         .multilineTextAlignment(.center)
         .lineLimit(1)
       Text(subtitle)
-        .font(.caption)
+        .font(TrawlDesign.Typography.meta)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
         .lineLimit(2)
@@ -588,18 +588,18 @@ struct ArchiveOverviewView: View {
       VStack(spacing: 0) {
         HStack(spacing: TrawlDesign.Space.md) {
           Text("Items per week")
-            .font(.headline)
+            .font(TrawlDesign.Typography.itemTitle)
             .foregroundStyle(.primary)
 
           if let hoveredWeek {
             Text(hoverSummary(for: hoveredWeek))
-              .font(.callout.monospacedDigit())
+              .font(TrawlDesign.Typography.monoSmall)
               .foregroundStyle(.secondary)
               .lineLimit(1)
               .truncationMode(.tail)
           } else {
             Text("Click a week or drag across a row to pick dates.")
-              .font(.callout)
+              .font(TrawlDesign.Typography.meta)
               .foregroundStyle(.secondary)
               .lineLimit(1)
               .truncationMode(.tail)
@@ -624,9 +624,9 @@ struct ArchiveOverviewView: View {
 
         HStack(spacing: 0) {
           Text("App")
-            .font(.caption)
+            .font(TrawlDesign.Typography.smallLabel)
             .foregroundStyle(.secondary)
-            .frame(width: 144, alignment: .leading)
+            .frame(width: TrawlDesign.timelineLabelColumnWidth, alignment: .leading)
 
           GeometryReader { proxy in
             let ticks = axis.yearTicks(forTrackWidth: Double(proxy.size.width))
@@ -634,7 +634,7 @@ struct ArchiveOverviewView: View {
               ForEach(ticks) { tick in
                 let x = CGFloat(tick.normalizedPosition) * proxy.size.width
                 Text(tick.label)
-                  .font(.caption2.monospacedDigit())
+                  .font(TrawlDesign.Typography.smallNumber)
                   .fontWeight(tick.isToday ? .semibold : .regular)
                   .foregroundStyle(tick.isToday ? .primary : .secondary)
                   .fixedSize()
@@ -648,7 +648,7 @@ struct ArchiveOverviewView: View {
           .frame(height: 20)
 
           Text("All time")
-            .font(.caption)
+            .font(TrawlDesign.Typography.smallLabel)
             .foregroundStyle(.secondary)
             .frame(width: 84, alignment: .trailing)
         }
@@ -672,7 +672,7 @@ struct ArchiveOverviewView: View {
         HStack {
           if hasUndatedContacts {
             Text("Contacts have no dates, so they aren't shown here.")
-              .font(.caption)
+              .font(TrawlDesign.Typography.meta)
               .foregroundStyle(.secondary)
           }
           Spacer()
@@ -708,14 +708,14 @@ struct ArchiveOverviewView: View {
         onBrowseApp(trawler.id)
       } label: {
         HStack(spacing: TrawlDesign.Space.sm) {
-          TrawlerIconView(registeredTrawler: trawler.id, size: 18)
+          TrawlerIconView(registeredTrawler: trawler.id, size: 20)
           Text(trawler.registeredTrawlerDisplayName)
-            .font(.callout)
+            .font(TrawlDesign.Typography.laneLabel)
             .foregroundStyle(.primary)
             .lineLimit(1)
           Spacer(minLength: 0)
         }
-        .frame(width: 144, alignment: .leading)
+        .frame(width: TrawlDesign.timelineLabelColumnWidth, alignment: .leading)
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
@@ -806,15 +806,15 @@ struct ArchiveOverviewView: View {
             }
         )
       }
-      .frame(height: 28)
+      .frame(height: TrawlDesign.timelineOverviewLaneHeight)
 
       Text(count.formatted())
-        .font(.callout.monospacedDigit())
+        .font(TrawlDesign.Typography.monoSmall)
         .foregroundStyle(.secondary)
         .frame(width: 84, alignment: .trailing)
     }
     .padding(.horizontal, 12)
-    .padding(.vertical, 5)
+    .padding(.vertical, 6)
     .background(isHoveredRow ? Color.accentColor.opacity(0.06) : Color.clear)
   }
 

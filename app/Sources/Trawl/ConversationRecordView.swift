@@ -40,7 +40,7 @@ struct ConversationRecordView: View {
         }
         if !trawlLink.globallyRoutableTrawlLink.isEmpty {
           LabeledContent("Link", value: trawlLink.globallyRoutableTrawlLink)
-            .font(.caption)
+            .font(TrawlDesign.Typography.smallLabel)
             .foregroundStyle(.secondary)
         }
       }

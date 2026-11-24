@@ -56,11 +56,11 @@ struct BuildIdentityFooter: View {
       Spacer()
       if isExperimental {
         Text(HumanCopy.BuildIdentity.experimentalFeaturesOn)
-          .font(.caption.weight(.semibold))
+          .font(TrawlDesign.Typography.smallLabel.weight(.semibold))
           .foregroundStyle(TrawlDesign.brandRed)
       }
       Text(identity.displayName)
-        .font(.caption.monospaced())
+        .font(TrawlDesign.Typography.smallLabel.monospaced())
         .foregroundStyle(.secondary)
         .textSelection(.enabled)
     }

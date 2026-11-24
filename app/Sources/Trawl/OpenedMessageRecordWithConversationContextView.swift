@@ -70,7 +70,7 @@ private struct OpenedMessageConversationHeader: View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(alignment: .firstTextBaseline, spacing: 12) {
         Text(conversationDisplayName)
-          .font(.title2.weight(.semibold))
+          .font(TrawlDesign.Typography.pageTitle)
           .textSelection(.enabled)
         Spacer(minLength: 8)
         if !conversationTrawlLink.globallyRoutableTrawlLink.isEmpty {
@@ -89,7 +89,7 @@ private struct OpenedMessageConversationHeader: View {
               copiedLink ? "Copied" : conversationTrawlLink.globallyRoutableTrawlLink,
               systemImage: copiedLink ? "checkmark" : "link"
             )
-            .font(.caption.monospaced())
+            .font(TrawlDesign.Typography.smallLabel.monospaced())
           }
           .buttonStyle(.bordered)
           .controlSize(.small)
@@ -102,7 +102,7 @@ private struct OpenedMessageConversationHeader: View {
             conversationDisplayName) != .orderedSame)
       {
         Text(participantDisplayNames.formatted())
-          .font(.callout)
+          .font(TrawlDesign.Typography.meta)
           .foregroundStyle(.secondary)
           .textSelection(.enabled)
       }
@@ -179,7 +179,7 @@ private struct OpenedMessageDayDivider: View {
         .fill(.quaternary)
         .frame(height: 1)
       Text(date, format: .dateTime.year().month(.abbreviated).day())
-        .font(.caption.weight(.medium))
+        .font(TrawlDesign.Typography.smallLabel.weight(.medium))
         .foregroundStyle(.secondary)
         .fixedSize()
       Rectangle()
@@ -200,12 +200,12 @@ private struct OpenedMessageConversationRow: View {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
         if !senderDisplayNames.isEmpty {
           Text(senderDisplayNames.formatted())
-            .font(.callout.weight(.semibold))
+            .font(TrawlDesign.Typography.meta.weight(.semibold))
             .foregroundStyle(isOpenedMessage ? TrawlDesign.brandRed : .primary)
         }
         if isOpenedMessage {
           Text("Match")
-            .font(.caption2.weight(.semibold))
+            .font(TrawlDesign.Typography.smallLabel.weight(.semibold))
             .foregroundStyle(TrawlDesign.brandRed)
             .padding(.horizontal, 6)
             .padding(.vertical, 1)
@@ -246,7 +246,7 @@ private struct OpenedMessageTime: View {
         EmptyView()
       }
     }
-    .font(.caption)
+    .font(TrawlDesign.Typography.smallLabel)
     .foregroundStyle(.secondary)
   }
 }
@@ -286,7 +286,7 @@ private struct OpenedMessageBoundaryNotice: View {
 
   var body: some View {
     Text(text)
-      .font(.caption)
+      .font(TrawlDesign.Typography.smallLabel)
       .foregroundStyle(.tertiary)
       .frame(maxWidth: .infinity, alignment: .center)
       .padding(.vertical, 2)

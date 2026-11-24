@@ -128,7 +128,7 @@ struct OpenTrawlSettingsView: View {
               Text(
                 "When you close the window, OpenTrawl stays in the top-right menu bar. It keeps your archive up to date and your AI can still search. Quit from the menu bar icon."
               )
-              .font(.caption)
+              .font(TrawlDesign.Typography.smallLabel)
               .foregroundStyle(.secondary)
             }
           }
@@ -157,14 +157,14 @@ struct OpenTrawlSettingsView: View {
               Text("Open at login")
                 .font(.body.weight(.medium))
               Text("AI apps on the web or your phone need this to reach this Mac after a restart.")
-                .font(.caption)
+                .font(TrawlDesign.Typography.smallLabel)
                 .foregroundStyle(.secondary)
             }
           }
 
           if let loginItemError {
             Text(loginItemError)
-              .font(.caption)
+              .font(TrawlDesign.Typography.smallLabel)
               .foregroundStyle(TrawlDesign.Colors.matchRed)
           }
         }
@@ -176,7 +176,7 @@ struct OpenTrawlSettingsView: View {
           Text("Archive updates")
             .font(.body.weight(.medium))
           Text("OpenTrawl checks your apps automatically every hour while running on this Mac.")
-            .font(.caption)
+            .font(TrawlDesign.Typography.smallLabel)
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -270,7 +270,7 @@ struct OpenTrawlSettingsView: View {
         Text(trawler.registeredTrawlerDisplayName)
           .font(TrawlDesign.Typography.sectionHeader)
         Text(state.statusLine)
-          .font(.caption)
+          .font(TrawlDesign.Typography.smallLabel)
           .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmber : .secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -333,7 +333,7 @@ struct OpenTrawlSettingsView: View {
             Text("AI apps on this Mac")
               .font(.body.weight(.semibold))
             Text("For Claude Code, Codex, Cursor, and other AI apps that run on this Mac.")
-              .font(.caption)
+              .font(TrawlDesign.Typography.smallLabel)
               .foregroundStyle(.secondary)
           }
           Spacer()
@@ -363,7 +363,7 @@ struct OpenTrawlSettingsView: View {
           Text(
             "What an AI app reads is sent to the company that runs it. This Mac must be on and awake."
           )
-          .font(.caption.weight(.medium))
+          .font(TrawlDesign.Typography.smallLabel.weight(.medium))
           .foregroundStyle(TrawlDesign.Colors.ink)
           Text("Run `trawl mcp --http --tailscale` on this Mac to serve your archive over Tailscale.")
             .font(TrawlDesign.Typography.monoSmall)
@@ -404,7 +404,7 @@ struct OpenTrawlSettingsView: View {
           Text(
             "To let another Mac search this Mac's archive read-only over Tailscale, create an access token on this Mac:"
           )
-          .font(.caption)
+          .font(TrawlDesign.Typography.smallLabel)
           .foregroundStyle(.secondary)
           Text("\(runtimeConfiguration.agentCommand) token create macbook --sources all")
             .font(TrawlDesign.Typography.monoSmall)
@@ -438,7 +438,7 @@ struct OpenTrawlSettingsView: View {
                 ? "On. OpenTrawl can read Messages, Mail, Notes, WhatsApp, and Telegram."
                 : "Off. Turn it on in System Settings to include Messages, Mail, Notes, WhatsApp, and Telegram."
             )
-            .font(.caption)
+            .font(TrawlDesign.Typography.smallLabel)
             .foregroundStyle(.secondary)
           }
           Spacer()

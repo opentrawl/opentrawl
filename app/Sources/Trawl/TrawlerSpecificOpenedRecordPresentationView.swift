@@ -17,14 +17,14 @@ struct TrawlerSpecificOpenedRecordPresentationView: View {
         VStack(alignment: .leading, spacing: 16) {
           VStack(alignment: .leading, spacing: 4) {
             Text(openedRecord.detailPresentation.detailDisplayName)
-              .font(.title2)
+              .font(TrawlDesign.Typography.pageTitle)
               .textSelection(.enabled)
               .id(
                 openedRecord.detailPresentation.detailDisplayNameAnchor?.recordAnchorIdentifier
                   ?? openedRecord.detailPresentation.detailDisplayName)
             if let subtitle = openedRecord.detailPresentation.detailSubtitle {
               Text(subtitle)
-                .font(.subheadline)
+                .font(TrawlDesign.Typography.meta)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             }
@@ -51,7 +51,7 @@ struct TrawlerSpecificOpenedRecordPresentationView: View {
           }
           if let footer = openedRecord.detailPresentation.detailFooterText {
             Text(footer)
-              .font(.footnote)
+              .font(TrawlDesign.Typography.smallLabel)
               .foregroundStyle(.secondary)
               .textSelection(.enabled)
           }

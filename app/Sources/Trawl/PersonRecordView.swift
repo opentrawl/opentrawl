@@ -80,7 +80,7 @@ private struct PersonContactMethodRow: View {
       VStack(alignment: .leading, spacing: 2) {
         if !contactMethod.personContactMethodLabel.isEmpty {
           Text(contactMethod.personContactMethodLabel)
-            .font(.caption)
+            .font(TrawlDesign.Typography.smallLabel)
             .foregroundStyle(.secondary)
         }
         switch contactMethod.personContactMethodKind {

@@ -84,16 +84,16 @@ struct SearchDateLineScrubberView: View {
     VStack(spacing: TrawlDesign.Space.xs) {
       HStack(spacing: TrawlDesign.Space.sm) {
         Text(scopedTrawlerDisplayName.map { "\($0) by week" } ?? "All items by week")
-          .font(.subheadline.weight(.semibold))
+          .font(TrawlDesign.Typography.bodyEmphasis)
           .foregroundStyle(.primary)
         Text("Drag across the line to choose dates.")
-          .font(.caption)
+          .font(TrawlDesign.Typography.meta)
           .foregroundStyle(.secondary)
           .lineLimit(1)
         Spacer(minLength: TrawlDesign.Space.sm)
         if let rangeBadgeText {
           Text(rangeBadgeText)
-            .font(.caption.monospacedDigit())
+            .font(TrawlDesign.Typography.monoSmall)
             .foregroundStyle(TrawlDesign.Colors.matchRed)
             .lineLimit(1)
           if !isDragging {
@@ -147,7 +147,7 @@ struct SearchDateLineScrubberView: View {
             }
         )
       }
-      .frame(height: 34)
+      .frame(height: TrawlDesign.searchDateScrubberLineHeight)
 
       GeometryReader { proxy in
         let ticks = axis.yearTicks(forTrackWidth: Double(proxy.size.width))
@@ -155,8 +155,7 @@ struct SearchDateLineScrubberView: View {
           ForEach(ticks) { tick in
             let x = CGFloat(tick.normalizedPosition) * proxy.size.width
             Text(tick.label)
-              .font(TrawlDesign.Typography.monoAxis)
-              .monospacedDigit()
+              .font(TrawlDesign.Typography.smallNumber)
               .foregroundStyle(tick.isToday ? TrawlDesign.Colors.ink : TrawlDesign.Colors.mutedInk)
               .fixedSize()
               .position(
@@ -170,7 +169,7 @@ struct SearchDateLineScrubberView: View {
     }
     .padding(.horizontal, TrawlDesign.Space.md)
     .padding(.vertical, TrawlDesign.Space.sm)
-    .frame(height: 92)
+    .frame(height: 108)
     .background(TrawlDesign.Colors.surface)
     .overlay(alignment: .top) {
       Divider()

@@ -92,6 +92,8 @@ enum TrawlDesign {
   static let timelineLaneHeight: CGFloat = 26
   static let timelineSlimLaneHeight: CGFloat = 14
   static let timelineLabelColumnWidth: CGFloat = 156
+  static let timelineOverviewLaneHeight: CGFloat = 34
+  static let searchDateScrubberLineHeight: CGFloat = 44
   static let timelineCountColumnWidth: CGFloat = 94
   static let timelineUndatedColumnWidth: CGFloat = 28
   static let timelineFutureGutterWidth: CGFloat = 34
@@ -105,16 +107,20 @@ enum TrawlDesign {
   static let searchWorkspaceMaximumWidth: CGFloat = 1_680
   static let recordReadingWidth: CGFloat = 760
 
+  /// One type scale in macOS point sizes: 17 and 15 for titles, 13 for body,
+  /// 12 for supporting text and 11 for the smallest labels. Nothing in the
+  /// main window is smaller than 11.
   enum Typography {
     static let pageTitle = Font.title2.weight(.semibold)
+    static let itemTitle = Font.title3.weight(.semibold)
     static let sectionHeader = Font.headline
-    static let cardTitle = Font.subheadline.weight(.semibold)
     static let body = Font.body
+    static let bodyEmphasis = Font.body.weight(.semibold)
     static let meta = Font.callout
-    static let caption = Font.caption
+    static let smallLabel = Font.subheadline
+    static let smallNumber = Font.subheadline.monospacedDigit()
     static let laneLabel = Font.body
     static let monoSmall = Font.callout.monospacedDigit()
-    static let monoAxis = Font.caption2.monospacedDigit()
   }
 
   static func usesCompactSearchLayout(width: CGFloat) -> Bool {

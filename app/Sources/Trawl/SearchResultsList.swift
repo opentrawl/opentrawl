@@ -160,7 +160,7 @@ struct SearchResultsList: View {
         Image(systemName: "exclamationmark.triangle.fill")
           .foregroundStyle(.orange)
         Text(loadMoreFailureMessage)
-          .font(.caption)
+          .font(TrawlDesign.Typography.meta)
           .foregroundStyle(.secondary)
         Spacer()
         Button("Try again", action: onLoadMore)
@@ -174,7 +174,7 @@ struct SearchResultsList: View {
         ProgressView()
           .controlSize(.small)
         Text("Loading more results…")
-          .font(.caption)
+          .font(TrawlDesign.Typography.meta)
           .foregroundStyle(.secondary)
         Spacer()
       }
@@ -221,14 +221,14 @@ private struct SearchResultsContext: View {
       }
       if case .partial = phase {
         Label(OperationalCopy.Search.partialResults, systemImage: "exclamationmark.triangle")
-          .font(.caption)
+          .font(TrawlDesign.Typography.smallLabel)
       }
     }
-    .font(.callout)
+    .font(TrawlDesign.Typography.meta)
     .foregroundStyle(.secondary)
     .fixedSize(horizontal: false, vertical: true)
     .padding(.horizontal, 14)
-    .padding(.vertical, 8)
+    .padding(.vertical, 10)
   }
 }
 
@@ -257,25 +257,25 @@ private struct SearchResultRow: View {
   var body: some View {
     HStack(alignment: .top, spacing: TrawlDesign.Space.sm) {
       if let registeredTrawler = searchMatch.registeredTrawler {
-        TrawlerIconView(registeredTrawler: registeredTrawler, size: 20)
-          .padding(.top, 2)
+        TrawlerIconView(registeredTrawler: registeredTrawler, size: 22)
+          .padding(.top, 1)
       }
-      VStack(alignment: .leading, spacing: 3) {
+      VStack(alignment: .leading, spacing: 4) {
         Text(displayTitle)
-          .font(.subheadline.weight(.semibold))
+          .font(TrawlDesign.Typography.itemTitle)
           .foregroundStyle(.primary)
           .lineLimit(2)
 
         if !metadataLine.isEmpty {
           Text(metadataLine)
-            .font(.caption)
+            .font(TrawlDesign.Typography.meta)
             .foregroundStyle(.secondary)
             .lineLimit(1)
         }
 
         if !physicalPlaceNamesSpecificToBroadestText.isEmpty {
           Text(physicalPlaceNamesSpecificToBroadestText)
-            .font(.caption)
+            .font(TrawlDesign.Typography.meta)
             .foregroundStyle(.secondary)
             .lineLimit(1)
         }
@@ -287,14 +287,14 @@ private struct SearchResultRow: View {
         ) { _, searchMatchTextField in
           if let evidence = fieldLabelledSearchMatchTextEvidence(searchMatchTextField) {
             evidence
-              .font(.callout)
+              .font(TrawlDesign.Typography.body)
               .foregroundStyle(.secondary)
               .lineLimit(2)
           }
         }
       }
     }
-    .padding(.vertical, 4)
+    .padding(.vertical, 8)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
   }
