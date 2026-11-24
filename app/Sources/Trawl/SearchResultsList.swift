@@ -232,7 +232,14 @@ private struct SearchResultsContext: View {
           isLowerBound: totalMatchedCountIsLowerBound,
           isTruncated: isTruncated
         )
-        Text(showsUpToTodayContext ? "\(base) · Up to today" : base)
+        HStack(alignment: .firstTextBaseline, spacing: TrawlDesign.Space.xs) {
+          Text(base)
+            .font(TrawlDesign.Typography.bodyEmphasis)
+            .foregroundStyle(.primary)
+          if showsUpToTodayContext {
+            Text("· Up to today")
+          }
+        }
       }
       if case .partial = phase {
         Label(OperationalCopy.Search.partialResults, systemImage: "exclamationmark.triangle")
@@ -249,6 +256,7 @@ private struct SearchResultsContext: View {
 
 private struct SearchResultRow: View {
   @Environment(\.locale) private var locale
+  @Environment(\.backgroundProminence) private var backgroundProminence
 
   let searchMatch: SearchMatch
   let rawTitle: String
@@ -501,9 +509,11 @@ private struct SearchResultRow: View {
     for piece in pieces {
       var pieceText = Text(piece.text)
       if piece.matchesSearchQuery {
-        pieceText = pieceText
-          .bold()
-          .foregroundColor(TrawlDesign.Colors.matchRed)
+        // Red is unreadable on the selected row's accent fill.
+        pieceText =
+          backgroundProminence == .increased
+          ? pieceText.bold().underline()
+          : pieceText.bold().foregroundColor(TrawlDesign.Colors.matchRed)
       }
       line = Text("\(line)\(pieceText)")
     }
