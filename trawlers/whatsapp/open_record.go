@@ -85,11 +85,12 @@ func projectOpenedMessageRecordWithConversationContext(value openValue) *message
 
 func projectMessageRecord(whatsappMessage store.Message) *message.MessageRecord {
 	messageRecord := &message.MessageRecord{
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(messageRef(whatsappMessage)),
-		PeopleRelatedToMessage:   whatsappMessageCommandPeople(whatsappMessage),
-		MessageText:              messageText(whatsappMessage),
-		ConversationDisplayName:  messageWhere(whatsappMessage),
-		MessageMedia:             whatsappMessageMedia(whatsappMessage),
+		CanonicalRecordReference:               trawlkit.NewCanonicalArchiveRecordReference(messageRef(whatsappMessage)),
+		PeopleRelatedToMessage:                 whatsappMessageCommandPeople(whatsappMessage),
+		MessageText:                            messageText(whatsappMessage),
+		ConversationDisplayName:                messageWhere(whatsappMessage),
+		MessageMedia:                           whatsappMessageMedia(whatsappMessage),
+		MessageDirectionRelativeToArchiveOwner: trawlkit.MessageDirectionFromSentByArchiveOwner(whatsappMessage.FromMe),
 	}
 	if !whatsappMessage.Timestamp.IsZero() {
 		messageRecord.MessageTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{

@@ -91,9 +91,10 @@ func projectMessageRecord(archiveMessage archive.MessageRow, chat archive.ChatSu
 		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 			archive.MessageRef(archiveMessage.MessageID),
 		),
-		PeopleRelatedToMessage:  imessageCommandPeople(archiveMessage, chat),
-		MessageText:             strings.TrimSpace(strings.ReplaceAll(archiveMessage.Text, objectReplacementCharacter, "")),
-		ConversationDisplayName: messageRecordConversationDisplayName(chat),
+		PeopleRelatedToMessage:                 imessageCommandPeople(archiveMessage, chat),
+		MessageText:                            strings.TrimSpace(strings.ReplaceAll(archiveMessage.Text, objectReplacementCharacter, "")),
+		ConversationDisplayName:                messageRecordConversationDisplayName(chat),
+		MessageDirectionRelativeToArchiveOwner: trawlkit.MessageDirectionFromSentByArchiveOwner(archiveMessage.FromMe),
 	}
 	if archiveMessage.HasAttachments {
 		messageRecord.MessageMedia = &message.MessageMedia{

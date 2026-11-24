@@ -69,10 +69,11 @@ func (c *Crawler) ListMessages(
 				CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
 					store.MessageRef(telegramMessage.SourcePK),
 				),
-				PeopleRelatedToMessage:  peopleRelatedToMessage,
-				MessageText:             messageText(telegramMessage),
-				ConversationDisplayName: telegramMessageConversationDisplayName(telegramMessage),
-				MessageMedia:            telegramMessageMedia(telegramMessage),
+				PeopleRelatedToMessage:                 peopleRelatedToMessage,
+				MessageText:                            messageText(telegramMessage),
+				ConversationDisplayName:                telegramMessageConversationDisplayName(telegramMessage),
+				MessageMedia:                           telegramMessageMedia(telegramMessage),
+				MessageDirectionRelativeToArchiveOwner: trawlkit.MessageDirectionFromSentByArchiveOwner(telegramMessage.FromMe),
 			}
 			if !telegramMessage.Timestamp.IsZero() {
 				messageRecord.MessageTime = &presentation.ArchiveRecordAssociatedTimeForDisplay{

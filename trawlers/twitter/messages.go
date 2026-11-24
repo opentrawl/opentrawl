@@ -104,11 +104,23 @@ func projectDirectMessageRecord(dm store.DirectMessage) *message.MessageRecord {
 		text = "[attachment]"
 	}
 	return &message.MessageRecord{
-		CanonicalRecordReference: trawlkit.NewCanonicalArchiveRecordReference(store.DMMessageRef(dm.ID)),
-		MessageTime:              twitterArchiveRecordAssociatedTime(dm.CreatedAt),
-		PeopleRelatedToMessage:   directMessagePeople(dm),
-		MessageText:              text,
-		ConversationDisplayName:  directMessageWhere(dm),
+		CanonicalRecordReference:               trawlkit.NewCanonicalArchiveRecordReference(store.DMMessageRef(dm.ID)),
+		MessageTime:                            twitterArchiveRecordAssociatedTime(dm.CreatedAt),
+		PeopleRelatedToMessage:                 directMessagePeople(dm),
+		MessageText:                            text,
+		ConversationDisplayName:                directMessageWhere(dm),
+		MessageDirectionRelativeToArchiveOwner: directMessageDirectionRelativeToArchiveOwner(dm),
+	}
+}
+
+func directMessageDirectionRelativeToArchiveOwner(dm store.DirectMessage) message.MessageDirectionRelativeToArchiveOwner {
+	switch dm.Direction {
+	case "outbound":
+		return trawlkit.MessageDirectionFromSentByArchiveOwner(true)
+	case "inbound":
+		return trawlkit.MessageDirectionFromSentByArchiveOwner(false)
+	default:
+		return message.MessageDirectionRelativeToArchiveOwner_MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_UNSPECIFIED
 	}
 }
 
