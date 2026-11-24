@@ -43,6 +43,12 @@ type ConversationLister interface {
 	Conversations(ctx context.Context, req *TrawlerCommandExecutionRequest, q ConversationQuery) (*conversation.ConversationListResponse, error)
 }
 
+// ConversationRecordReferenceRecognizer lets `trawl open` skip listing every
+// conversation when a link names a message or another record kind.
+type ConversationRecordReferenceRecognizer interface {
+	CanonicalRecordReferenceNamesConversation(*CanonicalArchiveRecordReference) bool
+}
+
 type TrawlerMessageLister interface {
 	ListMessages(
 		ctx context.Context,

@@ -22,16 +22,17 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Trawler                    = (*Crawler)(nil)
-	_ trawlkit.Updater                    = (*Crawler)(nil)
-	_ trawlkit.Searcher                   = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher                 = (*Crawler)(nil)
-	_ trawlkit.ConversationLister         = (*Crawler)(nil)
-	_ trawlkit.TrawlerMessageLister       = (*Crawler)(nil)
-	_ trawlkit.PeopleSnapshotProvider     = (*Crawler)(nil)
-	_ trawlkit.CanonicalRecordOpener      = (*Crawler)(nil)
-	_ trawlkit.ArchiveIndexChangeExporter = (*Crawler)(nil)
-	_ trawlkit.PluginCapabilityDeclarator = (*Crawler)(nil)
+	_ trawlkit.Trawler                               = (*Crawler)(nil)
+	_ trawlkit.Updater                               = (*Crawler)(nil)
+	_ trawlkit.Searcher                              = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher                            = (*Crawler)(nil)
+	_ trawlkit.ConversationLister                    = (*Crawler)(nil)
+	_ trawlkit.ConversationRecordReferenceRecognizer = (*Crawler)(nil)
+	_ trawlkit.TrawlerMessageLister                  = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider                = (*Crawler)(nil)
+	_ trawlkit.CanonicalRecordOpener                 = (*Crawler)(nil)
+	_ trawlkit.ArchiveIndexChangeExporter            = (*Crawler)(nil)
+	_ trawlkit.PluginCapabilityDeclarator            = (*Crawler)(nil)
 )
 
 func New() *Crawler {

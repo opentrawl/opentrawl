@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -199,4 +200,8 @@ func whatsappMessageCommandPeople(message store.Message) []*person.PersonRelated
 		})
 	}
 	return people
+}
+
+func (*Crawler) CanonicalRecordReferenceNamesConversation(canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference) bool {
+	return strings.HasPrefix(trawlkit.CanonicalArchiveRecordReferenceText(canonicalRecordReference), store.ChatRefPrefix)
 }

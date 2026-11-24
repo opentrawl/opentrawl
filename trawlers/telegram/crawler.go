@@ -73,6 +73,7 @@ var (
 	_ trawlkit.Searcher                                   = (*Crawler)(nil)
 	_ trawlkit.WhoMatcher                                 = (*Crawler)(nil)
 	_ trawlkit.ConversationLister                         = (*Crawler)(nil)
+	_ trawlkit.ConversationRecordReferenceRecognizer      = (*Crawler)(nil)
 	_ trawlkit.TrawlerMessageLister                       = (*Crawler)(nil)
 	_ trawlkit.PeopleSnapshotProvider                     = (*Crawler)(nil)
 	_ trawlkit.SuccessfullyCompletedArchiveUpdateRecorder = (*Crawler)(nil)
@@ -248,4 +249,8 @@ func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 
 func normalizeWords(value string) string {
 	return strings.Join(strings.Fields(value), " ")
+}
+
+func (*Crawler) CanonicalRecordReferenceNamesConversation(canonicalRecordReference *trawlkit.CanonicalArchiveRecordReference) bool {
+	return strings.HasPrefix(trawlkit.CanonicalArchiveRecordReferenceText(canonicalRecordReference), store.ChatRefPrefix)
 }

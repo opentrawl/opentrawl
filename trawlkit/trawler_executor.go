@@ -279,6 +279,10 @@ func FindConversationRecordWithCanonicalReference(
 	trawler Trawler,
 	canonicalRecordReference *CanonicalArchiveRecordReference,
 ) (*conversation.ConversationRecord, error) {
+	if recognizer, ok := trawler.(ConversationRecordReferenceRecognizer); ok &&
+		!recognizer.CanonicalRecordReferenceNamesConversation(canonicalRecordReference) {
+		return nil, nil
+	}
 	requestedCanonicalRecordReference := CanonicalArchiveRecordReferenceText(canonicalRecordReference)
 	response, err := executeConversations(
 		ctx,

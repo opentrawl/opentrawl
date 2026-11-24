@@ -3,6 +3,7 @@ package shortref
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -50,13 +51,14 @@ func NewScopedSQLiteIndex(db SQLiteDB, trawler string) *ScopedSQLiteIndex {
 }
 
 func (i *ScopedSQLiteIndex) Lookup(ctx context.Context, alias string) ([]string, error) {
+	// DISTINCT or ORDER BY here makes SQLite scan the whole trawler through
+	// the canonical_ref index instead of seeking the alias; dedupe in Go.
 	rows, err := i.db.QueryContext(ctx, `
-select distinct canonical_ref
+select canonical_ref
 from trawler_short_references
 where trawler = ?
   and alias = ?
   and tombstoned = 0
-order by canonical_ref
 `, i.trawler, alias)
 	if err != nil {
 		return nil, fmt.Errorf("lookup scoped short ref: %w", err)
@@ -74,7 +76,8 @@ order by canonical_ref
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read scoped short ref lookup: %w", err)
 	}
-	return refs, nil
+	slices.Sort(refs)
+	return slices.Compact(refs), nil
 }
 
 func (i *ScopedSQLiteIndex) Aliases(ctx context.Context, canonicalRefs []string) (map[string]string, error) {
