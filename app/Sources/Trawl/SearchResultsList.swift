@@ -115,19 +115,14 @@ struct SearchResultsList: View {
       Divider()
 
       List(selection: $selectedSearchMatchIdentifier) {
-        ForEach(groupedSections) { section in
-          Section(section.title) {
-            ForEach(section.matches) { searchMatch in
-              SearchResultRow(
-                searchMatch: searchMatch,
-                rawTitle: title(searchMatch),
-                registeredTrawlerDisplayName: trawlerDisplayName(
-                  searchMatch.registeredTrawler),
-                showsTrawlerDisplayName: showsTrawlerDisplayName
-              )
-              .tag(searchMatch.id)
+        if searchMatchesAreNewestFirst {
+          ForEach(groupedSections) { section in
+            Section(section.title) {
+              searchResultRows(for: section.matches)
             }
           }
+        } else {
+          searchResultRows(for: searchMatches)
         }
 
         if loadMoreFailureMessage != nil || isLoadingMore || canLoadMore {
@@ -151,6 +146,26 @@ struct SearchResultsList: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  /// Month headings describe a list in date order. A search for words comes
+  /// back in order of relevance, where a heading for every row is noise.
+  private var searchMatchesAreNewestFirst: Bool {
+    let times = searchMatches.compactMap(\.time)
+    return zip(times, times.dropFirst()).allSatisfy { $0 >= $1 }
+  }
+
+  private func searchResultRows(for matches: [SearchMatch]) -> some View {
+    ForEach(matches) { searchMatch in
+      SearchResultRow(
+        searchMatch: searchMatch,
+        rawTitle: title(searchMatch),
+        registeredTrawlerDisplayName: trawlerDisplayName(
+          searchMatch.registeredTrawler),
+        showsTrawlerDisplayName: showsTrawlerDisplayName
+      )
+      .tag(searchMatch.id)
+    }
   }
 
   @ViewBuilder
@@ -261,36 +276,30 @@ private struct SearchResultRow: View {
           .padding(.top, 1)
       }
       VStack(alignment: .leading, spacing: 4) {
-        Text(displayTitle)
-          .font(TrawlDesign.Typography.itemTitle)
-          .foregroundStyle(.primary)
-          .lineLimit(2)
-
-        if !metadataLine.isEmpty {
-          Text(metadataLine)
-            .font(TrawlDesign.Typography.meta)
-            .foregroundStyle(.secondary)
+        HStack(alignment: .firstTextBaseline, spacing: TrawlDesign.Space.sm) {
+          Text(displayTitle)
+            .font(TrawlDesign.Typography.itemTitle)
+            .foregroundStyle(.primary)
             .lineLimit(1)
-        }
-
-        if !physicalPlaceNamesSpecificToBroadestText.isEmpty {
-          Text(physicalPlaceNamesSpecificToBroadestText)
-            .font(TrawlDesign.Typography.meta)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-
-        ForEach(
-          Array(
-            searchMatch.searchMatchPresentation.searchMatchTextFieldsInDisplayOrder.enumerated()),
-          id: \.offset
-        ) { _, searchMatchTextField in
-          if let evidence = fieldLabelledSearchMatchTextEvidence(searchMatchTextField) {
-            evidence
-              .font(TrawlDesign.Typography.body)
+          Spacer(minLength: 0)
+          if let formattedTime {
+            Text(formattedTime)
+              .font(TrawlDesign.Typography.smallNumber)
               .foregroundStyle(.secondary)
-              .lineLimit(2)
+              .fixedSize()
           }
+        }
+
+        if let matchingTextLine {
+          matchingTextLine
+            .font(TrawlDesign.Typography.body)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        } else if !peopleAndPlacesLine.isEmpty {
+          Text(peopleAndPlacesLine)
+            .font(TrawlDesign.Typography.body)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
         }
       }
     }
@@ -299,26 +308,30 @@ private struct SearchResultRow: View {
     .accessibilityLabel(accessibilityLabel)
   }
 
-  /// Combines timestamp, container, and people into one deduplicated metadata line
-  /// so Mail never repeats sender addresses and Telegram never repeats the conversation title.
-  private var metadataLine: String {
-    var parts: [String] = []
-    if let formattedTime {
-      parts.append(formattedTime)
-    }
-
+  /// Shown when the record has no text to quote: who it involves, or where
+  /// it is filed, and its place.
+  private var peopleAndPlacesLine: String {
     let container = digitalContainerNamesNearestToBroadestText
-    let people = cleanedPeopleSummary(excludingContainer: container)
+    return [
+      cleanedPeopleSummary(excludingContainer: container),
+      physicalPlaceNamesSpecificToBroadestText,
+    ]
+    .filter { !$0.isEmpty }
+    .joined(separator: " · ")
+  }
 
-    if !people.isEmpty {
-      parts.append(people)
-    } else if !container.isEmpty,
-      container.localizedCaseInsensitiveCompare(displayTitle) != .orderedSame,
-      !Self.isRawChatIdentifier(container)
-    {
-      parts.append(container)
-    }
-    return parts.joined(separator: " · ")
+  private var senderDisplayName: String? {
+    searchMatch.searchMatchPresentation.peopleRelatedToMatchingRecord
+      .filter { $0.personRoleInArchiveRecord == .sender || $0.personRoleInArchiveRecord == .author }
+      .map {
+        Self.stripRedundantEmailEcho(
+          $0.personDisplayName.trimmingCharacters(in: .whitespacesAndNewlines))
+      }
+      .first {
+        !$0.isEmpty
+          && !Self.isRawChatIdentifier($0)
+          && $0.localizedCaseInsensitiveCompare(displayTitle) != .orderedSame
+      }
   }
 
   private func cleanedPeopleSummary(excludingContainer container: String) -> String {
@@ -397,8 +410,8 @@ private struct SearchResultRow: View {
     var facts = [
       showsTrawlerDisplayName ? registeredTrawlerDisplayName : nil,
       displayTitle,
-      metadataLine,
-      physicalPlaceNamesSpecificToBroadestText,
+      formattedTime,
+      peopleAndPlacesLine,
     ]
       .compactMap { $0 }
       .filter { !$0.isEmpty }
@@ -438,30 +451,77 @@ private struct SearchResultRow: View {
     }
   }
 
-  private func fieldLabelledSearchMatchTextEvidence(
-    _ searchMatchTextField: SearchMatchTextField
-  ) -> Text? {
-    let fieldName = searchMatchTextField.searchMatchTextFieldName
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    let fragments = searchMatchTextField.searchMatchTextFragmentsInDisplayOrder
-      .filter { !$0.searchMatchTextFragmentContent.isEmpty }
-    guard !fieldName.isEmpty || !fragments.isEmpty else { return nil }
-
-    var result = Text("")
-    if !fieldName.isEmpty {
-      result = Text(fragments.isEmpty ? fieldName : "\(fieldName): ")
-        .foregroundStyle(.secondary)
-    }
-    for fragment in fragments {
-      var piece = Text(fragment.searchMatchTextFragmentContent)
-      if fragment.searchMatchTextFragmentMatchesSearchQuery {
-        piece = piece
-          .bold()
-          .foregroundColor(TrawlDesign.brandRed)
+  /// One line of the record's text, with the sender in front and the words
+  /// that matched the search in red.
+  private var matchingTextLine: Text? {
+    let fields = searchMatch.searchMatchPresentation.searchMatchTextFieldsInDisplayOrder
+    let fieldToQuote =
+      fields.first {
+        $0.searchMatchTextFragmentsInDisplayOrder.contains(
+          where: \.searchMatchTextFragmentMatchesSearchQuery)
       }
-      result = Text("\(result)\(piece)")
+      ?? fields.first {
+        $0.searchMatchTextFragmentsInDisplayOrder.contains {
+          !$0.searchMatchTextFragmentContent
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+      }
+    guard let fieldToQuote else { return nil }
+
+    var pieces = fieldToQuote.searchMatchTextFragmentsInDisplayOrder
+      .map {
+        QuotedTextPiece(
+          text: $0.searchMatchTextFragmentContent.replacing(#/\s+/#, with: " "),
+          matchesSearchQuery: $0.searchMatchTextFragmentMatchesSearchQuery)
+      }
+      .filter { !$0.text.isEmpty }
+    if let firstMatchingPiece = pieces.firstIndex(where: \.matchesSearchQuery),
+      firstMatchingPiece > 0
+    {
+      let textBeforeFirstMatch = pieces[..<firstMatchingPiece].map(\.text).joined()
+      pieces.replaceSubrange(
+        ..<firstMatchingPiece,
+        with: [
+          QuotedTextPiece(
+            text: Self.endOfTextBeforeFirstMatch(textBeforeFirstMatch),
+            matchesSearchQuery: false)
+        ])
     }
-    return result
+    if let firstPiece = pieces.first {
+      pieces[0].text = String(firstPiece.text.drop(while: \.isWhitespace))
+    }
+    guard pieces.contains(where: { !$0.text.isEmpty }) else { return nil }
+
+    let fieldName = fieldToQuote.searchMatchTextFieldName
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    var line = Text("")
+    if let lineLabel = senderDisplayName ?? (fieldName.isEmpty ? nil : fieldName) {
+      line = Text("\(lineLabel): ")
+    }
+    for piece in pieces {
+      var pieceText = Text(piece.text)
+      if piece.matchesSearchQuery {
+        pieceText = pieceText
+          .bold()
+          .foregroundColor(TrawlDesign.Colors.matchRed)
+      }
+      line = Text("\(line)\(pieceText)")
+    }
+    return line
+  }
+
+  private struct QuotedTextPiece {
+    var text: String
+    let matchesSearchQuery: Bool
+  }
+
+  /// Keeps the first matched word on the visible part of a one-line row.
+  private static func endOfTextBeforeFirstMatch(_ text: String) -> String {
+    let longestTextBeforeFirstMatch = 28
+    guard text.count > longestTextBeforeFirstMatch else { return text }
+    let ending = text.suffix(longestTextBeforeFirstMatch)
+    guard let firstSpace = ending.firstIndex(of: " ") else { return "…\(ending)" }
+    return "…\(ending[ending.index(after: firstSpace)...])"
   }
 
   private var formattedTime: String? {
