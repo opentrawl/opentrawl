@@ -4,6 +4,12 @@ set -euo pipefail
 # OPENTRAWL_GOOGLE_OAUTH_CLIENT_SECRET_FILE names a file holding only the
 # Google desktop OAuth client secret. A build without it cannot connect
 # Gmail. The secret goes into the Go archive and is never printed.
+#
+# OPENTRAWL_TELEGRAM_API_HASH_FILE names either a file holding only the
+# Telegram api_hash or a TOML file containing api_hash (and optional api_id).
+# When unset, swift-with-trawl also checks the default local credentials file
+# (${OPENTRAWL_STATE_ROOT:-$HOME/.opentrawl}/telegram/opentrawl-app-credentials.toml).
+# The hash goes into the Go archive and is never printed.
 
 app_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 archive_directory="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-go-archive.XXXXXX")"
@@ -26,6 +32,41 @@ if [[ -n "${OPENTRAWL_GOOGLE_OAUTH_CLIENT_SECRET_FILE:-}" ]]; then
     exit 1
   }
   go_linker_flag_values+=("-X github.com/opentrawl/opentrawl/gmail.DefaultGoogleOAuthClientSecret=$google_oauth_client_secret")
+fi
+
+telegram_credentials_file="${OPENTRAWL_TELEGRAM_API_HASH_FILE:-}"
+telegram_credentials_required=0
+if [[ -n "$telegram_credentials_file" ]]; then
+  telegram_credentials_required=1
+else
+  default_telegram_credentials_file="${OPENTRAWL_STATE_ROOT:-$HOME/.opentrawl}/telegram/opentrawl-app-credentials.toml"
+  if [[ -s "$default_telegram_credentials_file" && -r "$default_telegram_credentials_file" ]]; then
+    telegram_credentials_file="$default_telegram_credentials_file"
+  fi
+fi
+
+if [[ -n "$telegram_credentials_file" ]]; then
+  [[ -s "$telegram_credentials_file" && -r "$telegram_credentials_file" ]] || {
+    echo "swift-with-trawl: Telegram API hash file is missing or empty" >&2
+    exit 1
+  }
+  telegram_api_hash=""
+  telegram_api_id=""
+  if grep -Eq '^[[:space:]]*api_hash[[:space:]]*=' "$telegram_credentials_file"; then
+    telegram_api_hash="$(sed -nE 's/^[[:space:]]*api_hash[[:space:]]*=[[:space:]]*"?([0-9A-Fa-f]+)"?[[:space:]]*(#.*)?$/\1/p' "$telegram_credentials_file" | head -n 1)"
+    telegram_api_id="$(sed -nE 's/^[[:space:]]*api_id[[:space:]]*=[[:space:]]*"?([0-9]+)"?[[:space:]]*(#.*)?$/\1/p' "$telegram_credentials_file" | head -n 1)"
+  else
+    telegram_api_hash="$(tr -d '\r\n[:space:]' < "$telegram_credentials_file")"
+  fi
+  if [[ "$telegram_api_hash" =~ ^[0-9A-Fa-f]{32}$ ]]; then
+    go_linker_flag_values+=("-X github.com/opentrawl/opentrawl/trawlers/telegram/directmtproto.telegramBuildAPIHash=$telegram_api_hash")
+    if [[ -n "$telegram_api_id" && "$telegram_api_id" =~ ^[1-9][0-9]*$ ]]; then
+      go_linker_flag_values+=("-X github.com/opentrawl/opentrawl/trawlers/telegram/directmtproto.telegramBuildAPIID=$telegram_api_id")
+    fi
+  elif [[ "$telegram_credentials_required" -eq 1 ]]; then
+    echo "swift-with-trawl: Telegram API hash has an invalid format" >&2
+    exit 1
+  fi
 fi
 go_linker_flags=()
 if [[ "${#go_linker_flag_values[@]}" -gt 0 ]]; then

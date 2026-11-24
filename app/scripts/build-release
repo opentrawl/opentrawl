@@ -11,6 +11,7 @@ usage: app/scripts/build-release \
   [--identity IDENTITY] \
   [--provisioning-profile FILE] \
   [--google-oauth-client-secret FILE] \
+  [--telegram-api-hash FILE] \
   [--feed-url URL] \
   [--notary-key FILE] \
   [--notary-key-id ID] \
@@ -22,6 +23,8 @@ identity is ad hoc signing (-), which is useful for local structural checks.
 --provisioning-profile enables Data Protection Keychain with Developer ID signing.
 --google-oauth-client-secret names a file holding only the Google desktop OAuth
 client secret; without it the app cannot connect Gmail.
+--telegram-api-hash names a file holding the Telegram api_hash (or an
+opentrawl-app-credentials.toml file) for direct Telegram sign-in.
 --notarize requires a Developer ID identity and an App Store Connect team API
 key. Individual API keys cannot use notarytool.
 EOF
@@ -35,6 +38,7 @@ sparkle_public_key=""
 identity="-"
 provisioning_profile=""
 google_oauth_client_secret_file=""
+telegram_api_hash_file=""
 feed_url="https://github.com/opentrawl/opentrawl/releases/latest/download/appcast.xml"
 notary_key=""
 notary_key_id=""
@@ -50,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --identity) identity="${2:-}"; shift 2 ;;
     --provisioning-profile) [[ -n "${2:-}" ]] || usage; provisioning_profile="$2"; shift 2 ;;
     --google-oauth-client-secret) [[ -n "${2:-}" ]] || usage; google_oauth_client_secret_file="$2"; shift 2 ;;
+    --telegram-api-hash) [[ -n "${2:-}" ]] || usage; telegram_api_hash_file="$2"; shift 2 ;;
     --feed-url) feed_url="${2:-}"; shift 2 ;;
     --notary-key) notary_key="${2:-}"; shift 2 ;;
     --notary-key-id) notary_key_id="${2:-}"; shift 2 ;;
@@ -89,6 +94,12 @@ fi
 if [[ -n "$google_oauth_client_secret_file" ]]; then
   [[ -s "$google_oauth_client_secret_file" && -r "$google_oauth_client_secret_file" ]] || {
     echo "build-release: cannot read Google OAuth client secret file: $google_oauth_client_secret_file" >&2
+    exit 1
+  }
+fi
+if [[ -n "$telegram_api_hash_file" ]]; then
+  [[ -s "$telegram_api_hash_file" && -r "$telegram_api_hash_file" ]] || {
+    echo "build-release: cannot read Telegram API hash file: $telegram_api_hash_file" >&2
     exit 1
   }
 fi
@@ -204,6 +215,7 @@ host_swift() {
 echo "Building the release app"
 OPENTRAWL_BUILD_VERSION="$version" \
   OPENTRAWL_GOOGLE_OAUTH_CLIENT_SECRET_FILE="$google_oauth_client_secret_file" \
+  OPENTRAWL_TELEGRAM_API_HASH_FILE="$telegram_api_hash_file" \
   "$script_dir/swift-with-trawl" build \
   --scratch-path "$swift_scratch" \
   --configuration release \

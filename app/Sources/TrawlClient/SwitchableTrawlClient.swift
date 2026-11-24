@@ -46,4 +46,8 @@ public final class SwitchableTrawlClient: TrawlClient, @unchecked Sendable {
   ) async throws -> OpenResponse {
     try await currentClient.open(link: link, anchor: anchor)
   }
+
+  public func photoImageData(for link: GloballyRoutableTrawlLink) async throws -> Data? {
+    try await currentClient.photoImageData(for: link)
+  }
 }

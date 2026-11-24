@@ -346,6 +346,10 @@ public final class SearchModel {
     await openLink(link, anchor: anchor, matchID: matchID)
   }
 
+  public func photoImageData(for link: GloballyRoutableTrawlLink) async throws -> Data? {
+    try await client.photoImageData(for: link)
+  }
+
   private func openLink(
     _ link: GloballyRoutableTrawlLink,
     anchor: RecordAnchorIdentifier,

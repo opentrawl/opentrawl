@@ -602,7 +602,9 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
 
                 ResultPreview(
                   phase: model.openPhase,
+                  isRemoteArchive: isRemoteArchive,
                   highlightedTerms: highlightedTermsForOpenedRecord,
+                  loadPhotoImageData: { try await model.photoImageData(for: $0) },
                   onOpenLink: openLinkedRecord
                 )
               }
@@ -624,7 +626,9 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
               } else {
                 ResultPreview(
                   phase: model.openPhase,
+                  isRemoteArchive: isRemoteArchive,
                   highlightedTerms: highlightedTermsForOpenedRecord,
+                  loadPhotoImageData: { try await model.photoImageData(for: $0) },
                   onOpenLink: openLinkedRecord
                 )
               }

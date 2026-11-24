@@ -126,9 +126,13 @@ public protocol TrawlClient: Sendable {
     link: GloballyRoutableTrawlLink,
     anchor: RecordAnchorIdentifier
   ) async throws -> OpenResponse
+  func photoImageData(for link: GloballyRoutableTrawlLink) async throws -> Data?
 }
 
 extension TrawlClient {
+  public func photoImageData(for link: GloballyRoutableTrawlLink) async throws -> Data? {
+    nil
+  }
   public func update() async throws -> FederatedTrawlerArchiveUpdateOperation {
     try await update(registeredTrawlers: []) { _ in }
   }

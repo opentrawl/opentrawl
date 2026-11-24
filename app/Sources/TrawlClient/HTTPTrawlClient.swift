@@ -113,7 +113,7 @@ public struct RemoteArchiveEndpointConfiguration: Sendable, Equatable {
     components.fragment = nil
 
     var path = components.path
-    for suffix in ["/mcp", "/app/status", "/app/search", "/app/open", "/healthz"] {
+    for suffix in ["/mcp", "/app/status", "/app/search", "/app/open", "/app/photo", "/healthz"] {
       if path.hasSuffix(suffix) {
         path = String(path.dropLast(suffix.count))
         break
@@ -249,11 +249,54 @@ public struct HTTPTrawlClient: TrawlClient {
     return result
   }
 
+  public func photoImageData(for link: GloballyRoutableTrawlLink) async throws -> Data? {
+    guard
+      let route = parseGloballyRoutableTrawlLink(link),
+      route.registeredTrawler.registeredTrawlerIdentity == "photos"
+    else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    let response = try await fetchAuthenticatedGET(
+      path: "/app/photo",
+      queryItems: [URLQueryItem(name: "link", value: link.globallyRoutableTrawlLink)],
+      accept: "image/jpeg, image/*",
+      timeout: Self.defaultOpenTimeout,
+      allowNotFoundAsNil: true
+    )
+    guard let data = response, !data.isEmpty else { return nil }
+    return data
+  }
+
   private func fetchProtobuf<Message: SwiftProtobuf.Message>(
     path: String,
     queryItems: [URLQueryItem],
     timeout: TimeInterval
   ) async throws -> Message {
+    guard
+      let data = try await fetchAuthenticatedGET(
+        path: path,
+        queryItems: queryItems,
+        accept: "application/x-protobuf",
+        timeout: timeout,
+        allowNotFoundAsNil: false
+      )
+    else {
+      throw TrawlClientError.invalidFrame
+    }
+    do {
+      return try Message(serializedBytes: data)
+    } catch {
+      throw TrawlClientError.invalidProtobuf
+    }
+  }
+
+  private func fetchAuthenticatedGET(
+    path: String,
+    queryItems: [URLQueryItem],
+    accept: String,
+    timeout: TimeInterval,
+    allowNotFoundAsNil: Bool
+  ) async throws -> Data? {
     guard !configuration.bearerToken.isEmpty else {
       throw TrawlClientError.remoteAuthenticationRequired
     }
@@ -278,7 +321,7 @@ public struct HTTPTrawlClient: TrawlClient {
     request.timeoutInterval = timeout
     request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
     request.setValue("Bearer \(configuration.bearerToken)", forHTTPHeaderField: "Authorization")
-    request.setValue("application/x-protobuf", forHTTPHeaderField: "Accept")
+    request.setValue(accept, forHTTPHeaderField: "Accept")
 
     let data: Data
     let urlResponse: URLResponse
@@ -305,6 +348,8 @@ public struct HTTPTrawlClient: TrawlClient {
     switch httpResponse.statusCode {
     case 200:
       break
+    case 404 where allowNotFoundAsNil:
+      return nil
     case 401:
       throw TrawlClientError.remoteAuthenticationRequired
     case 403:
@@ -320,11 +365,7 @@ public struct HTTPTrawlClient: TrawlClient {
     guard data.count <= DelimitedFrames.maximumFrameBytes else {
       throw TrawlClientError.oversizedFrame
     }
-    do {
-      return try Message(serializedBytes: data)
-    } catch {
-      throw TrawlClientError.invalidProtobuf
-    }
+    return data
   }
 
   private static func decodedServerErrorMessage(from data: Data) -> String {

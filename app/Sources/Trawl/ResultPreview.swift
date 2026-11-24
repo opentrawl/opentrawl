@@ -5,7 +5,9 @@ import TrawlCore
 
 struct ResultPreview: View {
   let phase: SearchOpenPhase
+  var isRemoteArchive: Bool = false
   var highlightedTerms: [String] = []
+  var loadPhotoImageData: ((GloballyRoutableTrawlLink) async throws -> Data?)?
   var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
 
   @State private var copiedLink = false
@@ -49,7 +51,11 @@ struct ResultPreview: View {
             case .trawlerSpecificRecordPresentation(let openedRecord):
               TrawlerSpecificOpenedRecordPresentationView(
                 openedRecord: openedRecord,
+                recordTrawler: record.recordTrawler,
+                trawlLink: response.requestedTrawlLink,
                 targetAnchor: response.requestedRecordAnchor,
+                isRemoteArchive: isRemoteArchive,
+                loadPhotoImageData: loadPhotoImageData,
                 onOpenLink: onOpenLink)
             }
           }

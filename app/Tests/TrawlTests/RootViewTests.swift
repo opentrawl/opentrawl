@@ -286,6 +286,42 @@ struct RootViewTests {
     #expect(searchModel.openPhase == .idle)
   }
 
+  @MainActor
+  @Test func photoFieldHelperExtractsCachedPathAndHidesRawFilePathInPhotoRecords() {
+    let cachedPathField = TrawlerSpecificCommandDetailPresentationField(
+      fieldDisplayName: "Picture",
+      fieldValue: .text("/tmp/opentrawl-picture-cache/example.jpg"),
+      fieldAnchor: nil
+    )
+    let notFetchedField = TrawlerSpecificCommandDetailPresentationField(
+      fieldDisplayName: "Picture",
+      fieldValue: .text("Not fetched yet."),
+      fieldAnchor: nil
+    )
+    let cameraField = TrawlerSpecificCommandDetailPresentationField(
+      fieldDisplayName: "Camera",
+      fieldValue: .text("iPhone"),
+      fieldAnchor: nil
+    )
+
+    #expect(
+      OpenedPhotoPreviewView.localCachedPictureFilePath(from: [cameraField, cachedPathField])
+        == "/tmp/opentrawl-picture-cache/example.jpg"
+    )
+    #expect(
+      OpenedPhotoPreviewView.localCachedPictureFilePath(from: [cameraField, notFetchedField]) == nil
+    )
+    #expect(
+      OpenedPhotoPreviewView.shouldHideRawPicturePathField(cachedPathField, isPhotoRecord: true)
+    )
+    #expect(
+      !OpenedPhotoPreviewView.shouldHideRawPicturePathField(notFetchedField, isPhotoRecord: true)
+    )
+    #expect(
+      !OpenedPhotoPreviewView.shouldHideRawPicturePathField(cachedPathField, isPhotoRecord: false)
+    )
+  }
+
 }
 
 @MainActor
