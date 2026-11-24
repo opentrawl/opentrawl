@@ -261,12 +261,14 @@ func validateOpenedMessageRecordWithConversationContext(
 	) {
 		return fmt.Errorf("canonical opened message record reference does not match the opened record")
 	}
-	if err := validateTrawlerOwnedRecordReference(
-		registeredTrawler,
-		openedMessage.GetConversationRecordReference(),
-		"canonical conversation record reference",
-	); err != nil {
-		return err
+	if canonicalArchiveRecordReferenceText(openedMessage.GetConversationRecordReference()) != "" {
+		if err := validateTrawlerOwnedRecordReference(
+			registeredTrawler,
+			openedMessage.GetConversationRecordReference(),
+			"canonical conversation record reference",
+		); err != nil {
+			return err
+		}
 	}
 	openedMessageCount := 0
 	for _, messageRecord := range openedMessage.GetConversationContextMessageRecordsNewestFirst() {

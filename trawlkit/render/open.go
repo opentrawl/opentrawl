@@ -172,9 +172,6 @@ func writeOpenedMessageRecordWithConversationContext(
 		return fmt.Errorf("opened message record is missing")
 	}
 	conversationLink := openedMessage.GetConversationTrawlLink()
-	if globallyRoutableTrawlLinkText(conversationLink) == "" {
-		return fmt.Errorf("conversation link for opened message is missing")
-	}
 	conversationDisplayName := strings.TrimSpace(openedMessage.GetConversationDisplayName())
 	if err := writeLines(writer, Wrap(conversationDisplayName, OutputWidth(writer))); err != nil {
 		return err

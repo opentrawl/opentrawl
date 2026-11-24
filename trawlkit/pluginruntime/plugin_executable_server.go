@@ -14,6 +14,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/pluginproxy"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
 	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 	worker "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/worker"
@@ -333,6 +334,25 @@ func runSDKOpenRecord(
 	if opened != nil {
 		defer func() { _ = opened.Close() }()
 		execReq.OpenedTrawlerArchiveStore = opened
+	}
+	if conversationLister, ok := trawler.(trawlkit.ConversationLister); ok {
+		conversationRecord, err := trawlkit.FindConversationRecordWithCanonicalReference(
+			ctx, conversationLister, execReq, trawler, op.GetCanonicalRecordReference(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		if conversationRecord != nil {
+			return &plugincontract.PluginInvocationResult{
+				Success: &plugincontract.PluginInvocationResult_OpenRecord{OpenRecord: &open.OpenRecord{
+					RecordTrawler:            trawler.RegisteredTrawlerDeclaration().RegisteredTrawler,
+					CanonicalRecordReference: conversationRecord.GetCanonicalRecordReference(),
+					TypedOpenedRecord: &open.OpenRecord_ConversationRecord{
+						ConversationRecord: conversationRecord,
+					},
+				}},
+			}, nil
+		}
 	}
 	execReq.RequestedRecordAnchor = op.GetRequestedRecordAnchor()
 	record, err := opener.OpenCanonicalRecord(ctx, execReq, op.GetCanonicalRecordReference())

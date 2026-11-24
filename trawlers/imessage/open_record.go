@@ -52,8 +52,14 @@ func validateOpenTimestamps(value archive.MessageContext) error {
 
 func projectOpenedMessageRecordWithConversationContext(value archive.MessageContext) *message.OpenedMessageRecordWithConversationContext {
 	title := strings.TrimSpace(conversationDisplayName(value.Chat))
-	if title == "" || title == "unknown conversation" {
-		title = "Conversation"
+	if strings.TrimSpace(value.Message.ChatID) == "" ||
+		title == "" ||
+		title == "unknown conversation" ||
+		title == "direct conversation" {
+		title = "iMessage conversation"
+		if sender := humanParticipantDisplayIdentity(value.Message.SenderLabel); sender != "" && sender != "me" {
+			title = sender
+		}
 	}
 	contextMessageRecords := make([]*message.MessageRecord, 0, len(value.Before)+1+len(value.After))
 	for _, message := range value.Before {
@@ -73,9 +79,9 @@ func projectOpenedMessageRecordWithConversationContext(value archive.MessageCont
 		OpenedMessageRecordAnchor:                 trawlkit.NewRecordAnchorIdentifier(trawlkit.MatchAnchorID),
 		EarlierConversationContextMessagesOmitted: value.BeforeTruncated,
 		LaterConversationContextMessagesOmitted:   value.AfterTruncated,
-		ConversationRecordReference: trawlkit.NewCanonicalArchiveRecordReference(
-			archive.ChatRef(value.Message.ChatID),
-		),
+	}
+	if chatRef := archive.ChatRef(value.Message.ChatID); chatRef != "" {
+		openedMessageRecord.ConversationRecordReference = trawlkit.NewCanonicalArchiveRecordReference(chatRef)
 	}
 	return openedMessageRecord
 }

@@ -267,8 +267,19 @@ func findConversationRecordIdentifiedByLocalTrawlerShortReference(
 	if len(canonicalRecordReferences) != 1 {
 		return nil, ErrUnknownShortRef
 	}
-	requestedCanonicalRecordReference :=
-		CanonicalArchiveRecordReferenceText(canonicalRecordReferences[0])
+	return FindConversationRecordWithCanonicalReference(ctx, conversationLister, request, trawler, canonicalRecordReferences[0])
+}
+
+// FindConversationRecordWithCanonicalReference returns the listed conversation
+// a link names, or nil when the link names another kind of record.
+func FindConversationRecordWithCanonicalReference(
+	ctx context.Context,
+	conversationLister ConversationLister,
+	request *TrawlerCommandExecutionRequest,
+	trawler Trawler,
+	canonicalRecordReference *CanonicalArchiveRecordReference,
+) (*conversation.ConversationRecord, error) {
+	requestedCanonicalRecordReference := CanonicalArchiveRecordReferenceText(canonicalRecordReference)
 	response, err := executeConversations(
 		ctx,
 		conversationLister,
@@ -299,7 +310,7 @@ func setGloballyRoutableTrawlLinkForConversationContainingOpenedMessage(
 	}
 	canonicalConversationRecordReference := openedMessageRecord.GetConversationRecordReference()
 	if CanonicalArchiveRecordReferenceText(canonicalConversationRecordReference) == "" {
-		return errors.New("canonical conversation record reference containing opened message is missing")
+		return nil
 	}
 	shortReferencesByCanonicalRecordReference, err := req.LocalShortReferencesForCanonicalArchiveRecordReferences(
 		ctx,
