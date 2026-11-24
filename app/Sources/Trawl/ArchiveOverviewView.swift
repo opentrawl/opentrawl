@@ -97,7 +97,7 @@ struct ArchiveOverviewView: View {
   private static let narrowestHorizontalFlowWidth: CGFloat = 1_080
   private static let sourceAppChipWidth: CGFloat = 178
   private static let sourceAppChipHeight: CGFloat = 30
-  private static let sourceAppChipSpacing: CGFloat = 8
+  private static let sourceAppChipSpacing: CGFloat = 12
   private static let archiveHubWidth: CGFloat = 216
   private static let destinationCardWidth: CGFloat = 328
 
@@ -205,13 +205,10 @@ struct ArchiveOverviewView: View {
 
   private var verticalConstellation: some View {
     VStack(alignment: .center, spacing: 36) {
-      HStack(spacing: 10) {
-        ForEach(trawlers) { trawler in
-          compactSourceChip(for: trawler)
-            .anchorPreference(key: ConstellationAnchorPreferenceKey.self, value: .bounds) {
-              [.source(trawler.id): $0]
-            }
-        }
+      ViewThatFits(in: .horizontal) {
+        compactSourceRow(iconSize: 24, spacing: 10)
+        compactSourceRow(iconSize: 20, spacing: 4)
+        compactSourceRow(iconSize: 16, spacing: 2)
       }
 
       archiveHubNode
@@ -321,13 +318,24 @@ struct ArchiveOverviewView: View {
     }
   }
 
-  private func compactSourceChip(for trawler: RestingTrawler) -> some View {
+  private func compactSourceRow(iconSize: CGFloat, spacing: CGFloat) -> some View {
+    HStack(spacing: spacing) {
+      ForEach(trawlers) { trawler in
+        compactSourceChip(for: trawler, iconSize: iconSize)
+          .anchorPreference(key: ConstellationAnchorPreferenceKey.self, value: .bounds) {
+            [.source(trawler.id): $0]
+          }
+      }
+    }
+  }
+
+  private func compactSourceChip(for trawler: RestingTrawler, iconSize: CGFloat) -> some View {
     let op = operabilityByID[trawler.id]
     return Button {
       onBrowseApp(trawler.id)
     } label: {
       ZStack(alignment: .topTrailing) {
-        TrawlerIconView(registeredTrawler: trawler.id, size: 24)
+        TrawlerIconView(registeredTrawler: trawler.id, size: iconSize)
         if op?.needsAttention == true {
           Circle()
             .fill(TrawlDesign.Colors.warningAmber)
@@ -335,7 +343,7 @@ struct ArchiveOverviewView: View {
             .offset(x: 3, y: -2)
         }
       }
-      .frame(width: 30, height: 30)
+      .frame(width: iconSize + 6, height: iconSize + 6)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
