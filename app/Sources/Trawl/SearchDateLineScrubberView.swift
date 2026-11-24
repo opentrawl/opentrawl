@@ -8,7 +8,6 @@ import TrawlCore
 struct SearchDateLineScrubberView: View {
   let trawlerStatuses: [TrawlerStatus]
   let scopedTrawlerID: RegisteredTrawlerIdentity?
-  let queryText: String
   let resultSummaryText: String
   let earliestDateInclusive: Date?
   let latestDateInclusive: Date?
@@ -45,6 +44,10 @@ struct SearchDateLineScrubberView: View {
     }
   }
 
+  private var isDragging: Bool {
+    draftStartFraction != nil && draftEndFraction != nil
+  }
+
   private var activeFractions: (lower: CGFloat, upper: CGFloat)? {
     if let draftStartFraction, let draftEndFraction {
       return (min(draftStartFraction, draftEndFraction), max(draftStartFraction, draftEndFraction))
@@ -68,7 +71,10 @@ struct SearchDateLineScrubberView: View {
         earliestInclusive: range.earliestInclusive,
         latestInclusive: range.latestInclusive
       ) ?? ""
-    return resultSummaryText.isEmpty ? rangeStr : "\(rangeStr) · \(resultSummaryText)"
+    if isDragging || resultSummaryText.isEmpty {
+      return rangeStr
+    }
+    return "\(rangeStr) · \(resultSummaryText)"
   }
 
   var body: some View {
@@ -76,26 +82,25 @@ struct SearchDateLineScrubberView: View {
 
     VStack(spacing: TrawlDesign.Space.xs) {
       HStack(spacing: TrawlDesign.Space.sm) {
-        Text("When")
-          .font(TrawlDesign.Typography.caption.weight(.semibold))
+        Text("All items by week")
+          .font(TrawlDesign.Typography.cardTitle)
           .foregroundStyle(TrawlDesign.Colors.ink)
-        Text(
-          queryText.isEmpty
-            ? "Drag across the line to choose dates"
-            : "Results for “\(queryText)” · Drag across the line to choose dates"
-        )
-        .font(TrawlDesign.Typography.meta)
-        .foregroundStyle(TrawlDesign.Colors.mutedInk)
-        .lineLimit(1)
+        Text("Drag across the line to choose dates.")
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(TrawlDesign.Colors.mutedInk)
+          .lineLimit(1)
         Spacer(minLength: TrawlDesign.Space.sm)
         if let rangeBadgeText {
           Text(rangeBadgeText)
-            .font(TrawlDesign.Typography.caption.weight(.semibold))
+            .font(TrawlDesign.Typography.meta)
+            .monospacedDigit()
             .foregroundStyle(TrawlDesign.Colors.matchRed)
             .lineLimit(1)
-          Button("Clear dates", action: onClearDateRange)
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
+          if !isDragging {
+            Button("Clear dates", action: onClearDateRange)
+              .buttonStyle(.bordered)
+              .controlSize(.small)
+          }
         }
       }
 
@@ -111,20 +116,11 @@ struct SearchDateLineScrubberView: View {
           if let active = activeFractions {
             let x1 = active.lower * width
             let x2 = active.upper * width
-            let bandW = max(4, x2 - x1)
+            let bandW = max(3, x2 - x1)
             Rectangle()
-              .fill(TrawlDesign.Colors.matchRed.opacity(0.12))
+              .fill(TrawlDesign.Colors.matchRed.opacity(0.14))
               .frame(width: bandW, height: height)
               .offset(x: x1)
-
-            Capsule()
-              .fill(TrawlDesign.Colors.matchRed)
-              .frame(width: 5, height: 16)
-              .offset(x: max(0, x1 - 2.5))
-            Capsule()
-              .fill(TrawlDesign.Colors.matchRed)
-              .frame(width: 5, height: 16)
-              .offset(x: min(width - 5, x2 - 2.5))
           }
         }
         .contentShape(Rectangle())
@@ -142,7 +138,7 @@ struct SearchDateLineScrubberView: View {
               draftStartFraction = nil
               draftEndFraction = nil
               let lower = min(s, e)
-              let upper = max(max(s, e), min(1, lower + 0.01))
+              let upper = max(s, e)
               let range = axis.inclusiveCalendarDayRange(
                 fromNormalizedPosition: Double(lower),
                 toNormalizedPosition: Double(upper)
@@ -160,6 +156,7 @@ struct SearchDateLineScrubberView: View {
             let x = CGFloat(tick.normalizedPosition) * proxy.size.width
             Text(tick.label)
               .font(TrawlDesign.Typography.monoAxis)
+              .monospacedDigit()
               .foregroundStyle(tick.isToday ? TrawlDesign.Colors.ink : TrawlDesign.Colors.mutedInk)
               .fixedSize()
               .position(
@@ -173,7 +170,7 @@ struct SearchDateLineScrubberView: View {
     }
     .padding(.horizontal, TrawlDesign.Space.md)
     .padding(.vertical, TrawlDesign.Space.sm)
-    .frame(height: 88)
+    .frame(height: 92)
     .background(TrawlDesign.Colors.surface)
     .overlay(alignment: .top) {
       Divider()
@@ -257,7 +254,7 @@ struct SearchDateLineScrubberView: View {
       let clipRect = CGRect(
         x: active.lower * size.width,
         y: 0,
-        width: max(4, (active.upper - active.lower) * size.width),
+        width: max(3, (active.upper - active.lower) * size.width),
         height: size.height
       )
       context.drawLayer { layer in

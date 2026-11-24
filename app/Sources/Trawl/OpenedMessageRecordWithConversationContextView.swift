@@ -221,12 +221,12 @@ private struct OpenedMessageConversationRow: View {
     .padding(10)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(
-      isOpenedMessage ? TrawlDesign.brandRed.opacity(0.08) : .secondary.opacity(0.05),
-      in: .rect(cornerRadius: 8))
+      isOpenedMessage ? TrawlDesign.brandRed.opacity(0.08) : TrawlDesign.Colors.surface,
+      in: TrawlDesign.Shape.control)
     .overlay {
       if isOpenedMessage {
-        RoundedRectangle(cornerRadius: 8)
-          .stroke(TrawlDesign.brandRed.opacity(0.32), lineWidth: 1)
+        TrawlDesign.Shape.control
+          .strokeBorder(TrawlDesign.brandRed.opacity(0.32), lineWidth: 1)
       }
     }
   }

@@ -42,7 +42,7 @@ enum AgentPrompts {
       - keeps those archives and my searches on my Mac;
       - has no telemetry or analytics;
       - does not run servers that receive my archive, searches or usage data;
-      - keeps app indexing on my Mac by default. The app \(updateClaim). Network requests happen only when I explicitly connect a cloud service, a remote OpenTrawl archive host, or ask OpenTrawl to sync or download something (for example Google for Gmail, Telegram for direct login or missing media downloads, Enable Banking for Money, X for Twitter, a remote archive server I configure, or local embedding weights if I enable optional semantic search).
+      - keeps app indexing on my Mac by default. The app \(updateClaim). Network requests happen only when I explicitly connect a cloud service, a remote OpenTrawl archive host, or ask OpenTrawl to sync or download something (for example Google for Gmail, Telegram for direct login or missing media downloads, Enable Banking for Money, X for Twitter — including optional user-initiated browser cookie import for X, a remote archive server I configure, or local embedding weights if I enable optional semantic search).
 
       \(auditTarget) Explain in plain English what OpenTrawl reads, what leaves my Mac, which network requests happen automatically or when I ask for them, whether OpenTrawl receives any of my personal data, and whether the app has telemetry or analytics.
 

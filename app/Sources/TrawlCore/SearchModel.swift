@@ -187,12 +187,18 @@ public final class SearchModel {
       return
     }
 
+    let isEmptyBrowse =
+      query.isEmpty
+      && earliestMatchingArchiveRecordTimeInclusive == nil
+      && latestMatchingArchiveRecordTimeInclusive == nil
     let effectiveEarliest =
-      (query.isEmpty
-        && earliestMatchingArchiveRecordTimeInclusive == nil
-        && latestMatchingArchiveRecordTimeInclusive == nil)
+      isEmptyBrowse
       ? Date(timeIntervalSince1970: 0)
       : earliestMatchingArchiveRecordTimeInclusive
+    let effectiveLatest =
+      isEmptyBrowse
+      ? Date()
+      : latestMatchingArchiveRecordTimeInclusive
 
     timedOutLocally = false
     isLoadingMore = false
@@ -207,7 +213,7 @@ public final class SearchModel {
         searchQueryText: query,
         onlySearchThisRegisteredTrawler: registeredTrawler,
         earliestMatchingArchiveRecordTimeInclusive: effectiveEarliest,
-        latestMatchingArchiveRecordTimeInclusive: latestMatchingArchiveRecordTimeInclusive,
+        latestMatchingArchiveRecordTimeInclusive: effectiveLatest,
         maximumReturnedSearchMatchCount: input.limit
       )
       let response = try await searchWithinLimit(request)
@@ -263,18 +269,23 @@ public final class SearchModel {
       }
     }
     do {
+      let isEmptyBrowse =
+        nextInput.query.isEmpty
+        && nextInput.earliestMatchingArchiveRecordTimeInclusive == nil
+        && nextInput.latestMatchingArchiveRecordTimeInclusive == nil
       let effectiveEarliest =
-        (nextInput.query.isEmpty
-          && nextInput.earliestMatchingArchiveRecordTimeInclusive == nil
-          && nextInput.latestMatchingArchiveRecordTimeInclusive == nil)
+        isEmptyBrowse
         ? Date(timeIntervalSince1970: 0)
         : nextInput.earliestMatchingArchiveRecordTimeInclusive
+      let effectiveLatest =
+        isEmptyBrowse
+        ? Date()
+        : nextInput.latestMatchingArchiveRecordTimeInclusive
       let request = TrawlArchiveSearchRequest(
         searchQueryText: nextInput.query,
         onlySearchThisRegisteredTrawler: nextInput.registeredTrawler,
         earliestMatchingArchiveRecordTimeInclusive: effectiveEarliest,
-        latestMatchingArchiveRecordTimeInclusive:
-          nextInput.latestMatchingArchiveRecordTimeInclusive,
+        latestMatchingArchiveRecordTimeInclusive: effectiveLatest,
         maximumReturnedSearchMatchCount: nextInput.limit
       )
       let response = try await searchWithinLimit(request)

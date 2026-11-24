@@ -46,6 +46,7 @@ let package = Package(
                 .linkedFramework("LocalAuthentication"),
                 .linkedFramework("WebKit"),
                 .linkedFramework("ServiceManagement"),
+                .linkedLibrary("sqlite3"),
                 .unsafeFlags([
                     "-Xlinker", "-rpath",
                     "-Xlinker", "@executable_path/../Frameworks",

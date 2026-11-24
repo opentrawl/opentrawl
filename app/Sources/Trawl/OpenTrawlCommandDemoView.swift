@@ -127,9 +127,9 @@ private struct OpenTrawlCommandDemoTerminal: View {
     .frame(maxWidth: .infinity)
     .frame(height: TrawlDesign.commandDemoTerminalHeight)
     .background(Color(red: 0.045, green: 0.055, blue: 0.075))
-    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .clipShape(TrawlDesign.Shape.surface)
     .overlay {
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
+      TrawlDesign.Shape.surface
         .strokeBorder(Color.white.opacity(0.09))
     }
     .accessibilityElement(children: .contain)

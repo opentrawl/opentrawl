@@ -55,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApplication.shared.setActivationPolicy(launchInBackground ? .accessory : .regular)
     UserDefaults.standard.removeObject(forKey: "OpenTrawlLaunchInBackground")
+    BrowserXSessionImporter.cleanupStaleTemporaryCopies()
     _ = updates
     observeAutomaticArchiveRefresh()
     observeWindowCloseForMenuBarMode()

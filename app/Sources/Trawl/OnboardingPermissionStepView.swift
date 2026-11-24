@@ -111,7 +111,7 @@ private struct PermissionDragDemonstration: View {
     }
     .padding(24)
     .frame(maxWidth: .infinity)
-    .background(Color.secondary.opacity(0.055), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    .background(Color.secondary.opacity(0.055), in: TrawlDesign.Shape.surface)
     .task(id: StoryboardMode(reduceMotion: reduceMotion, tileIsInSystemSettings: tileIsInSystemSettings, accessIsConfirmed: accessIsConfirmed)) {
       await playStoryboard()
     }
@@ -137,8 +137,8 @@ private struct PermissionDragDemonstration: View {
       pointer
     }
     .frame(width: Self.width, height: Self.height, alignment: .topLeading)
-    .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.1)))
+    .background(Color(nsColor: .windowBackgroundColor), in: TrawlDesign.Shape.surface)
+    .overlay(TrawlDesign.Shape.surface.strokeBorder(.primary.opacity(0.1)))
     .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
   }
 
@@ -158,7 +158,7 @@ private struct PermissionDragDemonstration: View {
 
   private func placeholderRow(barWidth: CGFloat, switchedOn: Bool) -> some View {
     HStack(spacing: 10) {
-      RoundedRectangle(cornerRadius: 4, style: .continuous)
+      RoundedRectangle(cornerRadius: 18 * TrawlDesign.Radius.appIconFraction, style: .continuous)
         .fill(Color.secondary.opacity(0.18))
         .frame(width: 18, height: 18)
       Capsule()
@@ -183,14 +183,14 @@ private struct PermissionDragDemonstration: View {
 
   /// Dashed while waiting; it lights up as the tile comes near.
   private var emptySlot: some View {
-    RoundedRectangle(cornerRadius: 8, style: .continuous)
+    TrawlDesign.Shape.control
       .strokeBorder(
         tileIsHeld ? Color.accentColor : Color.secondary.opacity(0.35),
         style: StrokeStyle(lineWidth: tileIsHeld ? 1.5 : 1, dash: [4])
       )
       .background(
         Color.accentColor.opacity(tileIsHeld ? 0.06 : 0),
-        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        in: TrawlDesign.Shape.control
       )
       .frame(width: Self.rowWidth, height: Self.rowHeight)
       .opacity(tileIsInSlot && !tileIsFadedForReset ? 0 : 1)
@@ -204,7 +204,7 @@ private struct PermissionDragDemonstration: View {
         .font(.system(size: 9.5, weight: .medium))
         .foregroundStyle(.secondary)
         .lineLimit(1)
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
+      TrawlDesign.Shape.control
         .fill(Color.secondary.opacity(0.06))
         .frame(width: Self.rowWidth, height: Self.rowHeight)
         .background(ApplicationTileFlightOrigin())
@@ -213,7 +213,7 @@ private struct PermissionDragDemonstration: View {
     .padding(.top, 6)
     .padding(.bottom, 4)
     .frame(width: Self.rowWidth + 8, alignment: .leading)
-    .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .background(Color.secondary.opacity(0.05), in: TrawlDesign.Shape.surface)
   }
 
   private var movingTile: some View {
@@ -223,7 +223,7 @@ private struct PermissionDragDemonstration: View {
     )
     .background(
       Color(nsColor: .windowBackgroundColor),
-      in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+      in: TrawlDesign.Shape.control
     )
     .overlay(alignment: .trailing) {
       if tileIsInSlot {

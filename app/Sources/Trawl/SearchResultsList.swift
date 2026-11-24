@@ -98,6 +98,8 @@ struct SearchResultsList: View {
     return sections
   }
 
+  @State private var keyboardScrollToken = 0
+
   var body: some View {
     GeometryReader { proxy in
       ScrollViewReader { scrollProxy in
@@ -115,13 +117,13 @@ struct SearchResultsList: View {
             ForEach(groupedSections) { section in
               HStack {
                 Text(section.title)
-                  .font(TrawlDesign.Typography.caption.weight(.semibold))
+                  .font(TrawlDesign.Typography.caption)
                   .foregroundStyle(TrawlDesign.Colors.mutedInk)
                 Spacer()
               }
-              .padding(.horizontal, 14)
+              .padding(.horizontal, TrawlDesign.Space.md)
               .padding(.vertical, 6)
-              .background(TrawlDesign.Colors.surface.opacity(0.65))
+              .background(TrawlDesign.Colors.surface)
 
               ForEach(section.matches) { searchMatch in
                 Button {
@@ -153,8 +155,8 @@ struct SearchResultsList: View {
             alignment: .leading
           )
         }
-        .onChange(of: selectedSearchMatchIdentifier) { _, selectedID in
-          guard let selectedID else { return }
+        .onChange(of: keyboardScrollToken) { _, _ in
+          guard let selectedID = selectedSearchMatchIdentifier else { return }
           withAnimation(.easeInOut(duration: 0.14)) {
             scrollProxy.scrollTo(selectedID, anchor: .center)
           }
@@ -176,7 +178,6 @@ struct SearchResultsList: View {
       onReturn()
       return .handled
     }
-    .onExitCommand(perform: onEscape)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
@@ -226,6 +227,7 @@ struct SearchResultsList: View {
       } ?? (offset > 0 ? -1 : searchMatches.count)
     let nextIndex = min(max(currentIndex + offset, 0), searchMatches.count - 1)
     selectedSearchMatchIdentifier = searchMatches[nextIndex].id
+    keyboardScrollToken &+= 1
     onSelectionChanged(searchMatches[nextIndex])
   }
 }
@@ -280,48 +282,34 @@ private struct SearchResultRow: View {
   let isSelected: Bool
 
   var body: some View {
-    HStack(alignment: .top, spacing: 10) {
+    HStack(alignment: .top, spacing: TrawlDesign.Space.sm) {
       if let registeredTrawler = searchMatch.registeredTrawler {
-        TrawlerIconView(registeredTrawler: registeredTrawler, size: 22)
+        TrawlerIconView(registeredTrawler: registeredTrawler, size: 20)
+          .padding(.top, 1)
       }
       VStack(alignment: .leading, spacing: 3) {
-        if showsTrawlerDisplayName {
-          Text(registeredTrawlerDisplayName)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+        Text(title)
+          .font(TrawlDesign.Typography.cardTitle)
+          .foregroundStyle(TrawlDesign.Colors.ink)
+          .lineLimit(2)
+
+        if !metadataSubtitle.isEmpty {
+          Text(metadataSubtitle)
+            .font(TrawlDesign.Typography.meta)
+            .foregroundStyle(TrawlDesign.Colors.mutedInk)
             .lineLimit(1)
         }
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-          Text(title)
-            .font(.body.weight(.semibold))
-            .lineLimit(2)
-          Spacer(minLength: 4)
-          if let formattedTime {
-            Text(formattedTime)
-              .font(.caption)
-              .foregroundStyle(.tertiary)
-              .fixedSize()
-          }
-        }
+
         if !peopleRelatedToMatchingRecordText.isEmpty {
           Text(peopleRelatedToMatchingRecordText)
-            .font(.callout)
-            .foregroundStyle(.secondary)
+            .font(TrawlDesign.Typography.meta)
+            .foregroundStyle(TrawlDesign.Colors.mutedInk)
             .lineLimit(1)
         }
         if !physicalPlaceNamesSpecificToBroadestText.isEmpty {
           Text(physicalPlaceNamesSpecificToBroadestText)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-        }
-        if !digitalContainerNamesNearestToBroadestText.isEmpty,
-          digitalContainerNamesNearestToBroadestText.localizedCaseInsensitiveCompare(title)
-            != .orderedSame
-        {
-          Text(digitalContainerNamesNearestToBroadestText)
-            .font(.caption)
-            .foregroundStyle(.tertiary)
+            .font(TrawlDesign.Typography.meta)
+            .foregroundStyle(TrawlDesign.Colors.mutedInk)
             .lineLimit(1)
         }
         ForEach(
@@ -333,26 +321,20 @@ private struct SearchResultRow: View {
             fieldLabelledSearchMatchTextEvidence(searchMatchTextField)
           {
             fieldLabelledSearchMatchTextEvidence
-              .font(.callout)
-              .foregroundStyle(.secondary)
+              .font(TrawlDesign.Typography.meta)
+              .foregroundStyle(TrawlDesign.Colors.mutedInk)
               .lineLimit(2)
           }
         }
       }
     }
-    .padding(.vertical, 9)
-    .padding(.horizontal, 12)
-    .frame(minHeight: 62, alignment: .topLeading)
+    .padding(.vertical, TrawlDesign.Space.sm)
+    .padding(.horizontal, TrawlDesign.Space.md)
+    .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
     .background(
       isSelected ? TrawlDesign.Colors.selectBlueSurface : .clear,
-      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control)
+      in: TrawlDesign.Shape.control
     )
-    .overlay {
-      if isSelected {
-        RoundedRectangle(cornerRadius: TrawlDesign.Radius.control)
-          .stroke(TrawlDesign.Colors.selectBlue.opacity(0.32), lineWidth: 1)
-      }
-    }
     .padding(.horizontal, 6)
     .padding(.vertical, 2)
     .contentShape(.rect)
@@ -360,6 +342,20 @@ private struct SearchResultRow: View {
     .accessibilityLabel(accessibilityLabel)
     .accessibilityValue(isSelected ? "Selected" : "Not selected")
     .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
+
+  private var metadataSubtitle: String {
+    var parts: [String] = []
+    if let formattedTime {
+      parts.append(formattedTime)
+    }
+    if !digitalContainerNamesNearestToBroadestText.isEmpty,
+      digitalContainerNamesNearestToBroadestText.localizedCaseInsensitiveCompare(title)
+        != .orderedSame
+    {
+      parts.append(digitalContainerNamesNearestToBroadestText)
+    }
+    return parts.joined(separator: " · ")
   }
 
   private var accessibilityLabel: String {
@@ -463,7 +459,7 @@ private struct SearchResultRow: View {
           ? searchMatchTextFieldName
           : "\(searchMatchTextFieldName): "
       )
-      .foregroundStyle(.tertiary)
+      .foregroundStyle(TrawlDesign.Colors.mutedInk)
     }
     for searchMatchTextFragment in nonEmptySearchMatchTextFragments {
       var searchMatchTextFragmentText = Text(
@@ -482,11 +478,13 @@ private struct SearchResultRow: View {
   private var formattedTime: String? {
     guard let time = searchMatch.time else { return nil }
     if searchMatch.associatedTimeHasNoTimeOfDay {
-      return time.formatted(.dateTime.year().month().day().locale(locale))
+      var format = Date.FormatStyle.dateTime.year().month(.abbreviated).day().locale(locale)
+      format.timeZone = .gmt
+      return time.formatted(format)
     }
     let isCurrentYear = Calendar.current.isDate(time, equalTo: Date(), toGranularity: .year)
     if isCurrentYear {
-      return time.formatted(.dateTime.month().day().hour().minute().locale(locale))
+      return time.formatted(.dateTime.month(.abbreviated).day().hour().minute().locale(locale))
     }
     return time.formatted(.dateTime.year().month(.abbreviated).day().locale(locale))
   }

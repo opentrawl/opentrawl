@@ -5,8 +5,7 @@ import TrawlCore
 
 /// Responsive left app rail that stays fixed-order and never jumps.
 /// Wide windows (>= 960pt) show icon, name, and count; compact windows (720–959pt)
-/// shrink cleanly to a 56pt icon + count strip so Apps, Results, and Reader all
-/// remain visible side by side.
+/// shrink cleanly to a 56pt icon + count strip while keeping host switcher and plugins reachable.
 struct AppSidebarRailView: View {
   @Environment(TrawlerIconStore.self) private var iconStore
 
@@ -19,6 +18,7 @@ struct AppSidebarRailView: View {
   let totalSearchResultsCount: UInt64
   let totalSearchCountIsLowerBound: Bool
   let hasActiveDateRange: Bool
+  let isEmptyBrowse: Bool
   let selectedTrawlerID: RegisteredTrawlerIdentity?
   let hostDisplayName: String
   let hostSubtitle: String
@@ -39,12 +39,12 @@ struct AppSidebarRailView: View {
     VStack(spacing: 0) {
       HStack {
         Text("APPS")
-          .font(TrawlDesign.Typography.monoAxis)
+          .font(TrawlDesign.Typography.caption)
           .tracking(0.5)
           .foregroundStyle(TrawlDesign.Colors.mutedInk)
         Spacer()
         Text(mode == .overview ? "Items" : "Results")
-          .font(TrawlDesign.Typography.monoAxis)
+          .font(TrawlDesign.Typography.meta)
           .foregroundStyle(TrawlDesign.Colors.mutedInk)
       }
       .padding(.horizontal, TrawlDesign.Space.md)
@@ -61,14 +61,14 @@ struct AppSidebarRailView: View {
             Button(action: onOpenPluginsSettings) {
               HStack {
                 Text("Add a plugin…")
-                  .font(TrawlDesign.Typography.meta.weight(.medium))
+                  .font(TrawlDesign.Typography.meta)
                   .foregroundStyle(TrawlDesign.Colors.mutedInk)
                 Spacer()
               }
               .padding(.horizontal, TrawlDesign.Space.sm)
               .padding(.vertical, TrawlDesign.Space.sm)
               .overlay(
-                RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
+                TrawlDesign.Shape.control
                   .strokeBorder(
                     TrawlDesign.Colors.hairline,
                     style: StrokeStyle(lineWidth: 1, dash: [4, 3])
@@ -89,11 +89,11 @@ struct AppSidebarRailView: View {
         HStack(spacing: TrawlDesign.Space.sm) {
           VStack(alignment: .leading, spacing: 2) {
             Text(hostDisplayName)
-              .font(TrawlDesign.Typography.laneLabel.weight(.semibold))
+              .font(TrawlDesign.Typography.cardTitle)
               .foregroundStyle(TrawlDesign.Colors.ink)
               .lineLimit(1)
             Text(hostSubtitle)
-              .font(TrawlDesign.Typography.caption)
+              .font(TrawlDesign.Typography.meta)
               .foregroundStyle(TrawlDesign.Colors.mutedInk)
               .lineLimit(1)
           }
@@ -104,14 +104,8 @@ struct AppSidebarRailView: View {
         }
         .padding(.horizontal, TrawlDesign.Space.sm)
         .padding(.vertical, TrawlDesign.Space.sm)
-        .background(
-          TrawlDesign.Colors.paper,
-          in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
-            .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
-        )
+        .background(TrawlDesign.Colors.paper, in: TrawlDesign.Shape.control)
+        .overlay(TrawlDesign.Shape.control.strokeBorder(TrawlDesign.Colors.hairline, lineWidth: 1))
       }
       .buttonStyle(.plain)
       .padding(TrawlDesign.Space.sm)
@@ -140,20 +134,17 @@ struct AppSidebarRailView: View {
       HStack(spacing: TrawlDesign.Space.sm) {
         OpenTrawlMarkIcon(size: 18)
         Text("All apps")
-          .font(selected ? TrawlDesign.Typography.laneLabel.weight(.semibold) : TrawlDesign.Typography.laneLabel)
+          .font(TrawlDesign.Typography.laneLabel)
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.ink)
         Spacer()
         Text(countText)
-          .font(TrawlDesign.Typography.monoSmall.weight(.medium))
+          .font(TrawlDesign.Typography.monoSmall)
           .monospacedDigit()
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
       }
       .padding(.horizontal, TrawlDesign.Space.sm)
       .padding(.vertical, 6)
-      .background(
-        selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
-        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
-      )
+      .background(selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear, in: TrawlDesign.Shape.control)
     }
     .buttonStyle(.plain)
     .padding(.bottom, TrawlDesign.Space.xs)
@@ -163,7 +154,9 @@ struct AppSidebarRailView: View {
     let selected = selectedTrawlerID == trawler.id
     let operability = operabilityByID[trawler.id]
     let isUndatedExcluded =
-      mode == .search && hasActiveDateRange && trawler.id.registeredTrawlerIdentity == "contacts"
+      mode == .search
+      && (hasActiveDateRange || isEmptyBrowse)
+      && trawler.id.registeredTrawlerIdentity == "contacts"
 
     let countDisplay: String = {
       if isUndatedExcluded { return "No dates" }
@@ -179,7 +172,7 @@ struct AppSidebarRailView: View {
       HStack(spacing: TrawlDesign.Space.sm) {
         TrawlerIconView(registeredTrawler: trawler.id, size: 18)
         Text(trawler.registeredTrawlerDisplayName)
-          .font(selected ? TrawlDesign.Typography.laneLabel.weight(.semibold) : TrawlDesign.Typography.laneLabel)
+          .font(TrawlDesign.Typography.laneLabel)
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.ink)
           .lineLimit(1)
         Spacer(minLength: TrawlDesign.Space.xs)
@@ -190,38 +183,53 @@ struct AppSidebarRailView: View {
             .accessibilityLabel("\(trawler.registeredTrawlerDisplayName) needs attention")
         }
         Text(countDisplay)
-          .font(isUndatedExcluded ? TrawlDesign.Typography.caption : TrawlDesign.Typography.monoSmall)
+          .font(TrawlDesign.Typography.monoSmall)
           .monospacedDigit()
-          .foregroundStyle(
-            selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk
-          )
+          .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
       }
       .padding(.horizontal, TrawlDesign.Space.sm)
       .padding(.vertical, 6)
-      .background(
-        selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
-        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
-      )
+      .background(selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear, in: TrawlDesign.Shape.control)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .help(
       isUndatedExcluded
-        ? "Contacts have no dates, so a date range leaves them out."
+        ? "Contacts have no dates, so date-based browsing leaves them out."
         : (operability?.statusLine ?? trawler.registeredTrawlerDisplayName)
     )
   }
 
   private var compactRail: some View {
-    ScrollView {
-      VStack(spacing: TrawlDesign.Space.xs) {
-        compactAllAppsButton
-        ForEach(trawlers) { trawler in
-          compactAppButton(for: trawler)
+    VStack(spacing: 0) {
+      ScrollView {
+        VStack(spacing: TrawlDesign.Space.xs) {
+          compactAllAppsButton
+          ForEach(trawlers) { trawler in
+            compactAppButton(for: trawler)
+          }
         }
+        .padding(.vertical, TrawlDesign.Space.sm)
+        .padding(.horizontal, TrawlDesign.Space.xs)
       }
-      .padding(.vertical, TrawlDesign.Space.sm)
-      .padding(.horizontal, TrawlDesign.Space.xs)
+
+      Divider()
+
+      Menu {
+        Button("Switch archive host…", action: onOpenHostSwitcher)
+        if !isRemoteArchive {
+          Button("Add a plugin…", action: onOpenPluginsSettings)
+        }
+      } label: {
+        Image(systemName: "ellipsis")
+          .font(TrawlDesign.Typography.body)
+          .foregroundStyle(TrawlDesign.Colors.mutedInk)
+          .frame(width: 46, height: 32)
+      }
+      .menuStyle(.borderlessButton)
+      .menuIndicator(.hidden)
+      .padding(.vertical, TrawlDesign.Space.xs)
+      .accessibilityLabel("Archive options")
     }
     .frame(width: TrawlDesign.compactSidebarWidth)
     .background(TrawlDesign.Colors.surface)
@@ -230,6 +238,10 @@ struct AppSidebarRailView: View {
   private var compactAllAppsButton: some View {
     let selected = selectedTrawlerID == nil
     let count = mode == .overview ? totalAllAppsCount : totalSearchResultsCount
+    let formattedCount = CompactCountFormatter.format(
+      count,
+      isLowerBound: mode == .search && totalSearchCountIsLowerBound
+    )
     return Button {
       onSelectTrawler(nil)
     } label: {
@@ -238,16 +250,13 @@ struct AppSidebarRailView: View {
         Text("All")
           .font(TrawlDesign.Typography.monoAxis)
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
-        Text(CompactCountFormatter.format(count))
+        Text(formattedCount)
           .font(TrawlDesign.Typography.monoAxis)
           .monospacedDigit()
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
       }
       .frame(width: 46, height: 48)
-      .background(
-        selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
-        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
-      )
+      .background(selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear, in: TrawlDesign.Shape.control)
     }
     .buttonStyle(.plain)
     .help("All apps · \(count.formatted())")
@@ -258,7 +267,9 @@ struct AppSidebarRailView: View {
     let selected = selectedTrawlerID == trawler.id
     let operability = operabilityByID[trawler.id]
     let isUndatedExcluded =
-      mode == .search && hasActiveDateRange && trawler.id.registeredTrawlerIdentity == "contacts"
+      mode == .search
+      && (hasActiveDateRange || isEmptyBrowse)
+      && trawler.id.registeredTrawlerIdentity == "contacts"
     let count =
       mode == .search
       ? (searchMatchCountByID[trawler.id] ?? 0)
@@ -270,35 +281,32 @@ struct AppSidebarRailView: View {
       ZStack(alignment: .topTrailing) {
         VStack(spacing: 2) {
           TrawlerIconView(registeredTrawler: trawler.id, size: 18)
-          if !isUndatedExcluded {
-            Text(CompactCountFormatter.format(count))
-              .font(TrawlDesign.Typography.monoAxis)
-              .monospacedDigit()
-              .foregroundStyle(
-                selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk
-              )
-          }
+          Text(isUndatedExcluded ? "—" : CompactCountFormatter.format(count))
+            .font(TrawlDesign.Typography.monoAxis)
+            .monospacedDigit()
+            .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
         }
         .frame(width: 46, height: 42)
-        if operability?.needsAttention == true {
+        if !isUndatedExcluded && operability?.needsAttention == true {
           Circle()
             .fill(TrawlDesign.Colors.warningAmber)
             .frame(width: 6, height: 6)
             .padding(TrawlDesign.Space.xs)
         }
       }
-      .background(
-        selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
-        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
-      )
+      .background(selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear, in: TrawlDesign.Shape.control)
     }
     .buttonStyle(.plain)
     .help(
       isUndatedExcluded
-        ? "\(trawler.registeredTrawlerDisplayName) · Contacts have no dates, so a date range leaves them out."
+        ? "\(trawler.registeredTrawlerDisplayName) · Contacts have no dates."
         : "\(trawler.registeredTrawlerDisplayName) · \(operability?.statusLine ?? "\(count.formatted())")"
     )
-    .accessibilityLabel("\(trawler.registeredTrawlerDisplayName), \(count.formatted())")
+    .accessibilityLabel(
+      isUndatedExcluded
+        ? "\(trawler.registeredTrawlerDisplayName), no dates"
+        : "\(trawler.registeredTrawlerDisplayName), \(count.formatted())"
+    )
   }
 }
 
@@ -324,16 +332,10 @@ struct OpenTrawlMarkIcon: View {
 }
 
 enum CompactCountFormatter {
-  static func format(_ count: UInt64) -> String {
-    if count >= 1_000_000 {
-      return String(format: "%.1fM", Double(count) / 1_000_000)
-    }
-    if count >= 10_000 {
-      return String(format: "%.0fK", Double(count) / 1_000)
-    }
-    if count >= 1_000 {
-      return String(format: "%.1fK", Double(count) / 1_000)
-    }
-    return "\(count)"
+  static func format(_ count: UInt64, isLowerBound: Bool = false) -> String {
+    let base = Int64(clamping: count).formatted(
+      .number.notation(.compactName).precision(.fractionLength(0...1))
+    )
+    return isLowerBound && count > 0 ? "\(base)+" : base
   }
 }

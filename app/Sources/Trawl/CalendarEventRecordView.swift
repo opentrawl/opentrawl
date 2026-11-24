@@ -10,7 +10,8 @@ struct CalendarEventRecordView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           Text(calendarEventRecord.calendarEventDisplayName)
-            .font(.title2)
+            .font(.title2.weight(.semibold))
+            .foregroundStyle(TrawlDesign.Colors.ink)
             .textSelection(.enabled)
             .id("summary")
           CalendarEventTimeRange(

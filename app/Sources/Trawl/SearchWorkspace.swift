@@ -19,10 +19,6 @@ enum SearchEscapeAction: Equatable {
   }
 }
 
-enum SearchWorkspacePaneVisibility {
-  static func showsRecord(for phase: SearchOpenPhase) -> Bool { phase != .idle }
-}
-
 enum SearchWorkspaceLayout: Equatable {
   case results
   case compactRecord
@@ -36,25 +32,7 @@ enum SearchWorkspaceLayout: Equatable {
     if isCompact {
       return showsCompactRecord ? .compactRecord : .results
     }
-    return SearchWorkspacePaneVisibility.showsRecord(for: openPhase) ? .split : .results
-  }
-}
-
-enum SearchWorkspaceGeometry {
-  static let wideResultsWidth = TrawlDesign.searchResultsMaximumWidth
-
-  struct WideLayout: Equatable {
-    let resultsOriginX: CGFloat
-    let reservesRecordRegion: Bool
-  }
-
-  static func layout(for workspace: SearchWorkspaceLayout) -> WideLayout {
-    switch workspace {
-    case .results, .split:
-      WideLayout(resultsOriginX: 0, reservesRecordRegion: true)
-    case .compactRecord:
-      WideLayout(resultsOriginX: 0, reservesRecordRegion: false)
-    }
+    return openPhase != .idle ? .split : .results
   }
 }
 
@@ -163,10 +141,19 @@ struct ArchiveWorkspaceView: View {
     return trawlers.first(where: { $0.id == id })
   }
 
+  private var isEmptyBrowse: Bool {
+    destination == .search
+      && interaction.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      && !interaction.hasActiveDateRange
+  }
+
   var body: some View {
     GeometryReader { proxy in
       let isCompactRail = proxy.size.width < TrawlDesign.compactRailBreakpoint
-      let contentWidth = max(proxy.size.width - (isCompactRail ? TrawlDesign.compactSidebarWidth : TrawlDesign.wideSidebarWidth), 320)
+      let contentWidth = max(
+        proxy.size.width - (isCompactRail ? TrawlDesign.compactSidebarWidth : TrawlDesign.wideSidebarWidth),
+        320
+      )
 
       HStack(spacing: 0) {
         AppSidebarRailView(
@@ -179,6 +166,7 @@ struct ArchiveWorkspaceView: View {
           totalSearchResultsCount: model.totalMatchedRecordCount,
           totalSearchCountIsLowerBound: model.totalMatchedCountIsLowerBound,
           hasActiveDateRange: interaction.hasActiveDateRange,
+          isEmptyBrowse: isEmptyBrowse,
           selectedTrawlerID: destination == .overview ? nil : interaction.registeredTrawler,
           hostDisplayName: hostDisplayName,
           hostSubtitle: freshnessLine,
@@ -197,14 +185,10 @@ struct ArchiveWorkspaceView: View {
           SearchField(
             query: $interaction.query,
             scope: selectedScopeTrawler,
-            availableTrawlers: searchableTrawlers,
             earliestDateInclusive: interaction.earliestMatchingArchiveRecordTimeInclusive,
             latestDateInclusive: interaction.latestMatchingArchiveRecordTimeInclusive,
+            showsDefaultUpToTodayHint: isEmptyBrowse && selectedScopeTrawler?.id.registeredTrawlerIdentity != "contacts",
             focus: $focus,
-            onSelectScope: { trawler in
-              interaction.changeScope(to: trawler?.id)
-              destination = .search
-            },
             onClearScope: {
               interaction.changeScope(to: nil)
             },
@@ -225,8 +209,8 @@ struct ArchiveWorkspaceView: View {
             }
           )
           .id(fieldState.identity)
-          .padding(.horizontal, 14)
-          .padding(.vertical, 10)
+          .padding(.horizontal, TrawlDesign.Space.md)
+          .padding(.vertical, TrawlDesign.Space.sm)
           .background(TrawlDesign.Colors.paper)
 
           Divider()
@@ -234,6 +218,7 @@ struct ArchiveWorkspaceView: View {
           switch destination {
           case .overview:
             ArchiveOverviewView(
+              windowWidth: proxy.size.width,
               trawlers: trawlers,
               statusesByID: statusesByID,
               operabilityByID: operabilityByID,
@@ -248,6 +233,7 @@ struct ArchiveWorkspaceView: View {
               onOpenHostSwitcher: onOpenHostSwitcher,
               onRunAttentionAction: onRunAttentionAction,
               onBrowseApp: { trawlerID in
+                interaction.query = ""
                 interaction.applyScopeAndDateRange(
                   registeredTrawler: trawlerID,
                   earliestInclusive: nil,
@@ -256,6 +242,7 @@ struct ArchiveWorkspaceView: View {
                 destination = .search
               },
               onBrowseAllItems: {
+                interaction.query = ""
                 interaction.applyScopeAndDateRange(
                   registeredTrawler: nil,
                   earliestInclusive: nil,
@@ -289,7 +276,8 @@ struct ArchiveWorkspaceView: View {
     .onChange(of: model.phase) { _, newPhase in
       if newPhase != .loading {
         interaction.reconcileCommittedResults()
-        if interaction.selectedSearchMatchIdentifier == nil, let first = model.searchMatches.first {
+        let hasTextQuery = !interaction.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasTextQuery, interaction.selectedSearchMatchIdentifier == nil, let first = model.searchMatches.first {
           interaction.selectedSearchMatchIdentifier = first.id
           Task { await model.open(first) }
         }
@@ -305,10 +293,6 @@ struct ArchiveWorkspaceView: View {
     }
     .onChange(of: trawlerStatuses) { _, statuses in
       trawlerResolver.replace(with: statuses)
-    }
-    .onKeyPress(.escape) {
-      handleEscape()
-      return .handled
     }
     .onExitCommand(perform: handleEscape)
     .task(
@@ -367,48 +351,50 @@ struct ArchiveWorkspaceView: View {
             timedOutLocally: model.timedOutLocally
           )
         case .results:
-          HStack(spacing: 0) {
-            SearchResultsList(
-              phase: model.phase,
-              searchMatches: model.searchMatches,
-              totalMatchedRecordCount: model.totalMatchedRecordCount,
-              totalMatchedCountIsLowerBound: model.totalMatchedCountIsLowerBound,
-              isTruncated: model.isTruncated,
-              isLoadingMore: model.isLoadingMore,
-              canLoadMore: model.canLoadMore,
-              loadMoreFailureMessage: model.loadMoreFailureMessage,
-              trawlerDisplayName: {
-                $0.map(trawlerDisplayName(for:))
-                  ?? SearchTrawlerResolver.unavailableDisplayName
-              },
-              showsTrawlerDisplayName: interaction.registeredTrawler == nil,
-              committedQuery: model.committedInput?.query,
-              resultLimit: model.resultLimit,
-              title: model.displayTitle(for:),
-              selectedSearchMatchIdentifier: $interaction.selectedSearchMatchIdentifier,
-              focus: $focus,
-              onReturn: openSelectedResult,
-              onEscape: handleEscape,
-              onOpen: open,
-              onSelectionChanged: open,
-              onLoadMore: {
-                Task { await model.loadMore() }
-              }
-            )
-            .frame(width: resultsColumnWidth)
-
-            Divider()
-
+          if availableWidth < 740 {
             if model.openPhase == .idle {
-              VStack(spacing: 6) {
-                Text("Select a result to open it")
-                  .font(TrawlDesign.Typography.body)
-                  .foregroundStyle(TrawlDesign.Colors.mutedInk)
-              }
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-              .background(TrawlDesign.Colors.surface.opacity(0.35))
+              resultsListView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-              ResultPreview(phase: model.openPhase, onOpenLink: openLinkedRecord)
+              VStack(spacing: 0) {
+                HStack {
+                  Button {
+                    closeOpenedRecord()
+                  } label: {
+                    Label("Results", systemImage: "chevron.left")
+                      .labelStyle(.titleAndIcon)
+                  }
+                  .buttonStyle(.bordered)
+                  .controlSize(.small)
+                  Spacer()
+                }
+                .padding(.horizontal, TrawlDesign.Space.md)
+                .padding(.vertical, TrawlDesign.Space.sm)
+                .background(TrawlDesign.Colors.surface)
+
+                Divider()
+
+                ResultPreview(phase: model.openPhase, onOpenLink: openLinkedRecord)
+              }
+            }
+          } else {
+            HStack(spacing: 0) {
+              resultsListView
+                .frame(width: resultsColumnWidth)
+
+              Divider()
+
+              if model.openPhase == .idle {
+                VStack(spacing: TrawlDesign.Space.xs) {
+                  Text("Select a result to open it")
+                    .font(TrawlDesign.Typography.body)
+                    .foregroundStyle(TrawlDesign.Colors.mutedInk)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(TrawlDesign.Colors.surface.opacity(0.45))
+              } else {
+                ResultPreview(phase: model.openPhase, onOpenLink: openLinkedRecord)
+              }
             }
           }
         }
@@ -418,7 +404,6 @@ struct ArchiveWorkspaceView: View {
       SearchDateLineScrubberView(
         trawlerStatuses: trawlerStatuses,
         scopedTrawlerID: interaction.registeredTrawler,
-        queryText: interaction.query.trimmingCharacters(in: .whitespacesAndNewlines),
         resultSummaryText: scrubberResultSummary,
         earliestDateInclusive: interaction.earliestMatchingArchiveRecordTimeInclusive,
         latestDateInclusive: interaction.latestMatchingArchiveRecordTimeInclusive,
@@ -436,6 +421,41 @@ struct ArchiveWorkspaceView: View {
         }
       )
     }
+  }
+
+  private var resultsListView: some View {
+    SearchResultsList(
+      phase: model.phase,
+      searchMatches: model.searchMatches,
+      totalMatchedRecordCount: model.totalMatchedRecordCount,
+      totalMatchedCountIsLowerBound: model.totalMatchedCountIsLowerBound,
+      isTruncated: model.isTruncated,
+      isLoadingMore: model.isLoadingMore,
+      canLoadMore: model.canLoadMore,
+      loadMoreFailureMessage: model.loadMoreFailureMessage,
+      trawlerDisplayName: {
+        $0.map(trawlerDisplayName(for:))
+          ?? SearchTrawlerResolver.unavailableDisplayName
+      },
+      showsTrawlerDisplayName: interaction.registeredTrawler == nil,
+      committedQuery: model.committedInput?.query,
+      resultLimit: model.resultLimit,
+      title: model.displayTitle(for:),
+      selectedSearchMatchIdentifier: $interaction.selectedSearchMatchIdentifier,
+      focus: $focus,
+      onReturn: openSelectedResult,
+      onEscape: handleEscape,
+      onOpen: open,
+      onSelectionChanged: open,
+      onLoadMore: {
+        Task { await model.loadMore() }
+      }
+    )
+  }
+
+  private func closeOpenedRecord() {
+    model.clearOpenResult()
+    focus = .results
   }
 
   private var scrubberResultSummary: String {
@@ -488,15 +508,13 @@ struct ArchiveWorkspaceView: View {
   }
 
   private func handleEscape() {
-    if focus == .results {
+    if model.openPhase != .idle {
+      model.clearOpenResult()
+      focus = .results
+    } else if focus == .results {
       focus = .field
-    } else if !interaction.query.isEmpty || interaction.hasActiveDateRange || interaction.registeredTrawler != nil {
+    } else if !interaction.query.isEmpty {
       interaction.query = ""
-      interaction.applyScopeAndDateRange(
-        registeredTrawler: nil,
-        earliestInclusive: nil,
-        latestInclusive: nil
-      )
       focus = .field
     }
   }
@@ -507,11 +525,10 @@ private struct SearchField: View {
 
   @Binding var query: String
   let scope: RestingTrawler?
-  let availableTrawlers: [RestingTrawler]
   let earliestDateInclusive: Date?
   let latestDateInclusive: Date?
+  let showsDefaultUpToTodayHint: Bool
   @FocusState.Binding var focus: SearchFocus?
-  let onSelectScope: (RestingTrawler?) -> Void
   let onClearScope: () -> Void
   let onSetDateRange: (Date, Date) -> Void
   let onClearDateRange: () -> Void
@@ -531,9 +548,9 @@ private struct SearchField: View {
   }
 
   var body: some View {
-    HStack(spacing: 8) {
+    HStack(spacing: TrawlDesign.Space.sm) {
       Image(systemName: "magnifyingglass")
-        .font(.body.weight(.medium))
+        .font(TrawlDesign.Typography.body)
         .foregroundStyle(TrawlDesign.Colors.mutedInk)
 
       TextField(
@@ -558,18 +575,34 @@ private struct SearchField: View {
           accessibilityClearLabel: "Clear date filter",
           onClear: onClearDateRange
         )
+        .fixedSize()
+        .layoutPriority(1)
+      } else if showsDefaultUpToTodayHint {
+        Text("Up to today")
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(TrawlDesign.Colors.mutedInk)
+          .lineLimit(1)
+          .fixedSize()
+          .layoutPriority(1)
+          .padding(.horizontal, TrawlDesign.Space.sm)
+          .padding(.vertical, 3)
+          .background(TrawlDesign.Colors.paper, in: TrawlDesign.Shape.control)
       }
 
       if let scope {
         activeAppChip(scope: scope, onClear: onClearScope)
+          .fixedSize()
+          .layoutPriority(1)
       }
 
       dateFilterButton
+        .fixedSize()
+        .layoutPriority(1)
 
       if !query.isEmpty {
         Button(action: clearQuery) {
           Image(systemName: "xmark.circle.fill")
-            .font(.body)
+            .font(TrawlDesign.Typography.body)
             .foregroundStyle(TrawlDesign.Colors.mutedInk)
             .contentShape(.circle)
         }
@@ -578,16 +611,9 @@ private struct SearchField: View {
         .accessibilityLabel("Clear search")
       }
     }
-    .padding(.horizontal, 12)
-    .frame(height: 38)
-    .background(
-      TrawlDesign.Colors.surface,
-      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface)
-    )
-    .overlay {
-      RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface)
-        .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
-    }
+    .padding(.horizontal, TrawlDesign.Space.md)
+    .frame(height: 36)
+    .background(TrawlDesign.Colors.surface, in: TrawlDesign.Shape.control)
   }
 
   private var dateFilterButton: some View {
@@ -599,28 +625,18 @@ private struct SearchField: View {
       draftEndDate = latestDateInclusive ?? Date()
       isShowingDatePicker.toggle()
     } label: {
-      HStack(spacing: 5) {
-        Image(systemName: "calendar")
-          .font(.caption.weight(.semibold))
-        Text("Dates")
-          .font(.callout.weight(.medium))
-          .lineLimit(1)
-      }
-      .foregroundStyle(TrawlDesign.Colors.mutedInk)
-      .padding(.horizontal, 9)
-      .padding(.vertical, 4)
-      .background(TrawlDesign.Colors.hairline.opacity(0.45), in: Capsule())
-      .fixedSize()
+      Label("Dates", systemImage: "calendar")
+        .labelStyle(.titleAndIcon)
     }
-    .buttonStyle(.plain)
-    .fixedSize(horizontal: true, vertical: false)
+    .buttonStyle(.bordered)
+    .controlSize(.small)
     .help("Choose dates")
     .accessibilityLabel("Filter by dates")
     .popover(isPresented: $isShowingDatePicker, arrowEdge: .bottom) {
-      VStack(alignment: .leading, spacing: 12) {
+      VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
         Text("Choose dates")
-          .font(TrawlDesign.Typography.sectionHeader)
-        HStack(spacing: 6) {
+          .font(TrawlDesign.Typography.cardTitle)
+        HStack(spacing: TrawlDesign.Space.xs) {
           quickDateRangeButton("7 days", inclusiveDays: 7)
           quickDateRangeButton("30 days", inclusiveDays: 30)
           quickDateRangeButton("1 year", inclusiveDays: 365)
@@ -649,7 +665,7 @@ private struct SearchField: View {
           .tint(TrawlDesign.Colors.selectBlue)
         }
       }
-      .padding(16)
+      .padding(TrawlDesign.Space.md)
       .frame(width: 280)
     }
   }
@@ -675,30 +691,26 @@ private struct SearchField: View {
     accessibilityClearLabel: String,
     onClear: @escaping () -> Void
   ) -> some View {
-    HStack(spacing: 5) {
+    HStack(spacing: TrawlDesign.Space.xs) {
       Image(systemName: systemImage)
-        .font(.caption.weight(.semibold))
+        .font(TrawlDesign.Typography.caption)
       Text(title)
-        .font(.callout.weight(.medium))
+        .font(TrawlDesign.Typography.meta)
         .lineLimit(1)
       Button(action: onClear) {
         Image(systemName: "xmark")
-          .font(.caption2.weight(.bold))
-          .padding(3)
+          .font(TrawlDesign.Typography.monoAxis)
+          .padding(2)
           .contentShape(.circle)
       }
       .buttonStyle(.plain)
       .accessibilityLabel(accessibilityClearLabel)
     }
     .foregroundStyle(TrawlDesign.Colors.selectBlue)
-    .padding(.leading, 9)
+    .padding(.leading, TrawlDesign.Space.sm)
     .padding(.trailing, 6)
     .padding(.vertical, 3)
-    .background(TrawlDesign.Colors.selectBlueSurface, in: Capsule())
-    .overlay {
-      Capsule()
-        .stroke(TrawlDesign.Colors.selectBlue.opacity(0.32), lineWidth: 1)
-    }
+    .background(TrawlDesign.Colors.selectBlueSurface, in: TrawlDesign.Shape.control)
     .fixedSize()
   }
 
@@ -706,29 +718,25 @@ private struct SearchField: View {
     scope: RestingTrawler,
     onClear: @escaping () -> Void
   ) -> some View {
-    HStack(spacing: 5) {
+    HStack(spacing: TrawlDesign.Space.xs) {
       TrawlerIconView(registeredTrawler: scope.id, size: 15)
       Text(scope.registeredTrawlerDisplayName)
-        .font(.callout.weight(.semibold))
+        .font(TrawlDesign.Typography.meta)
         .lineLimit(1)
       Button(action: onClear) {
         Image(systemName: "xmark")
-          .font(.caption2.weight(.bold))
-          .padding(3)
+          .font(TrawlDesign.Typography.monoAxis)
+          .padding(2)
           .contentShape(.circle)
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Clear app filter")
     }
     .foregroundStyle(TrawlDesign.Colors.selectBlue)
-    .padding(.leading, 7)
+    .padding(.leading, 6)
     .padding(.trailing, 6)
     .padding(.vertical, 3)
-    .background(TrawlDesign.Colors.selectBlueSurface, in: Capsule())
-    .overlay {
-      Capsule()
-        .stroke(TrawlDesign.Colors.selectBlue.opacity(0.32), lineWidth: 1)
-    }
+    .background(TrawlDesign.Colors.selectBlueSurface, in: TrawlDesign.Shape.control)
     .fixedSize()
   }
 
@@ -749,13 +757,13 @@ private struct SearchOutcome: View {
     Group {
       switch phase {
       case .loading:
-        VStack(spacing: 9) {
+        VStack(spacing: TrawlDesign.Space.sm) {
           ProgressView()
             .controlSize(.small)
           Text("Searching. Stops after \(SearchModel.defaultWaitSeconds) seconds.")
         }
-        .font(.callout)
-        .foregroundStyle(.secondary)
+        .font(TrawlDesign.Typography.meta)
+        .foregroundStyle(TrawlDesign.Colors.mutedInk)
       default:
         ContentUnavailableView(
           OperationalCopy.Search.outcomeTitle(for: phase),
@@ -777,13 +785,6 @@ private struct SearchOutcome: View {
       timeoutSeconds: SearchModel.defaultWaitSeconds
     )
   }
-}
-
-struct SearchKey: Hashable {
-  let query: String
-  let registeredTrawler: RegisteredTrawlerIdentity?
-  let earliestDateInclusive: Date?
-  let latestDateInclusive: Date?
 }
 
 private struct SearchTriggerKey: Hashable {
