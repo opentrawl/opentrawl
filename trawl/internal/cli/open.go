@@ -22,13 +22,13 @@ type OpenCmd struct {
 
 var applePhotoUUIDAcceptedByOpenCommandPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
-func (c *OpenCmd) Run(r *Runtime) error {
+func (c *OpenCmd) execute(r *Runtime) (*open.OpenResponse, []InstalledTrawler, error) {
 	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(c.Link)
 	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
 	if err != nil {
 		applePhotoUUIDArgument := strings.TrimPrefix(strings.TrimSpace(c.Link), "photos:")
 		if !applePhotoUUIDAcceptedByOpenCommandPattern.MatchString(applePhotoUUIDArgument) {
-			return render.LinkIsNotValid()
+			return nil, nil, render.LinkIsNotValid()
 		}
 		requestedTrawlLink = nil
 		route = trawlkit.GloballyRoutableTrawlLinkRoute{
@@ -39,11 +39,11 @@ func (c *OpenCmd) Run(r *Runtime) error {
 	installedTrawlers := discoverInstalledTrawlers(r.ctx)
 	targetTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)
 	if serving, isAgentRequest := agentServingContextFrom(r.ctx); isAgentRequest && !serving.agentSourceScope.allowsSource(targetTrawlerIdentity) {
-		return render.AgentAccessSourceNotAllowed(targetTrawlerIdentity, installedTrawlerCommandNames(installedTrawlers))
+		return nil, nil, render.AgentAccessSourceNotAllowed(targetTrawlerIdentity, installedTrawlerCommandNames(installedTrawlers))
 	}
 	if selectedTrawler, found := findInstalledTrawler(installedTrawlers, targetTrawlerIdentity); found {
 		if _, err := trawlersForSharedOperation([]InstalledTrawler{selectedTrawler}, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN, true); err != nil {
-			return err
+			return nil, nil, err
 		}
 	}
 	openTrawlers := r.federationOpenTrawlers(installedTrawlers)
@@ -53,6 +53,14 @@ func (c *OpenCmd) Run(r *Runtime) error {
 		route.LocalShortReference,
 		requestedTrawlLink,
 	)
+	return response, installedTrawlers, nil
+}
+
+func (c *OpenCmd) Run(r *Runtime) error {
+	response, installedTrawlers, err := c.execute(r)
+	if err != nil {
+		return err
+	}
 	if !c.Participants || response.GetFailure() != nil {
 		return r.renderOpenResponse(response)
 	}

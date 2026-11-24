@@ -57,14 +57,22 @@ type remoteMCPOAuthClientStoreFile struct {
 	RegisteredClients []remoteMCPOAuthClientRecord `json:"registered_clients"`
 }
 
+type remoteMCPOAuthRefreshTokenState string
+
+const (
+	remoteMCPOAuthRefreshTokenStateActive  remoteMCPOAuthRefreshTokenState = "active"
+	remoteMCPOAuthRefreshTokenStateRotated remoteMCPOAuthRefreshTokenState = "rotated"
+	remoteMCPOAuthRefreshTokenStateRevoked remoteMCPOAuthRefreshTokenState = "revoked"
+)
+
 type remoteMCPOAuthRefreshTokenRecord struct {
-	RefreshTokenSHA256         string                     `json:"refresh_token_sha256"`
-	AgentAccessTokenIdentifier AgentAccessTokenIdentifier `json:"token_id"`
-	ClientIdentifier           string                     `json:"client_id"`
-	ResourceURI                string                     `json:"resource"`
-	Consumed                   bool                       `json:"consumed"`
-	CreatedTime                time.Time                  `json:"created_time"`
-	ExpiresTime                time.Time                  `json:"expires_time"`
+	RefreshTokenSHA256         string                          `json:"refresh_token_sha256"`
+	AgentAccessTokenIdentifier AgentAccessTokenIdentifier      `json:"token_id"`
+	ClientIdentifier           string                          `json:"client_id"`
+	ResourceURI                string                          `json:"resource"`
+	State                      remoteMCPOAuthRefreshTokenState `json:"state"`
+	CreatedTime                time.Time                       `json:"created_time"`
+	ExpiresTime                time.Time                       `json:"expires_time"`
 }
 
 type remoteMCPOAuthRefreshTokenStoreFile struct {
@@ -93,11 +101,52 @@ type remoteMCPOAuthAuthorizationCode struct {
 	ExpiresTime        time.Time
 }
 
+type remoteMCPOAuthPairingWindowState string
+
+const (
+	remoteMCPOAuthPairingWindowStateClosed    remoteMCPOAuthPairingWindowState = "closed"
+	remoteMCPOAuthPairingWindowStateOpen      remoteMCPOAuthPairingWindowState = "open"
+	remoteMCPOAuthPairingWindowStateConsumed  remoteMCPOAuthPairingWindowState = "consumed"
+	remoteMCPOAuthPairingWindowStateLockedOut remoteMCPOAuthPairingWindowState = "locked_out"
+	remoteMCPOAuthPairingWindowStateExpired   remoteMCPOAuthPairingWindowState = "expired"
+)
+
 type remoteMCPOAuthPairingWindow struct {
 	OneTimeCode      string
 	ExpiresTime      time.Time
 	FailedGuessCount int
-	ConsumedOrClosed bool
+	State            remoteMCPOAuthPairingWindowState
+}
+
+func (window *remoteMCPOAuthPairingWindow) currentState(now time.Time) remoteMCPOAuthPairingWindowState {
+	if window == nil {
+		return remoteMCPOAuthPairingWindowStateClosed
+	}
+	if window.State == remoteMCPOAuthPairingWindowStateOpen && !now.Before(window.ExpiresTime) {
+		window.State = remoteMCPOAuthPairingWindowStateExpired
+	}
+	return window.State
+}
+
+func (window *remoteMCPOAuthPairingWindow) verifyCode(enteredCode string, now time.Time) (bool, remoteMCPOAuthPairingWindowState) {
+	if state := window.currentState(now); state != remoteMCPOAuthPairingWindowStateOpen {
+		return false, state
+	}
+	expectedCode := normalizePairingCodeInput(window.OneTimeCode)
+	if subtle.ConstantTimeCompare([]byte(enteredCode), []byte(expectedCode)) == 1 {
+		return true, remoteMCPOAuthPairingWindowStateOpen
+	}
+	window.FailedGuessCount++
+	if window.FailedGuessCount >= remoteMCPOAuthMaxPairingCodeAttempts {
+		window.State = remoteMCPOAuthPairingWindowStateLockedOut
+	}
+	return false, window.State
+}
+
+func (window *remoteMCPOAuthPairingWindow) markConsumed() {
+	if window != nil && window.State == remoteMCPOAuthPairingWindowStateOpen {
+		window.State = remoteMCPOAuthPairingWindowStateConsumed
+	}
 }
 
 type remoteMCPOAuthProtectedResourceMetadata struct {
@@ -247,6 +296,7 @@ func (server *remoteMCPOAuthServer) OpenPairingWindow(duration time.Duration) (s
 	server.pairing = &remoteMCPOAuthPairingWindow{
 		OneTimeCode: code,
 		ExpiresTime: expiresAt,
+		State:       remoteMCPOAuthPairingWindowStateOpen,
 	}
 	server.mu.Unlock()
 	return code, expiresAt, nil
@@ -529,18 +579,16 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 		redirectOAuthError(response, request, pending.RedirectURI, pending.State, server.publicOriginForRequest(request), "access_denied", "user denied access")
 		return
 	}
-	if server.pairing == nil || server.pairing.ConsumedOrClosed || now.After(server.pairing.ExpiresTime) {
+	if server.pairing.currentState(now) != remoteMCPOAuthPairingWindowStateOpen {
 		delete(server.pendingConsents, csrfToken)
 		server.mu.Unlock()
 		renderConsentHTML(response, http.StatusOK, remoteMCPOAuthConsentView{PairingWindowOff: true})
 		return
 	}
-	expectedCode := normalizePairingCodeInput(server.pairing.OneTimeCode)
-	if subtle.ConstantTimeCompare([]byte(enteredCode), []byte(expectedCode)) != 1 {
-		server.pairing.FailedGuessCount++
-		windowClosed := server.pairing.FailedGuessCount >= remoteMCPOAuthMaxPairingCodeAttempts
+	matched, nextState := server.pairing.verifyCode(enteredCode, now)
+	if !matched {
+		windowClosed := nextState != remoteMCPOAuthPairingWindowStateOpen
 		if windowClosed {
-			server.pairing.ConsumedOrClosed = true
 			delete(server.pendingConsents, csrfToken)
 		}
 		server.mu.Unlock()
@@ -577,7 +625,7 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 	}
 
 	// Valid one-time code and source selection: consume both pairing window and CSRF consent session.
-	server.pairing.ConsumedOrClosed = true
+	server.pairing.markConsumed()
 	delete(server.pendingConsents, csrfToken)
 
 	allowedSourcesText := agentAccessAllSourcesKeyword
@@ -734,11 +782,24 @@ func (server *remoteMCPOAuthServer) handleRefreshTokenGrant(response http.Respon
 		return
 	}
 	matched := records[matchIndex]
-	if matched.Consumed {
+	switch matched.State {
+	case remoteMCPOAuthRefreshTokenStateRotated:
 		// Reuse of an already-rotated refresh token: revoke the underlying grant.
+		records[matchIndex].State = remoteMCPOAuthRefreshTokenStateRevoked
+		_ = server.saveRefreshTokensLocked(records)
 		server.mu.Unlock()
 		_, _ = revokeAgentAccessToken(server.stateRoot, matched.AgentAccessTokenIdentifier, now)
 		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token was already used; grant revoked")
+		return
+	case remoteMCPOAuthRefreshTokenStateRevoked:
+		server.mu.Unlock()
+		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token was revoked")
+		return
+	case remoteMCPOAuthRefreshTokenStateActive:
+		// Active token; continue validating expiry, binding, and grant liveness.
+	default:
+		server.mu.Unlock()
+		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token state is invalid")
 		return
 	}
 	if now.After(matched.ExpiresTime) {
@@ -763,7 +824,7 @@ func (server *remoteMCPOAuthServer) handleRefreshTokenGrant(response http.Respon
 		return
 	}
 
-	records[matchIndex].Consumed = true
+	records[matchIndex].State = remoteMCPOAuthRefreshTokenStateRotated
 	newRefreshSecret := make([]byte, 32)
 	if _, err := rand.Read(newRefreshSecret); err != nil {
 		server.mu.Unlock()
@@ -776,6 +837,7 @@ func (server *remoteMCPOAuthServer) handleRefreshTokenGrant(response http.Respon
 		AgentAccessTokenIdentifier: matched.AgentAccessTokenIdentifier,
 		ClientIdentifier:           matched.ClientIdentifier,
 		ResourceURI:                matched.ResourceURI,
+		State:                      remoteMCPOAuthRefreshTokenStateActive,
 		CreatedTime:                now,
 		ExpiresTime:                now.Add(remoteMCPOAuthRefreshTokenLifetime),
 	})
@@ -805,7 +867,7 @@ func (server *remoteMCPOAuthServer) isPairingWindowActive() bool {
 	now := server.now().UTC()
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	return server.pairing != nil && !server.pairing.ConsumedOrClosed && now.Before(server.pairing.ExpiresTime)
+	return server.pairing.currentState(now) == remoteMCPOAuthPairingWindowStateOpen
 }
 
 func (server *remoteMCPOAuthServer) pruneExpiredEphemeralStateLocked(now time.Time) {
@@ -1033,6 +1095,7 @@ func (server *remoteMCPOAuthServer) issueRefreshToken(
 		AgentAccessTokenIdentifier: tokenIdentifier,
 		ClientIdentifier:           clientID,
 		ResourceURI:                resourceURI,
+		State:                      remoteMCPOAuthRefreshTokenStateActive,
 		CreatedTime:                now,
 		ExpiresTime:                now.Add(remoteMCPOAuthRefreshTokenLifetime),
 	})

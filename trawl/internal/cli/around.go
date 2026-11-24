@@ -19,17 +19,17 @@ type AroundCmd struct {
 	Limit   int    `name:"limit" default:"30" placeholder:"COUNT" help:"Maximum number of related records"`
 }
 
-func (c *AroundCmd) Run(r *Runtime) error {
+func (c *AroundCmd) execute(r *Runtime) (unifiedindex.AroundResult, error) {
 	window, err := parseAroundWindowDuration(c.Window)
 	if err != nil {
-		return render.CommandFailureFromTrawler(render.CommandFailureKindCommandIsWrong, err.Error())
+		return unifiedindex.AroundResult{}, render.CommandFailureFromTrawler(render.CommandFailureKindCommandIsWrong, err.Error())
 	}
 	limit, err := normalizeSearchLimit(c.Limit)
 	if err != nil {
-		return err
+		return unifiedindex.AroundResult{}, err
 	}
 	if strings.TrimSpace(c.Target) == "" && strings.TrimSpace(c.Trip) == "" {
-		return render.CommandFailureFromTrawler(
+		return unifiedindex.AroundResult{}, render.CommandFailureFromTrawler(
 			render.CommandFailureKindCommandIsWrong,
 			"Provide a trawl link, a date (YYYY-MM-DD), or --trip.",
 		)
@@ -37,18 +37,18 @@ func (c *AroundCmd) Run(r *Runtime) error {
 
 	installed := discoverInstalledTrawlers(r.ctx)
 	if err := r.ensureUnifiedIndexBootstrappedForTrawlers(r.ctx, installed); err != nil {
-		return err
+		return unifiedindex.AroundResult{}, err
 	}
 	stateRoot, err := trawlkit.ResolveStateRoot(r.stateRoot)
 	if err != nil {
-		return err
+		return unifiedindex.AroundResult{}, err
 	}
 	indexStore, err := unifiedindex.OpenUnifiedIndexReadOnly(r.ctx, stateRoot, false)
 	if err != nil {
-		return err
+		return unifiedindex.AroundResult{}, err
 	}
 	if indexStore == nil {
-		return render.CommandFailureFromTrawler(
+		return unifiedindex.AroundResult{}, render.CommandFailureFromTrawler(
 			render.CommandFailureKindArchiveOrOperationFailed,
 			"Unified index has not been built yet; run `trawl index rebuild`.",
 		)
@@ -58,7 +58,7 @@ func (c *AroundCmd) Run(r *Runtime) error {
 	var trawlerFilter []string
 	if _, isAgentRequest := agentServingContextFrom(r.ctx); isAgentRequest {
 		if err := refuseAroundTargetOutsideAgentScope(installed, c.Target); err != nil {
-			return err
+			return unifiedindex.AroundResult{}, err
 		}
 		if strings.TrimSpace(c.Trawler) == "" {
 			for _, t := range installed {
@@ -69,7 +69,7 @@ func (c *AroundCmd) Run(r *Runtime) error {
 	if strings.TrimSpace(c.Trawler) != "" {
 		selected, selErr := r.selectInstalledTrawlers(installed, splitTrawlerCSV(c.Trawler))
 		if selErr != nil {
-			return selErr
+			return unifiedindex.AroundResult{}, selErr
 		}
 		for _, t := range selected {
 			trawlerFilter = append(trawlerFilter, installedTrawlerIdentityText(t))
@@ -84,9 +84,16 @@ func (c *AroundCmd) Run(r *Runtime) error {
 		TrawlerFilter: trawlerFilter,
 	})
 	if err != nil {
-		return render.CommandFailureFromTrawler(render.CommandFailureKindNothingOrSeveralThingsMatched, err.Error())
+		return unifiedindex.AroundResult{}, render.CommandFailureFromTrawler(render.CommandFailureKindNothingOrSeveralThingsMatched, err.Error())
 	}
+	return res, nil
+}
 
+func (c *AroundCmd) Run(r *Runtime) error {
+	res, err := c.execute(r)
+	if err != nil {
+		return err
+	}
 	windowRange := ""
 	if !res.WindowStart.IsZero() && !res.WindowEnd.IsZero() {
 		windowRange = res.WindowStart.Local().Format("2006-01-02") + " to " + res.WindowEnd.Local().Format("2006-01-02")

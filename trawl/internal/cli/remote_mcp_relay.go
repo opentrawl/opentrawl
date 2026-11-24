@@ -51,7 +51,6 @@ type remoteMCPRelayLaunchOptions struct {
 type activeRemoteMCPRelayTunnel struct {
 	PublicHostname string
 	PublicOrigin   string
-	LocalListener  net.Listener
 	stop           func()
 }
 
@@ -294,7 +293,6 @@ func startRemoteMCPRelayTunnel(
 	return &activeRemoteMCPRelayTunnel{
 		PublicHostname: deviceHostname,
 		PublicOrigin:   "https://" + deviceHostname,
-		LocalListener:  tlsListener,
 		stop: func() {
 			frpCancel()
 			_ = httpServer.Close()

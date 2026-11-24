@@ -32,28 +32,36 @@ type mergedSearchResult struct {
 	More          int
 }
 
-func (c *SearchCmd) Run(r *Runtime) error {
+type searchCommandExecution struct {
+	response                              *federation.FederatedTrawlerSearchOperation
+	query                                 string
+	trawlerScope                          string
+	resolvedWhoName                       string
+	searchWasExplicitlyScopedToOneTrawler bool
+}
+
+func (c *SearchCmd) execute(r *Runtime) (searchCommandExecution, error) {
 	limit, err := normalizeSearchLimit(c.Limit)
 	if err != nil {
-		return err
+		return searchCommandExecution{}, err
 	}
 	installed := discoverInstalledTrawlers(r.ctx)
 	query, selectedTrawlers, trawlerScope, err := r.resolveSearchTarget(installed, c.Query, c.Trawler)
 	if err != nil {
-		return err
+		return searchCommandExecution{}, err
 	}
 	searchWasExplicitlyScopedToOneTrawler := strings.TrimSpace(trawlerScope) != "" && len(selectedTrawlers) == 1
 	selectedTrawlers, err = trawlersForSharedOperation(selectedTrawlers,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_SEARCH, strings.TrimSpace(trawlerScope) != "")
 	if err != nil {
-		return err
+		return searchCommandExecution{}, err
 	}
 	whoInput := strings.TrimSpace(c.Who)
 	if strings.TrimSpace(query) == "" && whoInput == "" && strings.TrimSpace(c.After) == "" && strings.TrimSpace(c.Before) == "" {
-		return render.SearchNeedsWordsPersonOrDates()
+		return searchCommandExecution{}, render.SearchNeedsWordsPersonOrDates()
 	}
 	if len(selectedTrawlers) == 0 {
-		return render.NoTrawlersAreAvailable()
+		return searchCommandExecution{}, render.NoTrawlersAreAvailable()
 	}
 
 	var whoResolved *personMatchCandidate
@@ -63,7 +71,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			return c.trawlCommandArgumentsForPerson(query, trawlerScope, personLink)
 		})
 		if err != nil {
-			return err
+			return searchCommandExecution{}, err
 		}
 		whoResolved = &candidate
 		resolvedPersonMatchFactsFromTrawlers = candidate.PersonMatchFactsFromTrawlers
@@ -75,7 +83,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		before: c.Before,
 	}, "")
 	if err != nil {
-		return err
+		return searchCommandExecution{}, err
 	}
 	if whoResolved != nil {
 		selectedTrawlerDisplayNames := make([]string, 0, len(selectedTrawlers))
@@ -95,7 +103,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			}
 		}
 		if len(trawlersApplicableToResolvedPerson) == 0 {
-			return render.NothingInTrawlersInvolvesPerson(resolvedWhoName(whoResolved), selectedTrawlerDisplayNames)
+			return searchCommandExecution{}, render.NothingInTrawlersInvolvesPerson(resolvedWhoName(whoResolved), selectedTrawlerDisplayNames)
 		}
 		selectedTrawlers = trawlersApplicableToResolvedPerson
 	}
@@ -122,24 +130,39 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	}
 	if searchWasExplicitlyScopedToOneTrawler {
 		if err := userInputErrorFromFederatedTrawlerOperationFailures(response.GetOperationFailures()); err != nil {
-			return err
+			return searchCommandExecution{}, err
 		}
 	}
+	return searchCommandExecution{
+		response:                              response,
+		query:                                 query,
+		trawlerScope:                          trawlerScope,
+		resolvedWhoName:                       resolvedWhoName(whoResolved),
+		searchWasExplicitlyScopedToOneTrawler: searchWasExplicitlyScopedToOneTrawler,
+	}, nil
+}
+
+func (c *SearchCmd) Run(r *Runtime) error {
+	executed, err := c.execute(r)
+	if err != nil {
+		return err
+	}
+	response := executed.response
 	merged, err := searchPresentationsFromResponse(response)
 	if err != nil {
 		return err
 	}
 	if len(merged.Presentations) > 0 || len(response.GetTrawlerSearchResults()) > 0 {
 		var emptySearchNextCommands []render.NextCommand
-		if len(merged.Presentations) == 0 && searchWasExplicitlyScopedToOneTrawler && len(response.GetTrawlerSearchResults()) == 1 {
+		if len(merged.Presentations) == 0 && executed.searchWasExplicitlyScopedToOneTrawler && len(response.GetTrawlerSearchResults()) == 1 {
 			emptySearchNextCommands = render.DeclarativeNextCommandsForHumanOutput(
 				response.GetTrawlerSearchResults()[0].GetEmptySearchNextCommands(),
 				nil,
 			)
 		}
 		searchResults := render.SearchResults{
-			SearchQueryWords:                   query,
-			PersonDisplayNameTheSearchInvolves: resolvedWhoName(whoResolved),
+			SearchQueryWords:                   executed.query,
+			PersonDisplayNameTheSearchInvolves: executed.resolvedWhoName,
 			SearchStartDateAsTyped:             c.After,
 			SearchEndDateAsTyped:               c.Before,
 			SearchMatchesInDisplayOrder:        merged.Presentations,
@@ -148,8 +171,8 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		}
 		if merged.More > 0 {
 			searchResults.TrawlCommandArgumentsShowingMoreMatches = c.trawlCommandArgumentsShowingMoreMatches(
-				query,
-				trawlerScope,
+				executed.query,
+				executed.trawlerScope,
 				len(merged.Presentations),
 			)
 		}

@@ -254,17 +254,24 @@ func execute(
 	return kctx.Run(runtime)
 }
 
-func (c *StatusCmd) Run(r *Runtime) error {
+func (c *StatusCmd) execute(r *Runtime) (*federation.FederatedTrawlerStatusOperation, error) {
 	installedTrawlers, err := r.selectedTrawlers(c.Trawler)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	installedTrawlers, err = trawlersForSharedOperation(installedTrawlers,
 		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_STATUS, c.Trawler != "")
 	if err != nil {
+		return nil, err
+	}
+	return r.canonicalStatus(installedTrawlers), nil
+}
+
+func (c *StatusCmd) Run(r *Runtime) error {
+	response, err := c.execute(r)
+	if err != nil {
 		return err
 	}
-	response := r.canonicalStatus(installedTrawlers)
 	r.logFederationOutcomes(response.GetOperationFailures(), response.GetTrawlersSkippedFromOperation())
 	if err := r.output.WriteStatus(response); err != nil {
 		return err

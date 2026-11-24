@@ -32,13 +32,21 @@ type personMatchCandidate struct {
 	PersonTrawlLink                                       *trawlkit.GloballyRoutableTrawlLink
 }
 
-func (c *WhoCmd) Run(r *Runtime) error {
+type whoCommandExecution struct {
+	operation  *federationcontract.FederatedTrawlerPersonMatchOperation
+	totalFound int
+	query      string
+	resolution federatedWhoResolution
+	installed  []InstalledTrawler
+}
+
+func (c *WhoCmd) execute(r *Runtime) (whoCommandExecution, error) {
 	query := strings.Join(strings.Fields(strings.Join(c.Name, " ")), " ")
 	if query == "" {
-		return render.WhoNeedsName()
+		return whoCommandExecution{}, render.WhoNeedsName()
 	}
 	if c.Limit < 1 {
-		return render.LimitMustBeAtLeastOne()
+		return whoCommandExecution{}, render.LimitMustBeAtLeastOne()
 	}
 
 	installed := discoverInstalledTrawlers(r.ctx)
@@ -46,18 +54,35 @@ func (c *WhoCmd) Run(r *Runtime) error {
 	resolution.OperationFailures = append(resolution.OperationFailures,
 		r.readPersonMessageCountsFromTrawlers(installed, resolution.Candidates)...)
 	operation := federatedPersonMatchOperation(resolution, trawlerDisplayNamesByIdentity(installed))
+	totalFound := len(operation.GetPersonMatchCandidates())
+	if totalFound > c.Limit {
+		operation.PersonMatchCandidates = operation.GetPersonMatchCandidates()[:c.Limit]
+	}
+	return whoCommandExecution{
+		operation:  operation,
+		totalFound: totalFound,
+		query:      query,
+		resolution: resolution,
+		installed:  installed,
+	}, nil
+}
+
+func (c *WhoCmd) Run(r *Runtime) error {
+	executed, err := c.execute(r)
+	if err != nil {
+		return err
+	}
+	operation := executed.operation
 	r.logFederationOutcomes(operation.GetOperationFailures(), operation.GetTrawlersSkippedFromOperation())
-	numberOfMatchingPeople := len(operation.GetPersonMatchCandidates())
-	if numberOfMatchingPeople == 0 && len(operation.GetOperationFailures()) == 0 {
-		return unknownPersonFailure(query, resolution, trawlerDisplayNamesByIdentity(installed), func(personLink string) []string {
+	if executed.totalFound == 0 && len(operation.GetOperationFailures()) == 0 {
+		return unknownPersonFailure(executed.query, executed.resolution, trawlerDisplayNamesByIdentity(executed.installed), func(personLink string) []string {
 			return []string{"who", personLink}
 		})
 	}
 	var nextCommandShowingMorePeople []render.NextCommand
-	if numberOfMatchingPeople > c.Limit {
-		operation.PersonMatchCandidates = operation.GetPersonMatchCandidates()[:c.Limit]
+	if executed.totalFound > c.Limit {
 		nextCommandShowingMorePeople = []render.NextCommand{render.NextCommandShowingMoreRows(
-			[]string{"who", query, "--limit", strconv.Itoa(c.Limit * 2)},
+			[]string{"who", executed.query, "--limit", strconv.Itoa(c.Limit * 2)},
 		)}
 	}
 	if err := r.output.WritePersonMatches(operation, nextCommandShowingMorePeople); err != nil {
