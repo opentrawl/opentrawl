@@ -6,15 +6,18 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"io"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	app "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -46,6 +49,9 @@ func executeAppWire(
 	case "status":
 		return runtime.runAppStatus()
 	case "update":
+		if outputFile, ok := machineReadableProtocolOutputStream.(*os.File); ok && outputFile.Fd() == uintptr(syscall.Stdout) {
+			return runtime.runAppUpdateUntilParentExits(args[2:])
+		}
 		return runtime.runAppUpdate(args[2:])
 	case "search":
 		return runtime.runAppSearch(args[2:])
@@ -54,6 +60,42 @@ func executeAppWire(
 	default:
 		return fmt.Errorf("usage: trawl %s status|update|search|open", appWireCommand)
 	}
+}
+
+func (r *Runtime) runAppUpdateUntilParentExits(args []string) error {
+	// The app gives the updater /dev/null on stdin. Watch reparenting
+	// even when the updater is waiting for a worker and emits no frames.
+	appParentPID := os.Getppid()
+	if appParentPID == 1 {
+		return nil
+	}
+	// A progress frame can race with app exit. Handle SIGPIPE while
+	// the updater cancels and waits for its workers to exit.
+	signalContext, stopSignals := signal.NotifyContext(r.ctx, syscall.SIGTERM, syscall.SIGPIPE)
+	defer stopSignals()
+	updateContext, cancelUpdate := context.WithCancel(signalContext)
+	defer cancelUpdate()
+	r.ctx = updateContext
+	go cancelAppUpdateOnReparenting(updateContext, appParentPID, cancelUpdate)
+
+	err := r.runAppUpdate(args)
+	if updateContext.Err() != nil || errors.Is(err, syscall.EPIPE) {
+		return nil
+	}
+	return err
+}
+
+func cancelAppUpdateOnReparenting(updateContext context.Context, appParentPID int, cancelUpdate context.CancelFunc) {
+	parentCheck := time.NewTicker(100 * time.Millisecond)
+	defer parentCheck.Stop()
+	for os.Getppid() == appParentPID {
+		select {
+		case <-updateContext.Done():
+			return
+		case <-parentCheck.C:
+		}
+	}
+	cancelUpdate()
 }
 
 func (r *Runtime) runAppStatus() error {

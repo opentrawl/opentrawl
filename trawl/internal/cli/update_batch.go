@@ -30,6 +30,9 @@ func (r *Runtime) runUpdateBatch(
 	started func([]InstalledTrawler),
 	progress func(InstalledTrawler, updatePhase),
 ) (*federation.FederatedTrawlerArchiveUpdateOperation, error) {
+	if err := r.ctx.Err(); err != nil {
+		return nil, err
+	}
 	trawlers, err := trawlersForSharedOperation(trawlers, federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_UPDATE, false)
 	if err != nil {
 		return nil, err
@@ -65,6 +68,9 @@ func (r *Runtime) runUpdateBatch(
 	waitForTrawlers.Wait()
 
 	for index, trawler := range trawlers {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if results[index] == nil {
 			continue
 		}
