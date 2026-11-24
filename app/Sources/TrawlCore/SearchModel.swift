@@ -197,7 +197,7 @@ public final class SearchModel {
       : earliestMatchingArchiveRecordTimeInclusive
     let effectiveLatest =
       isEmptyBrowse
-      ? nil
+      ? (registeredTrawler?.registeredTrawlerIdentity == "calendar" ? nil : Date())
       : latestMatchingArchiveRecordTimeInclusive
 
     timedOutLocally = false
@@ -279,7 +279,7 @@ public final class SearchModel {
         : nextInput.earliestMatchingArchiveRecordTimeInclusive
       let effectiveLatest =
         isEmptyBrowse
-        ? nil
+        ? (nextInput.registeredTrawler?.registeredTrawlerIdentity == "calendar" ? nil : Date())
         : nextInput.latestMatchingArchiveRecordTimeInclusive
       let request = TrawlArchiveSearchRequest(
         searchQueryText: nextInput.query,

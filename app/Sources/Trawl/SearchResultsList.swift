@@ -39,6 +39,7 @@ struct SearchResultsList: View {
   let isLoadingMore: Bool
   let canLoadMore: Bool
   let loadMoreFailureMessage: String?
+  let showsUpToTodayContext: Bool
   let appFilterChips: [SearchAppFilterChip]
   let allAppsSearchMatchCountText: String?
   let appFilterSelection: RegisteredTrawlerIdentity?
@@ -113,7 +114,8 @@ struct SearchResultsList: View {
         totalMatchedCountIsLowerBound: totalMatchedCountIsLowerBound,
         isTruncated: isTruncated,
         resultLimit: resultLimit,
-        committedQuery: committedQuery
+        committedQuery: committedQuery,
+        showsUpToTodayContext: showsUpToTodayContext
       )
 
       SearchAppFilterChipStrip(
@@ -229,6 +231,7 @@ private struct SearchResultsContext: View {
   let isTruncated: Bool
   let resultLimit: UInt32
   let committedQuery: String?
+  let showsUpToTodayContext: Bool
 
   @ViewBuilder
   var body: some View {
@@ -245,9 +248,14 @@ private struct SearchResultsContext: View {
           isLowerBound: totalMatchedCountIsLowerBound,
           isTruncated: isTruncated
         )
-        Text(base)
-          .font(TrawlDesign.Typography.bodyEmphasis)
-          .foregroundStyle(.primary)
+        HStack(alignment: .firstTextBaseline, spacing: TrawlDesign.Space.xs) {
+          Text(base)
+            .font(TrawlDesign.Typography.bodyEmphasis)
+            .foregroundStyle(.primary)
+          if showsUpToTodayContext {
+            Text("· Up to today")
+          }
+        }
       }
       if case .partial = phase {
         Label(OperationalCopy.Search.partialResults, systemImage: "exclamationmark.triangle")

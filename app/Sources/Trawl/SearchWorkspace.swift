@@ -387,6 +387,12 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
             && committedInput.latestMatchingArchiveRecordTimeInclusive == nil
           if committedIsEmptyBrowse {
             for trawlerSearchResult in model.trawlerSearchResults {
+              // All-items browse stops at today so future Calendar events don't bury today's inbox.
+              if committedInput.registeredTrawler == nil,
+                trawlerSearchResult.registeredTrawler.registeredTrawlerIdentity == "calendar"
+              {
+                continue
+              }
               emptyBrowseCountByID[trawlerSearchResult.registeredTrawler] =
                 trawlerSearchResult.totalSearchMatches
             }
@@ -661,6 +667,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
       isLoadingMore: model.isLoadingMore,
       canLoadMore: model.canLoadMore,
       loadMoreFailureMessage: model.loadMoreFailureMessage,
+      showsUpToTodayContext: isEmptyBrowse && interaction.registeredTrawler == nil,
       appFilterChips: searchAppFilterChips,
       allAppsSearchMatchCountText: allAppsChipCountText,
       appFilterSelection: interaction.registeredTrawler,
