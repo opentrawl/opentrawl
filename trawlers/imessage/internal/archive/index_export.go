@@ -8,6 +8,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
+	trawlstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const (
@@ -46,13 +47,22 @@ func (s *Store) ExportArchiveIndexChanges(
 	).Scan(&maxChatRow, &chatCount); err != nil {
 		return fmt.Errorf("read imessage chat cursor state: %w", err)
 	}
-	nextCursor := fmt.Sprintf("imessage:%d:%d:%d:%d", maxMsgRow, msgCount, maxChatRow, chatCount)
+	displayNameFingerprint, err := trawlstore.FingerprintQueryRows(ctx, s.store.DB(),
+		`select source_rowid, handle, display_name from handles order by source_rowid`,
+		`select source_rowid, display_name, room_name, chat_identifier from chats order by source_rowid`,
+		`select chat_rowid, handle_rowid from chat_participants order by chat_rowid, handle_rowid`,
+	)
+	if err != nil {
+		return fmt.Errorf("read imessage display names for index cursor: %w", err)
+	}
+	nextCursor := fmt.Sprintf("imessage:%d:%d:%d:%d:%s", maxMsgRow, msgCount, maxChatRow, chatCount, displayNameFingerprint)
 	if sinceOpaqueCursor != "" && sinceOpaqueCursor == nextCursor {
 		return nil
 	}
 
-	prevMsgRow, prevMsgCount, prevChatRow, prevChatCount, ok := parseIMessageCursor(sinceOpaqueCursor)
-	incremental := ok && msgCount >= prevMsgCount && chatCount >= prevChatCount && maxMsgRow >= prevMsgRow && maxChatRow >= prevChatRow
+	prevMsgRow, prevMsgCount, prevChatRow, prevChatCount, prevDisplayNameFingerprint, ok := parseIMessageCursor(sinceOpaqueCursor)
+	incremental := ok && prevDisplayNameFingerprint == displayNameFingerprint &&
+		msgCount >= prevMsgCount && chatCount >= prevChatCount && maxMsgRow >= prevMsgRow && maxChatRow >= prevChatRow
 
 	startMsgRow, startChatRow := int64(0), int64(0)
 	if incremental {
@@ -206,19 +216,19 @@ func (s *Store) loadIMessageChatShortRefs(ctx context.Context, afterChatRowID in
 	return out, rows.Err()
 }
 
-func parseIMessageCursor(cursor string) (int64, int64, int64, int64, bool) {
+func parseIMessageCursor(cursor string) (int64, int64, int64, int64, string, bool) {
 	parts := strings.Split(cursor, ":")
-	if len(parts) != 5 || parts[0] != "imessage" {
-		return 0, 0, 0, 0, false
+	if len(parts) != 6 || parts[0] != "imessage" || parts[5] == "" {
+		return 0, 0, 0, 0, "", false
 	}
 	a, e1 := strconv.ParseInt(parts[1], 10, 64)
 	b, e2 := strconv.ParseInt(parts[2], 10, 64)
 	c, e3 := strconv.ParseInt(parts[3], 10, 64)
 	d, e4 := strconv.ParseInt(parts[4], 10, 64)
 	if e1 != nil || e2 != nil || e3 != nil || e4 != nil {
-		return 0, 0, 0, 0, false
+		return 0, 0, 0, 0, "", false
 	}
-	return a, b, c, d, true
+	return a, b, c, d, parts[5], true
 }
 
 func decodeAppleIMessageDate(rawDate int64) (int64, bool) {
