@@ -3,8 +3,8 @@ import TrawlClient
 import TrawlCore
 
 /// Shared continuous line/area date scrubber anchored cleanly along the bottom of
-/// the Search tab. Matches the Overview line grammar, never jumps or resizes, and
-/// lets the user drag a ruby range band to filter by dates (or clear dates in one click).
+/// the Search tab. Uses the exact same sqrt-recency time axis (`ArchiveTimelineTimeAxis`)
+/// and power-law vertical intensity (`ArchiveTimelineIntensityScale`) as Overview.
 struct SearchDateLineScrubberView: View {
   let trawlerStatuses: [TrawlerStatus]
   let scopedTrawlerID: RegisteredTrawlerIdentity?
@@ -25,6 +25,11 @@ struct SearchDateLineScrubberView: View {
     return trawlerStatuses.filter { $0.id.registeredTrawlerIdentity != "contacts" }
   }
 
+  private var timeAxis: ArchiveTimelineTimeAxis {
+    let histories = relevantStatuses.compactMap(\.archiveWeeklyHistory)
+    return ArchiveTimelineTimeAxis.build(from: histories, referenceDate: Date())
+  }
+
   private var aggregatedWeeklyCounts: [(weekStart: Date, recordCount: UInt64)] {
     var totals: [Int64: UInt64] = [:]
     for status in relevantStatuses {
@@ -40,78 +45,52 @@ struct SearchDateLineScrubberView: View {
     }
   }
 
-  private var timeBounds: (start: Date, end: Date) {
-    let now = Date()
-    let histories = relevantStatuses.compactMap(\.archiveWeeklyHistory)
-    let axis = ArchiveTimelineTimeAxis.build(from: histories, referenceDate: now)
-    return (axis.earliestAxisDate, now)
-  }
-
-  private var yearLabels: [String] {
-    let bounds = timeBounds
-    let calendar = Calendar(identifier: .gregorian)
-    let startYear = calendar.component(.year, from: bounds.start)
-    let endYear = calendar.component(.year, from: bounds.end)
-    guard endYear > startYear else { return ["\(endYear)"] }
-    let span = endYear - startYear
-    let step = max(1, Int(ceil(Double(span) / 8.0)))
-    var out: [String] = []
-    var year = startYear
-    while year <= endYear {
-      out.append("\(year)")
-      year += step
-    }
-    if out.last != "\(endYear)" {
-      out.append("\(endYear)")
-    }
-    return out
-  }
-
   private var activeFractions: (lower: CGFloat, upper: CGFloat)? {
     if let draftStartFraction, let draftEndFraction {
       return (min(draftStartFraction, draftEndFraction), max(draftStartFraction, draftEndFraction))
     }
     guard earliestDateInclusive != nil || latestDateInclusive != nil else { return nil }
-    let bounds = timeBounds
-    let span = max(bounds.end.timeIntervalSince(bounds.start), 1)
-    let lower = earliestDateInclusive.map {
-      CGFloat(min(max($0.timeIntervalSince(bounds.start) / span, 0), 1))
-    } ?? 0
-    let upper = latestDateInclusive.map {
-      CGFloat(min(max($0.timeIntervalSince(bounds.start) / span, 0), 1))
-    } ?? 1
+    let axis = timeAxis
+    let lower = earliestDateInclusive.map { CGFloat(axis.datedNormalizedPosition(for: $0)) } ?? 0
+    let upper = latestDateInclusive.map { CGFloat(axis.datedNormalizedPosition(for: $0)) } ?? 1
     return (min(lower, upper), max(lower, upper))
   }
 
   private var rangeBadgeText: String? {
     guard let fractions = activeFractions else { return nil }
-    let bounds = timeBounds
-    let span = max(bounds.end.timeIntervalSince(bounds.start), 1)
-    let d1 = bounds.start.addingTimeInterval(TimeInterval(fractions.lower) * span)
-    let d2 = bounds.start.addingTimeInterval(TimeInterval(fractions.upper) * span)
+    let axis = timeAxis
+    let range = axis.inclusiveCalendarDayRange(
+      fromNormalizedPosition: Double(fractions.lower),
+      toNormalizedPosition: Double(fractions.upper)
+    )
     let rangeStr =
-      "\(d1.formatted(.dateTime.month(.abbreviated).year())) – \(d2.formatted(.dateTime.month(.abbreviated).year()))"
+      ArchiveTimelineDateRangeFormatting.label(
+        earliestInclusive: range.earliestInclusive,
+        latestInclusive: range.latestInclusive
+      ) ?? ""
     return resultSummaryText.isEmpty ? rangeStr : "\(rangeStr) · \(resultSummaryText)"
   }
 
   var body: some View {
-    VStack(spacing: 5) {
-      HStack(spacing: 8) {
+    let axis = timeAxis
+
+    VStack(spacing: TrawlDesign.Space.xs) {
+      HStack(spacing: TrawlDesign.Space.sm) {
         Text("When")
-          .font(.system(size: 11.5, weight: .semibold))
+          .font(TrawlDesign.Typography.caption.weight(.semibold))
           .foregroundStyle(TrawlDesign.Colors.ink)
         Text(
           queryText.isEmpty
             ? "Drag across the line to choose dates"
             : "Results for “\(queryText)” · Drag across the line to choose dates"
         )
-        .font(.system(size: 11.5))
+        .font(TrawlDesign.Typography.meta)
         .foregroundStyle(TrawlDesign.Colors.mutedInk)
         .lineLimit(1)
-        Spacer(minLength: 8)
+        Spacer(minLength: TrawlDesign.Space.sm)
         if let rangeBadgeText {
           Text(rangeBadgeText)
-            .font(.system(size: 11.5, weight: .semibold))
+            .font(TrawlDesign.Typography.caption.weight(.semibold))
             .foregroundStyle(TrawlDesign.Colors.matchRed)
             .lineLimit(1)
           Button("Clear dates", action: onClearDateRange)
@@ -126,7 +105,7 @@ struct SearchDateLineScrubberView: View {
 
         ZStack(alignment: .leading) {
           Canvas { context, size in
-            drawScrubberCurve(in: &context, size: size)
+            drawScrubberCurve(in: &context, size: size, axis: axis)
           }
 
           if let active = activeFractions {
@@ -138,12 +117,10 @@ struct SearchDateLineScrubberView: View {
               .frame(width: bandW, height: height)
               .offset(x: x1)
 
-            // Left handle
             Capsule()
               .fill(TrawlDesign.Colors.matchRed)
               .frame(width: 5, height: 16)
               .offset(x: max(0, x1 - 2.5))
-            // Right handle
             Capsule()
               .fill(TrawlDesign.Colors.matchRed)
               .frame(width: 5, height: 16)
@@ -164,42 +141,55 @@ struct SearchDateLineScrubberView: View {
               let e = min(max(value.location.x / width, 0), 1)
               draftStartFraction = nil
               draftEndFraction = nil
-              let bounds = timeBounds
-              let span = max(bounds.end.timeIntervalSince(bounds.start), 1)
               let lower = min(s, e)
-              let upper = max(s, e)
-              let d1 = bounds.start.addingTimeInterval(TimeInterval(lower) * span)
-              let d2 = bounds.start.addingTimeInterval(
-                TimeInterval(max(upper, min(1, lower + 0.01))) * span
+              let upper = max(max(s, e), min(1, lower + 0.01))
+              let range = axis.inclusiveCalendarDayRange(
+                fromNormalizedPosition: Double(lower),
+                toNormalizedPosition: Double(upper)
               )
-              onCommitDateRange(d1, d2)
+              onCommitDateRange(range.earliestInclusive, range.latestInclusive)
             }
         )
       }
       .frame(height: 34)
 
-      HStack {
-        ForEach(Array(yearLabels.enumerated()), id: \.offset) { index, label in
-          if index > 0 { Spacer() }
-          Text(label)
-            .font(TrawlDesign.Typography.monoAxis)
-            .foregroundStyle(TrawlDesign.Colors.mutedInk)
+      GeometryReader { proxy in
+        let ticks = axis.yearTicks(forTrackWidth: Double(proxy.size.width))
+        ZStack(alignment: .leading) {
+          ForEach(ticks) { tick in
+            let x = CGFloat(tick.normalizedPosition) * proxy.size.width
+            Text(tick.label)
+              .font(TrawlDesign.Typography.monoAxis)
+              .foregroundStyle(tick.isToday ? TrawlDesign.Colors.ink : TrawlDesign.Colors.mutedInk)
+              .fixedSize()
+              .position(
+                x: min(max(x, 16), max(16, proxy.size.width - 18)),
+                y: proxy.size.height / 2
+              )
+          }
         }
       }
+      .frame(height: 16)
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 9)
+    .padding(.horizontal, TrawlDesign.Space.md)
+    .padding(.vertical, TrawlDesign.Space.sm)
     .frame(height: 88)
-    .background(TrawlDesign.Colors.surface.opacity(0.85))
+    .background(TrawlDesign.Colors.surface)
     .overlay(alignment: .top) {
       Divider()
     }
   }
 
-  private func drawScrubberCurve(in context: inout GraphicsContext, size: CGSize) {
+  private func drawScrubberCurve(
+    in context: inout GraphicsContext,
+    size: CGSize,
+    axis: ArchiveTimelineTimeAxis
+  ) {
     let baselineY = size.height - 2
-    let points = aggregatedWeeklyCounts
-    guard !points.isEmpty else {
+    let visiblePoints = aggregatedWeeklyCounts.filter {
+      $0.weekStart >= axis.earliestAxisDate && $0.weekStart <= axis.referenceDate
+    }
+    guard !visiblePoints.isEmpty else {
       var line = Path()
       line.move(to: CGPoint(x: 0, y: baselineY))
       line.addLine(to: CGPoint(x: size.width, y: baselineY))
@@ -207,16 +197,10 @@ struct SearchDateLineScrubberView: View {
       return
     }
 
-    let bounds = timeBounds
-    let visiblePoints = points.filter {
-      $0.weekStart >= bounds.start && $0.weekStart <= bounds.end
-    }
-    guard !visiblePoints.isEmpty else { return }
-    let maxVal = Double(visiblePoints.map(\.recordCount).max() ?? 0)
-    guard maxVal > 0 else { return }
+    let rowMax = visiblePoints.map(\.recordCount).max() ?? 0
+    guard rowMax > 0 else { return }
 
-    let span = max(bounds.end.timeIntervalSince(bounds.start), 1)
-    let usableHeight = max(size.height - 6, 4)
+    let usableHeight = max(size.height - 5, 4)
 
     var strokePath = Path()
     var fillPath = Path()
@@ -225,10 +209,13 @@ struct SearchDateLineScrubberView: View {
     var hasStarted = false
 
     for item in visiblePoints {
-      let frac = min(max(item.weekStart.timeIntervalSince(bounds.start) / span, 0), 1)
-      let x = CGFloat(frac) * size.width
+      let x = CGFloat(axis.datedNormalizedPosition(for: item.weekStart)) * size.width
+      let heightFraction = ArchiveTimelineIntensityScale.heightFraction(
+        forRecordCount: item.recordCount,
+        rowMaximumRecordCount: rowMax
+      )
       let y = item.recordCount > 0
-        ? baselineY - max(1.5, CGFloat(Double(item.recordCount) / maxVal) * usableHeight)
+        ? baselineY - max(1.5, CGFloat(heightFraction) * usableHeight)
         : baselineY
       let pt = CGPoint(x: x, y: y)
       if !hasStarted {

@@ -541,7 +541,7 @@ private struct SearchField: View {
           ?? "Search your apps",
         text: $query
       )
-      .font(.system(size: 14.5))
+      .font(TrawlDesign.Typography.body)
       .textFieldStyle(.plain)
       .focused($focus, equals: .field)
       .layoutPriority(1)

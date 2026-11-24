@@ -225,29 +225,29 @@ struct OpenTrawlSettingsView: View {
       }
       .background(
         TrawlDesign.Colors.paper,
-        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
       )
       .overlay(
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
           .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
       )
 
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: TrawlDesign.Space.xs) {
         Text("Plugins")
-          .font(.headline)
+          .font(TrawlDesign.Typography.sectionHeader)
         Text("Plugins add more things to search. Add only plugins you trust.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(TrawlDesign.Colors.mutedInk)
         Text(
           "Optional plugins (such as Money for bank and card exports, and X encrypted messages) can be installed through the OpenTrawl plugin catalog."
         )
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .padding(12)
+        .font(TrawlDesign.Typography.meta)
+        .foregroundStyle(TrawlDesign.Colors.mutedInk)
+        .padding(TrawlDesign.Space.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
           TrawlDesign.Colors.surface,
-          in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+          in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
         )
       }
     }
@@ -268,7 +268,7 @@ struct OpenTrawlSettingsView: View {
       TrawlerIconView(registeredTrawler: trawler.id, size: 22)
       VStack(alignment: .leading, spacing: 2) {
         Text(trawler.registeredTrawlerDisplayName)
-          .font(.system(size: 13, weight: .semibold))
+          .font(TrawlDesign.Typography.sectionHeader)
         Text(state.statusLine)
           .font(.caption)
           .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmber : .secondary)
@@ -411,7 +411,10 @@ struct OpenTrawlSettingsView: View {
             .textSelection(.enabled)
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(TrawlDesign.Colors.surface, in: RoundedRectangle(cornerRadius: 6))
+            .background(
+              TrawlDesign.Colors.surface,
+              in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
+            )
         }
         .padding(6)
       }

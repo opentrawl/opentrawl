@@ -231,16 +231,16 @@ struct ChooseAppsStep: View {
           Text(
             "Photos, Calendar, and Contacts ask for macOS permission one by one. Gmail opens Google in your browser (read-only; OpenTrawl cannot send or change mail). X opens X sign-in to read your posts, bookmarks, likes, mentions, and older messages."
           )
-          .font(.system(size: 13))
-          .foregroundStyle(.secondary)
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(TrawlDesign.Colors.mutedInk)
           .fixedSize(horizontal: false, vertical: true)
         }
 
         OnboardingInformationGroup(title: HumanCopy.FullDiskAccess.trustGroupTitle) {
-          VStack(alignment: .leading, spacing: 10) {
+          VStack(alignment: .leading, spacing: TrawlDesign.Space.sm) {
             Text(HumanCopy.FullDiskAccess.trustGroupBody)
-              .font(.system(size: 13))
-              .foregroundStyle(.secondary)
+              .font(TrawlDesign.Typography.meta)
+              .foregroundStyle(TrawlDesign.Colors.mutedInk)
               .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) {
               Button {
@@ -301,30 +301,30 @@ struct ChooseAppsStep: View {
     action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
-      HStack(alignment: .top, spacing: 12) {
+      HStack(alignment: .top, spacing: TrawlDesign.Space.md) {
         Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-          .font(.system(size: 16, weight: .semibold))
-          .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : .secondary)
+          .font(TrawlDesign.Typography.body.weight(.semibold))
+          .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
           .padding(.top, 2)
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: TrawlDesign.Space.xs) {
           Text(title)
-            .font(.system(size: 14, weight: .semibold))
+            .font(TrawlDesign.Typography.sectionHeader)
             .foregroundStyle(TrawlDesign.Colors.ink)
           Text(detail)
-            .font(.system(size: 12.5))
-            .foregroundStyle(.secondary)
+            .font(TrawlDesign.Typography.meta)
+            .foregroundStyle(TrawlDesign.Colors.mutedInk)
             .fixedSize(horizontal: false, vertical: true)
         }
         Spacer(minLength: 0)
       }
-      .padding(14)
+      .padding(TrawlDesign.Space.md)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
-        selected ? TrawlDesign.Colors.selectBlueSurface : TrawlDesign.Colors.surface.opacity(0.6),
-        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+        selected ? TrawlDesign.Colors.selectBlueSurface : TrawlDesign.Colors.surface,
+        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
       )
       .overlay(
-        RoundedRectangle(cornerRadius: 11, style: .continuous)
+        RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
           .stroke(
             selected ? TrawlDesign.Colors.selectBlue.opacity(0.5) : TrawlDesign.Colors.hairline,
             lineWidth: selected ? 1.5 : 1

@@ -3,9 +3,10 @@ import TrawlClient
 import TrawlCore
 
 /// Overview (Home) view:
-/// 1. Top: "Your archive" actionable constellation connecting your apps -> archive host -> AI & Other Macs.
-/// 2. Bottom: "Items per week" fixed-height linear weekly curves (never resizing or jumping),
-///    with live hover readout, keyboard date picker, and 1Y / 5Y / All zoom.
+/// 1. Top: "Your archive" actionable constellation connecting apps -> archive host -> AI & Other Macs
+///    using dedicated connector columns so bezier curves never cross or overlap any card.
+/// 2. Bottom: "Items per week" fixed-height weekly curves using the sqrt-recency time axis
+///    (`ArchiveTimelineTimeAxis`) and power-law vertical intensity (`ArchiveTimelineIntensityScale`).
 struct ArchiveOverviewView: View {
   @Environment(TrawlerIconStore.self) private var iconStore
 
@@ -41,27 +42,43 @@ struct ArchiveOverviewView: View {
     trawlers.contains { $0.id.registeredTrawlerIdentity == "contacts" }
   }
 
+  private var timeAxis: ArchiveTimelineTimeAxis {
+    let now = Date()
+    let calendar = Calendar(identifier: .gregorian)
+    switch chartSpan {
+    case .oneYear:
+      let start = calendar.date(byAdding: .year, value: -1, to: now) ?? now.addingTimeInterval(-365 * 86_400)
+      return ArchiveTimelineTimeAxis(referenceDate: now, earliestDatedRecordTime: start)
+    case .fiveYears:
+      let start = calendar.date(byAdding: .year, value: -5, to: now) ?? now.addingTimeInterval(-5 * 365 * 86_400)
+      return ArchiveTimelineTimeAxis(referenceDate: now, earliestDatedRecordTime: start)
+    case .all:
+      let histories = datedTrawlers.compactMap { statusesByID[$0.id]?.archiveWeeklyHistory }
+      return ArchiveTimelineTimeAxis.build(from: histories, referenceDate: now)
+    }
+  }
+
   var body: some View {
     GeometryReader { outerProxy in
-      let isWideLayout = outerProxy.size.width >= 860
+      let isWideLayout = outerProxy.size.width >= 900
       ScrollView {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
           constellationCard(isWideLayout: isWideLayout)
           weeklyLinesCard
         }
-        .padding(16)
+        .padding(TrawlDesign.Space.md)
         .frame(width: outerProxy.size.width, alignment: .topLeading)
       }
-      .background(TrawlDesign.Colors.surface.opacity(0.45))
+      .background(TrawlDesign.Colors.surface)
     }
   }
 
   // MARK: - Top: Your archive constellation
 
   private func constellationCard(isWideLayout: Bool) -> some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
       Text("Your archive")
-        .font(.system(size: 14, weight: .semibold))
+        .font(TrawlDesign.Typography.sectionHeader)
         .foregroundStyle(TrawlDesign.Colors.ink)
 
       if isWideLayout {
@@ -70,7 +87,7 @@ struct ArchiveOverviewView: View {
         compactConstellation
       }
     }
-    .padding(14)
+    .padding(TrawlDesign.Space.md)
     .background(
       TrawlDesign.Colors.paper,
       in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
@@ -82,34 +99,43 @@ struct ArchiveOverviewView: View {
   }
 
   private var wideConstellation: some View {
-    HStack(alignment: .center, spacing: 18) {
-      // Left: Your apps in two tidy columns
+    let rowCount = max(1, (trawlers.count + 1) / 2)
+    let rightCardCount = isRemoteArchive ? 1 : 3
+
+    return HStack(alignment: .center, spacing: 0) {
       appColumnsGrid
         .frame(maxWidth: .infinity, alignment: .leading)
 
-      // Center: Host hub
-      centerHostHub
-        .frame(width: 170)
+      ConstellationConnectorColumn(
+        direction: .leftToHub,
+        branchCount: rowCount
+      )
+      .frame(width: 32)
+      .frame(maxHeight: .infinity)
 
-      // Right: Three honest actionable cards
+      centerHostHub
+        .frame(width: 164)
+
+      ConstellationConnectorColumn(
+        direction: .hubToRight,
+        branchCount: rightCardCount
+      )
+      .frame(width: 32)
+      .frame(maxHeight: .infinity)
+
       rightConnectionCards
-        .frame(width: 308)
+        .frame(width: 300)
     }
-    .frame(maxWidth: .infinity)
-    .background {
-      GeometryReader { proxy in
-        ConstellationConnectingLines(size: proxy.size)
-      }
-      .allowsHitTesting(false)
-    }
+    .fixedSize(horizontal: false, vertical: true)
   }
 
   private var compactConstellation: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      HStack(alignment: .top, spacing: 14) {
+    VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
+      HStack(alignment: .top, spacing: TrawlDesign.Space.md) {
         centerHostHub
-          .frame(width: 176)
+          .frame(width: 164)
         rightConnectionCards
+          .frame(maxWidth: .infinity)
       }
       appColumnsGrid
     }
@@ -120,14 +146,14 @@ struct ArchiveOverviewView: View {
     let leftColumn = Array(trawlers.prefix(split))
     let rightColumn = Array(trawlers.dropFirst(split))
 
-    return HStack(alignment: .top, spacing: 10) {
-      VStack(spacing: 8) {
+    return HStack(alignment: .top, spacing: TrawlDesign.Space.sm) {
+      VStack(spacing: TrawlDesign.Space.xs) {
         ForEach(leftColumn) { trawler in
           constellationAppNode(for: trawler)
         }
       }
       if !rightColumn.isEmpty {
-        VStack(spacing: 8) {
+        VStack(spacing: TrawlDesign.Space.xs) {
           ForEach(rightColumn) { trawler in
             constellationAppNode(for: trawler)
           }
@@ -152,18 +178,18 @@ struct ArchiveOverviewView: View {
       }
     }()
 
-    return HStack(spacing: 6) {
+    return HStack(spacing: TrawlDesign.Space.xs) {
       Button {
         onBrowseApp(trawler.id)
       } label: {
-        HStack(spacing: 7) {
-          TrawlerIconView(registeredTrawler: trawler.id, size: 17)
+        HStack(spacing: TrawlDesign.Space.sm) {
+          TrawlerIconView(registeredTrawler: trawler.id, size: 16)
           Text(trawler.registeredTrawlerDisplayName)
-            .font(.system(size: 12, weight: .semibold))
+            .font(TrawlDesign.Typography.laneLabel)
             .foregroundStyle(TrawlDesign.Colors.ink)
             .lineLimit(1)
             .layoutPriority(1)
-          Spacer(minLength: 4)
+          Spacer(minLength: TrawlDesign.Space.xs)
           if needsAttention && inlineActionTitle == nil {
             Circle()
               .fill(TrawlDesign.Colors.warningAmber)
@@ -185,28 +211,28 @@ struct ArchiveOverviewView: View {
           onRunAttentionAction(trawler.id, action)
         }
         .buttonStyle(.plain)
-        .font(.system(size: 10, weight: .semibold))
+        .font(TrawlDesign.Typography.caption)
         .foregroundStyle(TrawlDesign.Colors.warningAmber)
-        .padding(.horizontal, 6)
+        .padding(.horizontal, TrawlDesign.Space.sm)
         .padding(.vertical, 2)
         .background(
-          TrawlDesign.Colors.warningAmber.opacity(0.14),
-          in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+          TrawlDesign.Colors.warningAmberSurface,
+          in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
         )
         .fixedSize()
       }
     }
-    .padding(.horizontal, 9)
-    .frame(maxWidth: .infinity, minHeight: 32, maxHeight: 32, alignment: .leading)
+    .padding(.horizontal, TrawlDesign.Space.sm)
+    .frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30, alignment: .leading)
     .background(
-      needsAttention ? TrawlDesign.Colors.warningAmber.opacity(0.04) : TrawlDesign.Colors.paper,
-      in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+      needsAttention ? TrawlDesign.Colors.warningAmberSurface : TrawlDesign.Colors.paper,
+      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
     )
     .overlay(
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
+      RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
         .stroke(
           needsAttention
-            ? TrawlDesign.Colors.warningAmber.opacity(0.40)
+            ? TrawlDesign.Colors.warningAmber.opacity(0.45)
             : TrawlDesign.Colors.hairline,
           lineWidth: 1
         )
@@ -216,40 +242,39 @@ struct ArchiveOverviewView: View {
 
   private var centerHostHub: some View {
     Button(action: onOpenHostSwitcher) {
-      VStack(spacing: 5) {
-        OpenTrawlMarkIcon(size: 28)
+      VStack(spacing: TrawlDesign.Space.xs) {
+        OpenTrawlMarkIcon(size: 26)
         Text(hostDisplayName)
-          .font(.system(size: 13.5, weight: .bold))
+          .font(TrawlDesign.Typography.sectionHeader)
           .foregroundStyle(TrawlDesign.Colors.ink)
           .lineLimit(1)
         Text("\(totalItemCount.formatted()) items")
-          .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
+          .font(TrawlDesign.Typography.monoSmall.weight(.semibold))
           .monospacedDigit()
           .foregroundStyle(TrawlDesign.Colors.ink)
         Text(freshnessLine)
-          .font(.system(size: 11))
+          .font(TrawlDesign.Typography.caption)
           .foregroundStyle(TrawlDesign.Colors.mutedInk)
           .lineLimit(1)
       }
-      .padding(.vertical, 16)
-      .padding(.horizontal, 14)
+      .padding(.vertical, TrawlDesign.Space.md)
+      .padding(.horizontal, TrawlDesign.Space.md)
       .frame(maxWidth: .infinity)
       .background(
         TrawlDesign.Colors.paper,
-        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
       )
       .overlay(
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-          .stroke(TrawlDesign.Colors.hairline, lineWidth: 1.5)
+        RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+          .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
       )
-      .shadow(color: .black.opacity(0.04), radius: 10, y: 3)
     }
     .buttonStyle(.plain)
     .help("Switch archive host")
   }
 
   private var rightConnectionCards: some View {
-    VStack(spacing: 10) {
+    VStack(spacing: TrawlDesign.Space.sm) {
       if !isRemoteArchive {
         connectionCard(
           title: "AI apps on this Mac",
@@ -285,114 +310,77 @@ struct ArchiveOverviewView: View {
     isProminent: Bool,
     action: @escaping () -> Void
   ) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack(alignment: .center, spacing: 8) {
+    VStack(alignment: .leading, spacing: TrawlDesign.Space.xs) {
+      HStack(alignment: .center, spacing: TrawlDesign.Space.sm) {
         Text(title)
-          .font(.system(size: 12.5, weight: .semibold))
+          .font(TrawlDesign.Typography.laneLabel.weight(.semibold))
           .foregroundStyle(TrawlDesign.Colors.ink)
           .lineLimit(1)
-        Spacer(minLength: 4)
+        Spacer(minLength: TrawlDesign.Space.xs)
         Button(buttonTitle, action: action)
           .buttonStyle(.plain)
-          .font(.system(size: 11, weight: .semibold))
+          .font(TrawlDesign.Typography.caption.weight(.semibold))
           .foregroundStyle(isProminent ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.ink)
-          .padding(.horizontal, 9)
-          .padding(.vertical, 4)
+          .padding(.horizontal, TrawlDesign.Space.sm)
+          .padding(.vertical, TrawlDesign.Space.xs)
           .background(
             isProminent ? TrawlDesign.Colors.selectBlueSurface : TrawlDesign.Colors.surface,
-            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
           )
           .fixedSize()
       }
       Text(subtitle)
-        .font(.system(size: 11.5))
+        .font(TrawlDesign.Typography.meta)
         .foregroundStyle(TrawlDesign.Colors.mutedInk)
         .fixedSize(horizontal: false, vertical: true)
     }
-    .padding(12)
+    .padding(TrawlDesign.Space.md)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(
       TrawlDesign.Colors.paper,
-      in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
     )
     .overlay(
-      RoundedRectangle(cornerRadius: 11, style: .continuous)
+      RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
         .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
     )
   }
 
-  // MARK: - Bottom: Original Per-App Linear Weekly Lines (Fixed Row Height)
-
-  private var timelineWindowBounds: (start: Date, end: Date) {
-    let now = Date()
-    let calendar = Calendar(identifier: .gregorian)
-    switch chartSpan {
-    case .oneYear:
-      let start = calendar.date(byAdding: .year, value: -1, to: now) ?? now.addingTimeInterval(-365 * 86_400)
-      return (start, now)
-    case .fiveYears:
-      let start = calendar.date(byAdding: .year, value: -5, to: now) ?? now.addingTimeInterval(-5 * 365 * 86_400)
-      return (start, now)
-    case .all:
-      let histories = datedTrawlers.compactMap { statusesByID[$0.id]?.archiveWeeklyHistory }
-      let axis = ArchiveTimelineTimeAxis.build(from: histories, referenceDate: now)
-      return (axis.earliestAxisDate, now)
-    }
-  }
-
-  private var axisYearLabels: [String] {
-    let bounds = timelineWindowBounds
-    let calendar = Calendar(identifier: .gregorian)
-    let startYear = calendar.component(.year, from: bounds.start)
-    let endYear = calendar.component(.year, from: bounds.end)
-    guard endYear > startYear else { return ["\(endYear)"] }
-    let span = endYear - startYear
-    let step = max(1, Int(ceil(Double(span) / 8.0)))
-    var years: [String] = []
-    var year = startYear
-    while year <= endYear {
-      years.append("\(year)")
-      year += step
-    }
-    if years.last != "\(endYear)" {
-      years.append("\(endYear)")
-    }
-    return years
-  }
+  // MARK: - Bottom: Per-App Sqrt-Recency + Power-Law Weekly Curves
 
   private var weeklyLinesCard: some View {
-    let bounds = timelineWindowBounds
+    let axis = timeAxis
 
     return VStack(spacing: 0) {
-      HStack(spacing: 10) {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+      HStack(spacing: TrawlDesign.Space.sm) {
+        HStack(alignment: .firstTextBaseline, spacing: TrawlDesign.Space.sm) {
           Text("Items per week")
-            .font(.system(size: 14, weight: .semibold))
+            .font(TrawlDesign.Typography.sectionHeader)
             .foregroundStyle(TrawlDesign.Colors.ink)
           Text("Drag across a row to pick dates.")
-            .font(.system(size: 11.5))
+            .font(TrawlDesign.Typography.meta)
             .foregroundStyle(TrawlDesign.Colors.mutedInk)
         }
-        Spacer(minLength: 8)
+        Spacer(minLength: TrawlDesign.Space.sm)
         if let hovered = hoveredWeek {
           Button {
             let weekEnd = hovered.weekStart.addingTimeInterval(7 * 86_400 - 1)
             onSelectDateRange(hovered.trawlerID, hovered.weekStart, weekEnd)
           } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: TrawlDesign.Space.sm) {
               Text("\(hovered.trawlerName) · week of \(hovered.weekStart.formatted(.dateTime.day().month(.abbreviated).year()))")
-                .font(.system(size: 11.5, weight: .semibold))
+                .font(TrawlDesign.Typography.caption.weight(.semibold))
               Text("\(hovered.count.formatted()) items")
                 .font(TrawlDesign.Typography.monoSmall)
               Text("Show →")
-                .font(.system(size: 11, weight: .semibold))
+                .font(TrawlDesign.Typography.caption.weight(.semibold))
             }
             .foregroundStyle(TrawlDesign.Colors.matchRed)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .padding(.horizontal, TrawlDesign.Space.sm)
+            .padding(.vertical, TrawlDesign.Space.xs)
             .background(
               TrawlDesign.Colors.matchRed.opacity(0.10),
-              in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+              in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
             )
           }
           .buttonStyle(.plain)
@@ -404,9 +392,9 @@ struct ArchiveOverviewView: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .popover(isPresented: $isShowingDatePickerPopover, arrowEdge: .bottom) {
-          VStack(alignment: .leading, spacing: 12) {
+          VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
             Text("Choose dates")
-              .font(.headline)
+              .font(TrawlDesign.Typography.sectionHeader)
             DatePicker("From", selection: $customStartDate, displayedComponents: .date)
             DatePicker("To", selection: $customEndDate, displayedComponents: .date)
             HStack {
@@ -419,52 +407,82 @@ struct ArchiveOverviewView: View {
                 onSelectDateRange(nil, start, end)
               }
               .buttonStyle(.borderedProminent)
+              .tint(TrawlDesign.Colors.selectBlue)
             }
           }
-          .padding(14)
+          .padding(TrawlDesign.Space.md)
           .frame(width: 280)
         }
 
-        Picker("Time range", selection: $chartSpan) {
+        HStack(spacing: 2) {
           ForEach(OverviewChartSpan.allCases) { span in
-            Text(span.rawValue).tag(span)
+            let selected = chartSpan == span
+            Button(span.rawValue) {
+              chartSpan = span
+            }
+            .buttonStyle(.plain)
+            .font(TrawlDesign.Typography.caption.weight(selected ? .semibold : .medium))
+            .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
+            .padding(.horizontal, TrawlDesign.Space.sm)
+            .padding(.vertical, TrawlDesign.Space.xs)
+            .background(
+              selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
+              in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
+            )
           }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(width: 116)
+        .padding(2)
+        .background(
+          TrawlDesign.Colors.surface,
+          in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
+        )
+        .overlay(
+          RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
+            .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
+        )
       }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 11)
+      .padding(.horizontal, TrawlDesign.Space.md)
+      .padding(.vertical, TrawlDesign.Space.sm)
 
       Divider()
 
-      // Axis row
-      HStack(spacing: 12) {
+      // Sqrt-recency axis row matching ArchiveTimelineTimeAxis ticks
+      HStack(spacing: TrawlDesign.Space.md) {
         Text("App")
-          .font(.system(size: 11, weight: .semibold))
+          .font(TrawlDesign.Typography.monoAxis)
           .foregroundStyle(TrawlDesign.Colors.mutedInk)
-          .frame(width: 124, alignment: .leading)
-        HStack {
-          ForEach(Array(axisYearLabels.enumerated()), id: \.offset) { index, label in
-            if index > 0 { Spacer() }
-            Text(label)
-              .font(TrawlDesign.Typography.monoAxis)
-              .foregroundStyle(TrawlDesign.Colors.mutedInk)
+          .frame(width: 120, alignment: .leading)
+
+        GeometryReader { proxy in
+          let ticks = axis.yearTicks(forTrackWidth: Double(proxy.size.width))
+          ZStack(alignment: .leading) {
+            ForEach(ticks) { tick in
+              let x = CGFloat(tick.normalizedPosition) * proxy.size.width
+              Text(tick.label)
+                .font(TrawlDesign.Typography.monoAxis)
+                .foregroundStyle(tick.isToday ? TrawlDesign.Colors.ink : TrawlDesign.Colors.mutedInk)
+                .fixedSize()
+                .position(
+                  x: min(max(x, 16), max(16, proxy.size.width - 18)),
+                  y: proxy.size.height / 2
+                )
+            }
           }
         }
+        .frame(height: 24)
+
         Text("Total")
-          .font(.system(size: 11, weight: .semibold))
+          .font(TrawlDesign.Typography.monoAxis)
           .foregroundStyle(TrawlDesign.Colors.mutedInk)
           .frame(width: 72, alignment: .trailing)
       }
-      .padding(.horizontal, 16)
-      .frame(height: 26)
-      .background(TrawlDesign.Colors.surface.opacity(0.75))
+      .padding(.horizontal, TrawlDesign.Space.md)
+      .frame(height: 24)
+      .background(TrawlDesign.Colors.surface)
 
       Divider()
 
-      // Fixed-height rows (34pt each — never resizes, never jumps!)
+      // Fixed-height rows (30pt each — never resizes, never jumps)
       VStack(spacing: 0) {
         ForEach(datedTrawlers) { trawler in
           OverviewWeeklyCurveRow(
@@ -472,8 +490,7 @@ struct ArchiveOverviewView: View {
             status: statusesByID[trawler.id],
             totalCount: operabilityByID[trawler.id]?.archivedItemCount ?? 0,
             accentColor: iconStore.laneAccentColor(for: trawler.id),
-            windowStart: bounds.start,
-            windowEnd: bounds.end,
+            axis: axis,
             hoveredWeek: $hoveredWeek,
             dragRange: $dragRange,
             onBrowseApp: { onBrowseApp(trawler.id) },
@@ -489,18 +506,18 @@ struct ArchiveOverviewView: View {
       HStack {
         if hasUndatedContacts {
           Text("Contacts have no dates, so they aren't shown.")
-            .font(.system(size: 11.5))
+            .font(TrawlDesign.Typography.meta)
             .foregroundStyle(TrawlDesign.Colors.mutedInk)
         }
         Spacer()
         Button("Show all items →", action: onBrowseAllItems)
           .buttonStyle(.plain)
-          .font(.system(size: 11.5, weight: .medium))
+          .font(TrawlDesign.Typography.meta.weight(.medium))
           .foregroundStyle(TrawlDesign.Colors.selectBlue)
       }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 10)
-      .background(TrawlDesign.Colors.surface.opacity(0.55))
+      .padding(.horizontal, TrawlDesign.Space.md)
+      .padding(.vertical, TrawlDesign.Space.sm)
+      .background(TrawlDesign.Colors.surface)
     }
     .background(
       TrawlDesign.Colors.paper,
@@ -536,8 +553,7 @@ private struct OverviewWeeklyCurveRow: View {
   let status: TrawlerStatus?
   let totalCount: UInt64
   let accentColor: Color
-  let windowStart: Date
-  let windowEnd: Date
+  let axis: ArchiveTimelineTimeAxis
   @Binding var hoveredWeek: HoveredTimelineWeek?
   @Binding var dragRange: TimelineDragSelection?
   let onBrowseApp: () -> Void
@@ -548,7 +564,7 @@ private struct OverviewWeeklyCurveRow: View {
       return []
     }
     return buckets.filter { bucket in
-      bucket.utcWeekStartTime >= windowStart && bucket.utcWeekStartTime <= windowEnd
+      bucket.utcWeekStartTime >= axis.earliestAxisDate && bucket.utcWeekStartTime <= axis.referenceDate
     }
   }
 
@@ -557,16 +573,16 @@ private struct OverviewWeeklyCurveRow: View {
   }
 
   var body: some View {
-    HStack(spacing: 12) {
+    HStack(spacing: TrawlDesign.Space.md) {
       Button(action: onBrowseApp) {
-        HStack(spacing: 8) {
-          TrawlerIconView(registeredTrawler: trawler.id, size: 18)
+        HStack(spacing: TrawlDesign.Space.sm) {
+          TrawlerIconView(registeredTrawler: trawler.id, size: 17)
           Text(trawler.registeredTrawlerDisplayName)
-            .font(.system(size: 12.5, weight: isHoveredRow ? .semibold : .medium))
+            .font(isHoveredRow ? TrawlDesign.Typography.laneLabel.weight(.semibold) : TrawlDesign.Typography.laneLabel)
             .foregroundStyle(TrawlDesign.Colors.ink)
             .lineLimit(1)
         }
-        .frame(width: 124, alignment: .leading)
+        .frame(width: 120, alignment: .leading)
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
@@ -577,7 +593,7 @@ private struct OverviewWeeklyCurveRow: View {
 
         ZStack(alignment: .leading) {
           Canvas { context, size in
-            drawLinearCurve(in: &context, size: size)
+            drawPowerLawSqrtCurve(in: &context, size: size)
           }
 
           if let drag = dragRange, drag.trawlerID == trawler.id {
@@ -628,11 +644,13 @@ private struct OverviewWeeklyCurveRow: View {
               let endFrac = min(max(value.location.x / width, 0), 1)
               dragRange = nil
               if abs(endFrac - startFrac) * width > 6 {
-                let d1 = date(forFraction: min(startFrac, endFrac))
-                let d2 = date(forFraction: max(startFrac, endFrac))
-                onSelectDateRange(d1, d2)
+                let range = axis.inclusiveCalendarDayRange(
+                  fromNormalizedPosition: Double(min(startFrac, endFrac)),
+                  toNormalizedPosition: Double(max(startFrac, endFrac))
+                )
+                onSelectDateRange(range.earliestInclusive, range.latestInclusive)
               } else {
-                let clickedDate = date(forFraction: endFrac)
+                let clickedDate = axis.date(forDatedNormalizedPosition: Double(endFrac))
                 let weekStart =
                   Calendar(identifier: .gregorian).dateInterval(of: .weekOfYear, for: clickedDate)?.start
                   ?? clickedDate
@@ -641,7 +659,7 @@ private struct OverviewWeeklyCurveRow: View {
             }
         )
       }
-      .frame(height: 24)
+      .frame(height: 22)
 
       Text(totalCount.formatted())
         .font(TrawlDesign.Typography.monoSmall)
@@ -649,18 +667,13 @@ private struct OverviewWeeklyCurveRow: View {
         .foregroundStyle(TrawlDesign.Colors.mutedInk)
         .frame(width: 72, alignment: .trailing)
     }
-    .padding(.horizontal, 16)
-    .frame(height: 34)
+    .padding(.horizontal, TrawlDesign.Space.md)
+    .frame(height: 30)
     .background(isHoveredRow ? TrawlDesign.Colors.matchRed.opacity(0.05) : Color.clear)
   }
 
-  private func date(forFraction fraction: CGFloat) -> Date {
-    let span = max(windowEnd.timeIntervalSince(windowStart), 1)
-    return windowStart.addingTimeInterval(TimeInterval(fraction) * span)
-  }
-
   private func updateHover(fraction: CGFloat) {
-    let targetDate = date(forFraction: fraction)
+    let targetDate = axis.date(forDatedNormalizedPosition: Double(fraction))
     let nearest = visibleBuckets.min { lhs, rhs in
       abs(lhs.utcWeekStartTime.timeIntervalSince(targetDate))
         < abs(rhs.utcWeekStartTime.timeIntervalSince(targetDate))
@@ -680,7 +693,7 @@ private struct OverviewWeeklyCurveRow: View {
     )
   }
 
-  private func drawLinearCurve(in context: inout GraphicsContext, size: CGSize) {
+  private func drawPowerLawSqrtCurve(in context: inout GraphicsContext, size: CGSize) {
     let baselineY = size.height - 2
     var baseline = Path()
     baseline.move(to: CGPoint(x: 0, y: baselineY))
@@ -689,11 +702,10 @@ private struct OverviewWeeklyCurveRow: View {
 
     let buckets = visibleBuckets
     guard !buckets.isEmpty else { return }
-    let maxCount = Double(buckets.map(\.recordCount).max() ?? 0)
-    guard maxCount > 0 else { return }
+    let rowMax = buckets.map(\.recordCount).max() ?? 0
+    guard rowMax > 0 else { return }
 
-    let span = max(windowEnd.timeIntervalSince(windowStart), 1)
-    let usableHeight = max(size.height - 5, 4)
+    let usableHeight = max(size.height - 4, 4)
 
     var strokePath = Path()
     var fillPath = Path()
@@ -702,12 +714,15 @@ private struct OverviewWeeklyCurveRow: View {
     var hasStarted = false
 
     for bucket in buckets {
-      let frac = min(max(bucket.utcWeekStartTime.timeIntervalSince(windowStart) / span, 0), 1)
-      let x = CGFloat(frac) * size.width
-      // Honest linear scale (minimum 1.5pt lift when > 0 so quiet weeks remain visible).
-      let norm = Double(bucket.recordCount) / maxCount
+      let x = CGFloat(axis.datedNormalizedPosition(for: bucket.utcWeekStartTime)) * size.width
+      // Power-law vertical intensity (pow(ratio, 0.65)) so bursty spikes stay prominent
+      // while ordinary active weeks remain clearly legible.
+      let heightFraction = ArchiveTimelineIntensityScale.heightFraction(
+        forRecordCount: bucket.recordCount,
+        rowMaximumRecordCount: rowMax
+      )
       let y = bucket.recordCount > 0
-        ? baselineY - max(1.5, CGFloat(norm) * usableHeight)
+        ? baselineY - max(1.5, CGFloat(heightFraction) * usableHeight)
         : baselineY
       let pt = CGPoint(x: x, y: y)
 
@@ -719,7 +734,6 @@ private struct OverviewWeeklyCurveRow: View {
       } else if let prev = previousWeekStart,
         bucket.utcWeekStartTime.timeIntervalSince(prev) > 21 * 86_400
       {
-        // Drop back to zero across multi-week gaps so empty periods stay honest.
         let dropX = min(x, previousX + 2)
         let riseX = max(dropX, x - 2)
         strokePath.addLine(to: CGPoint(x: dropX, y: baselineY))
@@ -739,7 +753,7 @@ private struct OverviewWeeklyCurveRow: View {
     if hasStarted {
       fillPath.addLine(to: CGPoint(x: previousX, y: baselineY))
       fillPath.closeSubpath()
-      context.fill(fillPath, with: .color(accentColor.opacity(0.16)))
+      context.fill(fillPath, with: .color(accentColor.opacity(0.18)))
       context.stroke(
         strokePath,
         with: .color(accentColor.opacity(0.92)),
@@ -749,42 +763,51 @@ private struct OverviewWeeklyCurveRow: View {
   }
 }
 
-private struct ConstellationConnectingLines: View {
-  let size: CGSize
+/// Dedicated fixed-width column for Constellation bezier curves so connectors
+/// start and end cleanly at card borders and never draw behind or over content.
+private struct ConstellationConnectorColumn: View {
+  enum Direction {
+    case leftToHub
+    case hubToRight
+  }
+
+  let direction: Direction
+  let branchCount: Int
 
   var body: some View {
     Canvas { context, size in
-      let rightColumnWidth: CGFloat = 308
-      let hubWidth: CGFloat = 170
-      let spacing: CGFloat = 18
-      let rightEdgeX = max(size.width - rightColumnWidth, size.width * 0.65)
-      let hubRightX = rightEdgeX - spacing
-      let hubLeftX = hubRightX - hubWidth
-      let leftEdgeX = max(120, hubLeftX - spacing)
-      let centerY = size.height * 0.50
+      let count = max(1, branchCount)
+      let centerY = size.height / 2
+      let w = size.width
 
-      for idx in 0..<5 {
-        let y = size.height * (0.14 + CGFloat(idx) * 0.18)
-        var path = Path()
-        path.move(to: CGPoint(x: leftEdgeX, y: y))
-        path.addCurve(
-          to: CGPoint(x: hubLeftX, y: centerY + (CGFloat(idx) - 2) * 5),
-          control1: CGPoint(x: leftEdgeX + spacing * 0.6, y: y),
-          control2: CGPoint(x: hubLeftX - spacing * 0.6, y: centerY)
-        )
-        context.stroke(path, with: .color(TrawlDesign.Colors.hairline.opacity(0.6)), lineWidth: 1.2)
-      }
+      for idx in 0..<count {
+        let fraction = (CGFloat(idx) + 0.5) / CGFloat(count)
+        let outerY = size.height * fraction
+        let hubOffset = (fraction - 0.5) * min(size.height * 0.28, 44)
+        let hubY = centerY + hubOffset
 
-      for idx in 0..<3 {
-        let y = size.height * (0.20 + CGFloat(idx) * 0.30)
         var path = Path()
-        path.move(to: CGPoint(x: hubRightX, y: centerY + (CGFloat(idx) - 1) * 7))
-        path.addCurve(
-          to: CGPoint(x: rightEdgeX, y: y),
-          control1: CGPoint(x: hubRightX + spacing * 0.6, y: centerY),
-          control2: CGPoint(x: rightEdgeX - spacing * 0.6, y: y)
+        switch direction {
+        case .leftToHub:
+          path.move(to: CGPoint(x: 0, y: outerY))
+          path.addCurve(
+            to: CGPoint(x: w, y: hubY),
+            control1: CGPoint(x: w * 0.55, y: outerY),
+            control2: CGPoint(x: w * 0.45, y: hubY)
+          )
+        case .hubToRight:
+          path.move(to: CGPoint(x: 0, y: hubY))
+          path.addCurve(
+            to: CGPoint(x: w, y: outerY),
+            control1: CGPoint(x: w * 0.55, y: hubY),
+            control2: CGPoint(x: w * 0.45, y: outerY)
+          )
+        }
+        context.stroke(
+          path,
+          with: .color(TrawlDesign.Colors.hairline),
+          style: StrokeStyle(lineWidth: 1.2, lineCap: .round)
         )
-        context.stroke(path, with: .color(TrawlDesign.Colors.hairline.opacity(0.7)), lineWidth: 1.3)
       }
     }
   }

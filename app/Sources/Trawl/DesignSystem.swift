@@ -73,6 +73,10 @@ enum TrawlDesign {
       light: NSColor(srgbRed: 0.769, green: 0.482, blue: 0.0, alpha: 1.0),
       dark: NSColor(srgbRed: 0.941, green: 0.659, blue: 0.188, alpha: 1.0)
     )
+    static let warningAmberSurface = dynamicColor(
+      light: NSColor(srgbRed: 0.769, green: 0.482, blue: 0.0, alpha: 0.08),
+      dark: NSColor(srgbRed: 0.941, green: 0.659, blue: 0.188, alpha: 0.14)
+    )
 
     static func dynamicColor(light: NSColor, dark: NSColor) -> Color {
       Color(
@@ -128,8 +132,9 @@ enum TrawlDesign {
   enum Typography {
     static let pageTitle = Font.system(size: 24, weight: .semibold)
     static let sectionHeader = Font.system(size: 13, weight: .semibold)
-    static let body = Font.system(size: 15, weight: .regular)
-    static let meta = Font.system(size: 13, weight: .regular)
+    static let body = Font.system(size: 14, weight: .regular)
+    static let meta = Font.system(size: 12, weight: .regular)
+    static let caption = Font.system(size: 11, weight: .medium)
     static let laneLabel = Font.system(size: 12.5, weight: .medium)
     static let monoSmall = Font.system(size: 11.5, weight: .regular, design: .monospaced)
     static let monoAxis = Font.system(size: 10.5, weight: .medium, design: .monospaced)

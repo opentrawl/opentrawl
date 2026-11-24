@@ -39,17 +39,17 @@ struct AppSidebarRailView: View {
     VStack(spacing: 0) {
       HStack {
         Text("APPS")
-          .font(.system(size: 10.5, weight: .semibold))
+          .font(TrawlDesign.Typography.monoAxis)
           .tracking(0.5)
           .foregroundStyle(TrawlDesign.Colors.mutedInk)
         Spacer()
         Text(mode == .overview ? "Items" : "Results")
-          .font(.system(size: 10.5, weight: .medium))
+          .font(TrawlDesign.Typography.monoAxis)
           .foregroundStyle(TrawlDesign.Colors.mutedInk)
       }
-      .padding(.horizontal, 14)
-      .padding(.top, 12)
-      .padding(.bottom, 8)
+      .padding(.horizontal, TrawlDesign.Space.md)
+      .padding(.top, TrawlDesign.Space.md)
+      .padding(.bottom, TrawlDesign.Space.sm)
 
       ScrollView {
         VStack(spacing: 2) {
@@ -61,14 +61,14 @@ struct AppSidebarRailView: View {
             Button(action: onOpenPluginsSettings) {
               HStack {
                 Text("Add a plugin…")
-                  .font(.system(size: 12, weight: .medium))
+                  .font(TrawlDesign.Typography.meta.weight(.medium))
                   .foregroundStyle(TrawlDesign.Colors.mutedInk)
                 Spacer()
               }
-              .padding(.horizontal, 10)
-              .padding(.vertical, 7)
+              .padding(.horizontal, TrawlDesign.Space.sm)
+              .padding(.vertical, TrawlDesign.Space.sm)
               .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
                   .strokeBorder(
                     TrawlDesign.Colors.hairline,
                     style: StrokeStyle(lineWidth: 1, dash: [4, 3])
@@ -76,45 +76,45 @@ struct AppSidebarRailView: View {
               )
             }
             .buttonStyle(.plain)
-            .padding(.top, 8)
+            .padding(.top, TrawlDesign.Space.sm)
           }
         }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 12)
+        .padding(.horizontal, TrawlDesign.Space.sm)
+        .padding(.bottom, TrawlDesign.Space.md)
       }
 
       Divider()
 
       Button(action: onOpenHostSwitcher) {
-        HStack(spacing: 8) {
+        HStack(spacing: TrawlDesign.Space.sm) {
           VStack(alignment: .leading, spacing: 2) {
             Text(hostDisplayName)
-              .font(.system(size: 12.5, weight: .semibold))
+              .font(TrawlDesign.Typography.laneLabel.weight(.semibold))
               .foregroundStyle(TrawlDesign.Colors.ink)
               .lineLimit(1)
             Text(hostSubtitle)
-              .font(.system(size: 11))
+              .font(TrawlDesign.Typography.caption)
               .foregroundStyle(TrawlDesign.Colors.mutedInk)
               .lineLimit(1)
           }
           Spacer()
           Image(systemName: "chevron.up.chevron.down")
-            .font(.system(size: 10, weight: .medium))
+            .font(TrawlDesign.Typography.monoAxis)
             .foregroundStyle(TrawlDesign.Colors.mutedInk)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, TrawlDesign.Space.sm)
+        .padding(.vertical, TrawlDesign.Space.sm)
         .background(
           TrawlDesign.Colors.paper,
-          in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+          in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
         )
         .overlay(
-          RoundedRectangle(cornerRadius: 9, style: .continuous)
+          RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
             .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
         )
       }
       .buttonStyle(.plain)
-      .padding(10)
+      .padding(TrawlDesign.Space.sm)
     }
     .frame(width: TrawlDesign.wideSidebarWidth)
     .background(TrawlDesign.Colors.surface)
@@ -137,10 +137,10 @@ struct AppSidebarRailView: View {
     return Button {
       onSelectTrawler(nil)
     } label: {
-      HStack(spacing: 9) {
-        OpenTrawlMarkIcon(size: 19)
+      HStack(spacing: TrawlDesign.Space.sm) {
+        OpenTrawlMarkIcon(size: 18)
         Text("All apps")
-          .font(.system(size: 13, weight: selected ? .semibold : .medium))
+          .font(selected ? TrawlDesign.Typography.laneLabel.weight(.semibold) : TrawlDesign.Typography.laneLabel)
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.ink)
         Spacer()
         Text(countText)
@@ -148,15 +148,15 @@ struct AppSidebarRailView: View {
           .monospacedDigit()
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
       }
-      .padding(.horizontal, 10)
-      .padding(.vertical, 7)
+      .padding(.horizontal, TrawlDesign.Space.sm)
+      .padding(.vertical, 6)
       .background(
         selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
-        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
       )
     }
     .buttonStyle(.plain)
-    .padding(.bottom, 4)
+    .padding(.bottom, TrawlDesign.Space.xs)
   }
 
   private func appWideRow(for trawler: RestingTrawler) -> some View {
@@ -176,13 +176,13 @@ struct AppSidebarRailView: View {
     return Button {
       onSelectTrawler(trawler.id)
     } label: {
-      HStack(spacing: 9) {
-        TrawlerIconView(registeredTrawler: trawler.id, size: 19)
+      HStack(spacing: TrawlDesign.Space.sm) {
+        TrawlerIconView(registeredTrawler: trawler.id, size: 18)
         Text(trawler.registeredTrawlerDisplayName)
-          .font(.system(size: 13, weight: selected ? .semibold : .regular))
+          .font(selected ? TrawlDesign.Typography.laneLabel.weight(.semibold) : TrawlDesign.Typography.laneLabel)
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.ink)
           .lineLimit(1)
-        Spacer(minLength: 6)
+        Spacer(minLength: TrawlDesign.Space.xs)
         if !isUndatedExcluded && operability?.needsAttention == true {
           Circle()
             .fill(TrawlDesign.Colors.warningAmber)
@@ -190,23 +190,17 @@ struct AppSidebarRailView: View {
             .accessibilityLabel("\(trawler.registeredTrawlerDisplayName) needs attention")
         }
         Text(countDisplay)
-          .font(
-            isUndatedExcluded
-              ? .system(size: 11)
-              : TrawlDesign.Typography.monoSmall
-          )
+          .font(isUndatedExcluded ? TrawlDesign.Typography.caption : TrawlDesign.Typography.monoSmall)
           .monospacedDigit()
           .foregroundStyle(
-            selected
-              ? TrawlDesign.Colors.selectBlue
-              : TrawlDesign.Colors.mutedInk
+            selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk
           )
       }
-      .padding(.horizontal, 10)
+      .padding(.horizontal, TrawlDesign.Space.sm)
       .padding(.vertical, 6)
       .background(
         selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
-        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
       )
       .contentShape(Rectangle())
     }
@@ -220,14 +214,14 @@ struct AppSidebarRailView: View {
 
   private var compactRail: some View {
     ScrollView {
-      VStack(spacing: 4) {
+      VStack(spacing: TrawlDesign.Space.xs) {
         compactAllAppsButton
         ForEach(trawlers) { trawler in
           compactAppButton(for: trawler)
         }
       }
-      .padding(.vertical, 8)
-      .padding(.horizontal, 5)
+      .padding(.vertical, TrawlDesign.Space.sm)
+      .padding(.horizontal, TrawlDesign.Space.xs)
     }
     .frame(width: TrawlDesign.compactSidebarWidth)
     .background(TrawlDesign.Colors.surface)
@@ -242,17 +236,17 @@ struct AppSidebarRailView: View {
       VStack(spacing: 1) {
         OpenTrawlMarkIcon(size: 18)
         Text("All")
-          .font(.system(size: 9, weight: .semibold))
+          .font(TrawlDesign.Typography.monoAxis)
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
         Text(CompactCountFormatter.format(count))
-          .font(.system(size: 9.5, weight: selected ? .bold : .medium, design: .monospaced))
+          .font(TrawlDesign.Typography.monoAxis)
           .monospacedDigit()
           .foregroundStyle(selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk)
       }
       .frame(width: 46, height: 48)
       .background(
         selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
-        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
       )
     }
     .buttonStyle(.plain)
@@ -275,10 +269,10 @@ struct AppSidebarRailView: View {
     } label: {
       ZStack(alignment: .topTrailing) {
         VStack(spacing: 2) {
-          TrawlerIconView(registeredTrawler: trawler.id, size: 19)
+          TrawlerIconView(registeredTrawler: trawler.id, size: 18)
           if !isUndatedExcluded {
             Text(CompactCountFormatter.format(count))
-              .font(.system(size: 9.5, weight: selected ? .bold : .medium, design: .monospaced))
+              .font(TrawlDesign.Typography.monoAxis)
               .monospacedDigit()
               .foregroundStyle(
                 selected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.mutedInk
@@ -290,12 +284,12 @@ struct AppSidebarRailView: View {
           Circle()
             .fill(TrawlDesign.Colors.warningAmber)
             .frame(width: 6, height: 6)
-            .padding(4)
+            .padding(TrawlDesign.Space.xs)
         }
       }
       .background(
         selected ? TrawlDesign.Colors.selectBlueSurface : Color.clear,
-        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
       )
     }
     .buttonStyle(.plain)

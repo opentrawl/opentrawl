@@ -115,7 +115,7 @@ struct SearchResultsList: View {
             ForEach(groupedSections) { section in
               HStack {
                 Text(section.title)
-                  .font(.system(size: 11, weight: .semibold))
+                  .font(TrawlDesign.Typography.caption.weight(.semibold))
                   .foregroundStyle(TrawlDesign.Colors.mutedInk)
                 Spacer()
               }

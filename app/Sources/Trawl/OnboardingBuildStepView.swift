@@ -208,10 +208,10 @@ private struct ArchiveTrawlerSummary: View {
       .frame(maxHeight: 310)
       .background(
         TrawlDesign.Colors.paper,
-        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
       )
       .overlay(
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
           .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
       )
     }
@@ -261,12 +261,12 @@ private struct ArchiveBuildRow: View {
     HStack(spacing: 10) {
       TrawlerIconView(registeredTrawler: trawler.id, size: 22)
       Text(trawler.registeredTrawlerDisplayName)
-        .font(.system(size: 13.5, weight: .medium))
+        .font(TrawlDesign.Typography.laneLabel)
         .foregroundStyle(TrawlDesign.Colors.ink)
-      Spacer(minLength: 10)
+      Spacer(minLength: TrawlDesign.Space.sm)
       Text(state.statusLine)
-        .font(.system(size: 12))
-        .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmber : .secondary)
+        .font(TrawlDesign.Typography.meta)
+        .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmber : TrawlDesign.Colors.mutedInk)
         .lineLimit(1)
         .truncationMode(.tail)
       if let actionTitle = state.actionTitle, let action = state.action {
@@ -309,11 +309,11 @@ private struct AIConnectionPanel: View {
         Text(HumanCopy.ConnectAI.title)
           .trawlText(.sectionHeader)
         Text(HumanCopy.ConnectAI.body)
-          .font(.system(size: 12.5))
-          .foregroundStyle(.secondary)
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(TrawlDesign.Colors.mutedInk)
           .fixedSize(horizontal: false, vertical: true)
       }
-      Spacer(minLength: 8)
+      Spacer(minLength: TrawlDesign.Space.sm)
       Button(action: onCopy) {
         Label(
           hasCopied ? "Copied" : HumanCopy.ConnectAI.copyAction,
@@ -325,10 +325,10 @@ private struct AIConnectionPanel: View {
       .controlSize(.small)
       .tint(.primary)
     }
-    .padding(12)
+    .padding(TrawlDesign.Space.md)
     .background(
-      TrawlDesign.Colors.surface.opacity(0.65),
-      in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+      TrawlDesign.Colors.surface,
+      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
     )
   }
 }

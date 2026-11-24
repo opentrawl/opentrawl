@@ -391,20 +391,31 @@ struct PermissionRecoveryBanner: View {
   let action: () -> Void
 
   var body: some View {
-    HStack(spacing: 12) {
+    HStack(spacing: TrawlDesign.Space.md) {
       Image(systemName: "lock.trianglebadge.exclamationmark")
-        .foregroundStyle(.orange)
-      VStack(alignment: .leading, spacing: 3) {
+        .foregroundStyle(TrawlDesign.Colors.warningAmber)
+      VStack(alignment: .leading, spacing: 2) {
         Text(OperationalCopy.FullDiskAccess.needed)
-          .trawlText(.sectionHeader)
+          .font(TrawlDesign.Typography.sectionHeader)
+          .foregroundStyle(TrawlDesign.Colors.ink)
         Text(OperationalCopy.FullDiskAccess.instruction)
-          .trawlText(.body)
-          .foregroundStyle(.secondary)
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(TrawlDesign.Colors.mutedInk)
       }
       Spacer()
       Button(OperationalCopy.FullDiskAccess.open, action: action)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
-    .padding(16)
-    .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+    .padding(.horizontal, TrawlDesign.Space.md)
+    .padding(.vertical, TrawlDesign.Space.sm)
+    .background(
+      TrawlDesign.Colors.warningAmberSurface,
+      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+        .stroke(TrawlDesign.Colors.warningAmber.opacity(0.35), lineWidth: 1)
+    )
   }
 }
