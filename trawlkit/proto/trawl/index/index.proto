@@ -19,7 +19,6 @@ enum ArchiveRecordKind {
   ARCHIVE_RECORD_KIND_PHOTO = 6;
   ARCHIVE_RECORD_KIND_FINANCIAL_MOVEMENT = 7;
   ARCHIVE_RECORD_KIND_PERSON = 8;
-  ARCHIVE_RECORD_KIND_HEALTH_RECORD = 9;
 }
 
 // ObservedArchiveRecordRole records an explicit role observed by the source

@@ -30,7 +30,6 @@ require (
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-sqlite3 v1.14.47 // indirect
-	github.com/muktihari/fit v0.28.7 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/ogen-go/ogen v1.22.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
@@ -71,7 +70,6 @@ require (
 	github.com/opentrawl/opentrawl/calendar v0.0.0
 	github.com/opentrawl/opentrawl/gmail v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/contacts v0.0.0
-	github.com/opentrawl/opentrawl/trawlers/health v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/imessage v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/mail v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/money v0.0.0
@@ -86,8 +84,6 @@ require (
 replace github.com/opentrawl/opentrawl/trawlkit => ../trawlkit
 
 replace github.com/opentrawl/opentrawl/trawlers/contacts => ../trawlers/contacts
-
-replace github.com/opentrawl/opentrawl/trawlers/health => ../trawlers/health
 
 replace github.com/opentrawl/opentrawl/trawlers/imessage => ../trawlers/imessage
 

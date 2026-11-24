@@ -35,7 +35,7 @@ struct BuildIdentityTests {
     #expect(prompt.contains("missing media downloads"))
     #expect(
       prompt.contains(
-        "12 built-in apps: Messages, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Apple Health, Money, and Twitter (X)"
+        "11 built-in apps: Messages, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Money, and Twitter (X)"
       ))
     #expect(prompt.contains(Bundle.main.bundleURL.path))
     #expect(prompt.contains("this exact alpha build"))

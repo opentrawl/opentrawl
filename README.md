@@ -1,6 +1,6 @@
 # OpenTrawl
 
-**Spotlight for the Agentic OS.** Give any AI you use searchable access to your messages, emails, notes, photos, calendar, contacts, health, finances, and X history, without handing your life to a cloud vendor.
+**Spotlight for the Agentic OS.** Give any AI you use searchable access to your messages, emails, notes, photos, calendar, contacts, finances, and X history, without handing your life to a cloud vendor.
 
 Your AI does not know your history. Every time you switch models or start a new chat, you re-explain who people are, paste old messages, and dig up receipts yourself.
 
@@ -34,7 +34,7 @@ Because your archive stays on your disk in standard SQLite files, you can point 
 
 ## What it connects to
 
-### 12 built-in sources
+### 11 built-in sources
 
 | Source | What OpenTrawl archives | What it needs from you |
 | --- | --- | --- |
@@ -46,7 +46,6 @@ Because your archive stays on your disk in standard SQLite files, you can point 
 | [Contacts](trawlers/contacts) | Apple Contacts and people resolved across your messaging apps | Full Disk Access (guided setup) |
 | [Calendar](trawlers/calendar) | Apple Calendar events, calendars, and attendees | Full Disk Access (guided setup) |
 | [Photos](trawlers/photos) | Apple Photos dates, places, albums, cameras, people tags, and favourites | Full Disk Access (nearby-place lookups and photo descriptions are not enabled yet) |
-| [Apple Health](trawlers/health) | Apple Health exports, HealthFit `.fit` workouts, sleep, daily vitals, and incremental HealthKit batches | Local `export.zip`/`export.xml`, `.fit` files, or dropped HealthKit batches (`trawl health import PATH`; no network) |
 | [Gmail](trawlers/gmail) | Your Gmail mailbox (direct from your Mac to Google) | Read-only Google sign-in via your agent (`trawl gmail connect`) |
 | [Money](trawlers/money) | Bank accounts, balances, and transactions (ING and Wise) | Your own Enable Banking app registration, or import files written by an agent |
 | [Twitter (X)](trawlers/twitter) | Your posts, bookmarks, likes, mentions, and direct messages | Pasted X web session cookies, an exported X archive, or an X API key |
@@ -78,7 +77,7 @@ OpenTrawl runs locally on macOS today. Here is what we are building next so your
 
 ## The OpenTrawl suite
 
-- **OpenTrawl** (this repo): Spotlight for the Agentic OS. Give any AI searchable access to your messages, emails, notes, photos, calendar, contacts, health, finances, and X history.
+- **OpenTrawl** (this repo): Spotlight for the Agentic OS. Give any AI searchable access to your messages, emails, notes, photos, calendar, contacts, finances, and X history.
 - **[Agent Keyring](https://agent-keyring.jjpcodes.com/)**: 1Password for the Agentic OS. Let your AI agents sign in as you anywhere you work, using the passwords you already keep in Apple Passwords, approved on your Mac, iPhone, or Apple Watch.
 
 ## For agents and developers

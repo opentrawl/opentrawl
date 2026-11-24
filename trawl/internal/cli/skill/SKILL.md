@@ -1,6 +1,6 @@
 ---
 name: opentrawl
-description: Search and open the user's local digital archives across messages, email, calendar, notes, contacts, photos, health, finances, and X history using OpenTrawl MCP tools or the trawl CLI. Use whenever a task needs ground truth from the user's own history.
+description: Search and open the user's local digital archives across messages, email, calendar, notes, contacts, photos, finances, and X history using OpenTrawl MCP tools or the trawl CLI. Use whenever a task needs ground truth from the user's own history.
 ---
 
 # OpenTrawl (`trawl`)
@@ -10,12 +10,12 @@ OpenTrawl gives you strictly read-only, repeatable access to the user's local ar
 ## Rules
 
 - OpenTrawl is read-only. Never assume a lookup sends messages, edits emails, or modifies source apps.
-- Always open the full record before answering from a search snippet. Copy links verbatim (for example `gmail:abc123`, `imessage:def456`, or `health:ghi789`).
+- Always open the full record before answering from a search snippet. Copy links verbatim (for example `gmail:abc123`, `imessage:def456`, or `photos:ghi789`).
 - Respect source scope. When connected through a scoped MCP token, `trawl_status` lists the exact sources this session can read. Never imply "not found" for a source that is unavailable, stale, or outside your scope.
 - Do not run `trawl update`, install plugins (`trawl plugin install`), enable semantic search (`trawl semantic enable`), or write agent configs (`trawl connect --write`) unless the user asks.
 - Process exit codes: `0` complete, `1` failed, `2` bad usage, `3` partial result with usable stdout.
 
-## 12 built-in sources
+## 11 built-in sources
 
 - `imessage`: Apple Messages conversations and messages
 - `whatsapp`: WhatsApp Desktop chats, groups, and messages
@@ -26,7 +26,6 @@ OpenTrawl gives you strictly read-only, repeatable access to the user's local ar
 - `contacts`: Apple Contacts and cross-source people resolution
 - `calendar`: Apple Calendar events, calendars, and attendees
 - `photos`: Apple Photos dates, places, albums, cameras, people tags, and favourites
-- `health`: Apple Health exports (`export.zip` / `export.xml`), HealthFit `.fit` workouts, sleep, vitals, and incremental HealthKit batches
 - `money`: Bank accounts, balances, and transactions
 - `twitter`: X posts, bookmarks, likes, mentions, and direct messages
 
@@ -56,7 +55,6 @@ Core read-only lookup:
 
 Source-specific highlights:
 
-- `trawl health workouts|sleep|metrics|summary` and `trawl health import PATH`
 - `trawl photos [--on DATE] [--from DATE] [--to DATE] [--place NAME] [--person NAME]` and `trawl photos days`
 - `trawl notes [FOLDER]`, `trawl notes folders`, `trawl notes versions LINK`
 - `trawl money accounts`, `trawl money transactions`

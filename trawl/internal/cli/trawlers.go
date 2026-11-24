@@ -10,7 +10,6 @@ import (
 	"github.com/opentrawl/opentrawl/calendar"
 	"github.com/opentrawl/opentrawl/gmail"
 	contacts "github.com/opentrawl/opentrawl/trawlers/contacts"
-	health "github.com/opentrawl/opentrawl/trawlers/health"
 	imessage "github.com/opentrawl/opentrawl/trawlers/imessage"
 	mail "github.com/opentrawl/opentrawl/trawlers/mail"
 	money "github.com/opentrawl/opentrawl/trawlers/money"
@@ -68,7 +67,6 @@ var trawlerFactories = []trawlerRegistration{
 // exact same Seatbelt sandbox, capability policy, secret broker, and loopback
 // HTTP allowlist proxy as standalone external plugins.
 var bundledMultiCallPlugins = []pluginruntime.BundledMultiCallPluginRegistration{
-	{PluginIdentifier: "health", Factory: func() trawlkit.Trawler { return health.New() }},
 	{PluginIdentifier: "money", Factory: func() trawlkit.Trawler { return money.New() }},
 	{PluginIdentifier: "notes", Factory: func() trawlkit.Trawler { return notes.New() }},
 	{PluginIdentifier: "telegram", Factory: func() trawlkit.Trawler { return telegram.New() }},

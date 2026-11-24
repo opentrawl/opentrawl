@@ -439,26 +439,7 @@ struct RootView: View {
   }
 
   private var homeTrawlers: [RestingTrawler] {
-    let statusesByID = Dictionary(
-      model.trawlerStatuses.map { ($0.id, $0) },
-      uniquingKeysWith: { _, latest in latest }
-    )
-    return model.homeTrawlers.filter { trawler in
-      guard featureFlags.includes(trawler.id) else { return false }
-      // Hide Health when unimported (0 items) outside experimental mode so Overview
-      // and Sidebar never show a dead empty row for an iPhone-export-only source.
-      if trawler.id.registeredTrawlerIdentity == "health", !featureFlags.isExperimental {
-        let status = statusesByID[trawler.id]
-        let hasCounts =
-          (status?.archiveContentCountsAfterLastSuccessfullyCompletedUpdate.contains {
-            $0.archiveContentCount > 0
-          }) ?? false
-        let hasHistory =
-          !(status?.archiveWeeklyHistory?.weeklyRecordCountsInChronologicalOrder.isEmpty ?? true)
-        return hasCounts || hasHistory
-      }
-      return true
-    }
+    model.homeTrawlers.filter { featureFlags.includes($0.id) }
   }
 
   private var searchableHomeTrawlers: [RestingTrawler] {

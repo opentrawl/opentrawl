@@ -508,8 +508,6 @@ func DefaultRecordAnchorForIndexedRecord(trawlerID, recordKind string, hasBodyEv
 		return "money-details"
 	case "photos":
 		return "photo-details"
-	case "health":
-		return "health-details"
 	}
 	switch strings.ToLower(strings.TrimSpace(recordKind)) {
 	case "email":
@@ -567,8 +565,6 @@ func kindDisplayNameForCandidate(c indexedRecordCandidate) string {
 		return "Movement"
 	case "person":
 		return "Person"
-	case "health":
-		return "Health"
 	default:
 		return ""
 	}

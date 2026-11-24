@@ -741,8 +741,6 @@ func recordKindString(kind indexcontract.ArchiveRecordKind) string {
 		return "transaction"
 	case indexcontract.ArchiveRecordKind_ARCHIVE_RECORD_KIND_PERSON:
 		return "person"
-	case indexcontract.ArchiveRecordKind_ARCHIVE_RECORD_KIND_HEALTH_RECORD:
-		return "health"
 	default:
 		return "record"
 	}

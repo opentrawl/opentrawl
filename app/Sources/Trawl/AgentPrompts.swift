@@ -37,7 +37,7 @@ enum AgentPrompts {
       \(appBundlePath)
 
       OpenTrawl says that this exact \(buildKind):
-      - archives data from 12 built-in apps: Messages, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Apple Health, Money, and Twitter (X);
+      - archives data from 11 built-in apps: Messages, WhatsApp, Telegram, Apple Mail, Gmail, Notes, Contacts, Calendar, Photos, Money, and Twitter (X);
       - writes separate search archives under ~/.opentrawl;
       - keeps those archives and my searches on my Mac;
       - has no telemetry or analytics;
