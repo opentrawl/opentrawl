@@ -75,6 +75,7 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
   case remoteServerURLInvalid
   case remoteInsecureTransportRejected
   case remoteAuthenticationRequired
+  case remoteSavedAccessTokenMissing(hostDisplayName: String)
   case remoteAccessDenied(String)
   case remoteRequestRejected(String)
   case remoteServerUnreachable(String)
@@ -98,6 +99,8 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
       "Plain HTTP is only allowed over Tailscale or localhost. Use Tailscale or https://."
     case .remoteAuthenticationRequired:
       "The access token was rejected or revoked. Create a new token on the archive Mac."
+    case .remoteSavedAccessTokenMissing(let hostDisplayName):
+      "The saved access token for \(hostDisplayName) is missing on this Mac. Open Change archive host to enter a token, or switch to This Mac."
     case .remoteAccessDenied(let detail):
       detail.isEmpty ? "This access token does not allow that source." : detail
     case .remoteRequestRejected(let detail):

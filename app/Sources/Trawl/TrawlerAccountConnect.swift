@@ -314,9 +314,9 @@ struct XWebSignInSheet: View {
         TrawlerIconView(registeredTrawler: Self.twitterTrawlerID, size: 48)
         VStack(alignment: .leading, spacing: 3) {
           Text("Connect X")
-            .font(.headline)
+            .font(TrawlDesign.Typography.sectionHeader)
           Text(statusMessage)
-            .font(.subheadline)
+            .font(TrawlDesign.Typography.smallLabel)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -401,13 +401,13 @@ struct XWebSignInSheet: View {
             ProgressView()
               .controlSize(.small)
             Text(statusMessage)
-              .font(.callout)
+              .font(TrawlDesign.Typography.meta)
               .foregroundStyle(.secondary)
           } else if let errorMessage {
             Image(systemName: "exclamationmark.triangle.fill")
               .foregroundStyle(TrawlDesign.Colors.warningAmber)
             Text(errorMessage)
-              .font(.callout)
+              .font(TrawlDesign.Typography.meta)
               .fixedSize(horizontal: false, vertical: true)
           }
           Spacer(minLength: 0)
@@ -435,9 +435,9 @@ struct XWebSignInSheet: View {
         TrawlerIconView(registeredTrawler: Self.twitterTrawlerID, size: 32)
         VStack(alignment: .leading, spacing: 2) {
           Text("Sign in to X")
-            .font(.headline)
+            .font(TrawlDesign.Typography.sectionHeader)
           Text(statusMessage)
-            .font(.subheadline)
+            .font(TrawlDesign.Typography.smallLabel)
             .foregroundStyle(.secondary)
             .lineLimit(1)
         }
@@ -453,7 +453,7 @@ struct XWebSignInSheet: View {
           Image(systemName: "exclamationmark.triangle.fill")
             .foregroundStyle(TrawlDesign.Colors.warningAmber)
           Text(errorMessage)
-            .font(.callout)
+            .font(TrawlDesign.Typography.meta)
             .fixedSize(horizontal: false, vertical: true)
           Spacer()
         }

@@ -5,6 +5,7 @@ import TrawlCore
 
 struct ResultPreview: View {
   let phase: SearchOpenPhase
+  var highlightedTerms: [String] = []
   var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
 
   @State private var copiedLink = false
@@ -25,7 +26,8 @@ struct ResultPreview: View {
             case .messageWithConversationContext(let openedMessage):
               OpenedMessageRecordWithConversationContextView(
                 openedMessage: openedMessage,
-                targetAnchor: response.requestedRecordAnchor)
+                targetAnchor: response.requestedRecordAnchor,
+                highlightedTerms: highlightedTerms)
             case .conversation(let conversationRecord):
               ConversationRecordView(
                 conversationRecord: conversationRecord,

@@ -93,20 +93,32 @@ final class ArchiveConnectionStore {
 
     // The token itself is read only to restore a remote connection, so a Mac
     // that reads its own archive never opens secret storage at launch.
+    // When the user explicitly chose a remote archive, never silently fall back
+    // to This Mac if the saved token is missing: stay in remote mode and report
+    // the missing token so the user can re-enter it or switch intentionally.
     if defaults.string(forKey: Self.modeKey) == "remote",
-      let parsedStoredURL,
-      let storedOrigin,
-      let storedToken = accessTokenStorage.readAccessToken(forOriginKey: storedOrigin),
-      !storedToken.isEmpty
+      let parsedStoredURL
     {
-      let config = RemoteArchiveEndpointConfiguration(
-        serverBaseURL: parsedStoredURL,
-        bearerToken: storedToken
-      )
       self.mode = .remoteArchive(serverBaseURL: parsedStoredURL)
-      self.switchableClient = SwitchableTrawlClient(
-        initialClient: HTTPTrawlClient(configuration: config)
-      )
+      if let storedOrigin,
+        let storedToken = accessTokenStorage.readAccessToken(forOriginKey: storedOrigin),
+        !storedToken.isEmpty
+      {
+        let config = RemoteArchiveEndpointConfiguration(
+          serverBaseURL: parsedStoredURL,
+          bearerToken: storedToken
+        )
+        self.switchableClient = SwitchableTrawlClient(
+          initialClient: HTTPTrawlClient(configuration: config)
+        )
+      } else {
+        self.hasSavedBearerToken = false
+        let hostDisplayName = RemoteArchiveEndpointConfiguration.shortDisplayHostName(
+          for: parsedStoredURL)
+        self.switchableClient = SwitchableTrawlClient(
+          initialClient: MissingRemoteAccessTokenClient(hostDisplayName: hostDisplayName)
+        )
+      }
     } else {
       self.mode = .localMac
       self.switchableClient = SwitchableTrawlClient(initialClient: local)
@@ -203,5 +215,35 @@ final class ArchiveConnectionStore {
       switchableClient.replaceActiveClient(localClient)
       connectionRevision &+= 1
     }
+  }
+}
+
+/// Surfaces a missing saved token loudly instead of silently reading This Mac's
+/// archive or opening onboarding when a remote connection was configured.
+private struct MissingRemoteAccessTokenClient: TrawlClient {
+  let hostDisplayName: String
+
+  func status() async throws -> FederatedTrawlerStatusOperation {
+    throw TrawlClientError.remoteSavedAccessTokenMissing(hostDisplayName: hostDisplayName)
+  }
+
+  func update(
+    registeredTrawlers _: [RegisteredTrawlerIdentity],
+    progress _: @escaping @Sendable (TrawlerArchiveUpdateProgress) -> Void
+  ) async throws -> FederatedTrawlerArchiveUpdateOperation {
+    throw TrawlClientError.remoteArchiveReadOnly
+  }
+
+  func search(
+    _: TrawlArchiveSearchRequest
+  ) async throws -> FederatedTrawlerSearchOperation {
+    throw TrawlClientError.remoteSavedAccessTokenMissing(hostDisplayName: hostDisplayName)
+  }
+
+  func open(
+    link _: GloballyRoutableTrawlLink,
+    anchor _: RecordAnchorIdentifier
+  ) async throws -> OpenResponse {
+    throw TrawlClientError.remoteSavedAccessTokenMissing(hostDisplayName: hostDisplayName)
   }
 }

@@ -114,10 +114,11 @@ enum TrawlDesign {
 
   /// One type scale in macOS point sizes: 17 and 15 for titles, 13 for body,
   /// 12 for supporting text and 11 for the smallest labels. Nothing in the
-  /// main window is smaller than 11.
+  /// app is smaller than 11pt.
   enum Typography {
     static let pageTitle = Font.title2.weight(.semibold)
     static let itemTitle = Font.title3.weight(.semibold)
+    static let symbolEmphasis = Font.title3
     static let sectionHeader = Font.headline
     static let body = Font.body
     static let bodyEmphasis = Font.body.weight(.semibold)
@@ -126,6 +127,10 @@ enum TrawlDesign {
     static let smallNumber = Font.subheadline.monospacedDigit()
     static let laneLabel = Font.body
     static let monoSmall = Font.callout.monospacedDigit()
+    static let commandCode = Font.callout.monospaced()
+    static let commandDemoHeader = Font.subheadline.monospaced()
+    static let commandDemoComment = Font.title3.monospaced()
+    static let commandDemoCommand = Font.title2.monospaced().weight(.medium)
   }
 
   static func usesCompactSearchLayout(width: CGFloat) -> Bool {

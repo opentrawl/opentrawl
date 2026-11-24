@@ -20,7 +20,7 @@ struct RootView: View {
 
   @State private var onboarding: OnboardingModel
   @State private var appInstallations: MacAppInstallations
-  @State private var trawlerIconStore = TrawlerIconStore()
+  @State private var trawlerIconStore: TrawlerIconStore
   @State private var destination: WorkspaceDestination = .overview
   @State private var searchFocusRequestToken = 0
   @State private var isShowingConnectionPopover = false
@@ -40,6 +40,7 @@ struct RootView: View {
     onboarding: OnboardingModel = OnboardingModel(),
     featureFlags: AppFeatureFlags = .current(),
     appInstallations: MacAppInstallations = MacAppInstallations(),
+    trawlerIconStore: TrawlerIconStore = TrawlerIconStore(),
     buildIdentity: BuildIdentity = .current,
     aiInstruction: String = AgentPrompts.connectAI,
     openFullDiskAccess: @escaping @MainActor () -> Void =
@@ -57,6 +58,7 @@ struct RootView: View {
     self.onOpenSettingsPane = onOpenSettingsPane
     _onboarding = State(initialValue: onboarding)
     _appInstallations = State(initialValue: appInstallations)
+    _trawlerIconStore = State(initialValue: trawlerIconStore)
   }
 
   /// Remote archive connections show the workspace directly without falsely
@@ -583,10 +585,12 @@ private struct StaleStatusBanner: View {
         Button(OperationalCopy.Connection.changeArchiveHost, action: onOpenConnection)
           .buttonStyle(.bordered)
           .controlSize(.small)
+          .fixedSize()
       }
       Button(OperationalCopy.SharedAction.retry, action: onRetry)
         .buttonStyle(.bordered)
         .controlSize(.small)
+        .fixedSize()
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
@@ -601,7 +605,7 @@ private struct StaleStatusBanner: View {
   }
 }
 
-private struct FailureView: View {
+struct FailureView: View {
   var detail: String? = nil
   var onOpenConnection: (() -> Void)? = nil
   let retry: () -> Void
@@ -620,9 +624,14 @@ private struct FailureView: View {
       HStack(spacing: 10) {
         if let onOpenConnection {
           Button(OperationalCopy.Connection.changeArchiveHost, action: onOpenConnection)
+            .buttonStyle(.bordered)
+            .fixedSize()
         }
         Button(OperationalCopy.SharedAction.retry, action: retry)
+          .buttonStyle(.borderedProminent)
+          .fixedSize()
       }
+      .fixedSize()
     }
   }
 }

@@ -18,7 +18,7 @@ struct GuideOverlayView: View {
             ? OperationalCopy.FullDiskAccessOverlay.granted
             : OperationalCopy.FullDiskAccessOverlay.instruction(appName: model.appName)
         )
-        .font(.system(size: 13, weight: .medium))
+        .font(.body.weight(.medium))
         .contentTransition(.opacity)
         Spacer(minLength: 0)
         if model.phase == .guiding {
@@ -60,7 +60,8 @@ struct GuideOverlayView: View {
   private var closeButton: some View {
     Button(action: model.onClose) {
       Image(systemName: "xmark")
-        .font(.system(size: 10, weight: .bold))
+        .font(.subheadline.weight(.bold))
+        .imageScale(.small)
         .foregroundStyle(.secondary)
         .padding(5)
         .background(.quaternary, in: Circle())
@@ -103,11 +104,11 @@ public struct ApplicationRowTile: View {
         .interpolation(.high)
         .frame(width: height - 14, height: height - 14)
       Text(appName)
-        .font(.system(size: 13, weight: .semibold))
+        .font(.body.weight(.semibold))
       Spacer(minLength: 0)
       if granted {
         Image(systemName: "checkmark.circle.fill")
-          .font(.system(size: 18))
+          .font(.title2)
           .symbolRenderingMode(.palette)
           .foregroundStyle(.white, .green)
           .transition(.scale(scale: 0.6).combined(with: .opacity))

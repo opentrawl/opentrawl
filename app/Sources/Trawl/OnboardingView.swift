@@ -433,11 +433,12 @@ private struct WelcomeAppIcon: View {
       .overlay(alignment: .bottomTrailing) {
         if isComingSoon {
           Image(systemName: "clock.fill")
-            .font(.system(size: 9, weight: .semibold))
+            .font(TrawlDesign.Typography.smallLabel.weight(.semibold))
+            .imageScale(.small)
             .foregroundStyle(.white)
-            .frame(width: 17, height: 17)
+            .frame(width: 18, height: 18)
             .background(.secondary, in: Circle())
-            .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 2))
+            .overlay(Circle().stroke(TrawlDesign.Colors.paper, lineWidth: 2))
             .offset(x: 3, y: 3)
             .accessibilityHidden(true)
         }

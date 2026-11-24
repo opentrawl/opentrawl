@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var windowCloseObserver: NSObjectProtocol?
   let shellState = AppShellState()
   let appInstallations = MacAppInstallations()
+  let trawlerIconStore = TrawlerIconStore()
   let runtimeConfiguration = TrawlRuntimeConfiguration()
   lazy var connectionStore = ArchiveConnectionStore(runtimeConfiguration: runtimeConfiguration)
   lazy var client: any TrawlClient = connectionStore.switchableClient
@@ -233,12 +234,14 @@ struct TrawlApp: App {
         runtimeConfiguration: delegate.runtimeConfiguration,
         onboarding: delegate.onboarding,
         appInstallations: delegate.appInstallations,
+        trawlerIconStore: delegate.trawlerIconStore,
         aiInstruction: AgentPrompts.connectAI,
         openFullDiskAccess: delegate.requestFullDiskAccess,
         onOpenSettingsPane: { pane in
           delegate.shellState.selectedSettingsPane = pane
         }
       )
+      .environment(delegate.trawlerIconStore)
       .frame(
         minWidth: TrawlDesign.minimumWindow.width,
         minHeight: TrawlDesign.minimumWindow.height
@@ -294,6 +297,7 @@ struct TrawlApp: App {
         onSignOutX: delegate.signOutX,
         onOpenSourceApp: delegate.openSourceApp(bundleIdentifier:)
       )
+      .environment(delegate.trawlerIconStore)
       .sheet(
         isPresented: Binding(
           get: { delegate.shellState.isShowingXSignInFromSettings },

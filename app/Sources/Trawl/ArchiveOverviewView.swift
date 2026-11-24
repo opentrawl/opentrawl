@@ -404,7 +404,7 @@ struct ArchiveOverviewView: View {
   ) -> some View {
     HStack(alignment: .center, spacing: 12) {
       Image(systemName: symbol)
-        .font(.title3)
+        .font(TrawlDesign.Typography.symbolEmphasis)
         .foregroundStyle(isProminent ? Color.accentColor : .secondary)
         .frame(width: 24, alignment: .center)
 
@@ -456,7 +456,7 @@ struct ArchiveOverviewView: View {
   ) -> some View {
     VStack(alignment: .center, spacing: 6) {
       Image(systemName: symbol)
-        .font(.title3)
+        .font(TrawlDesign.Typography.symbolEmphasis)
         .foregroundStyle(isProminent ? Color.accentColor : .secondary)
       Text(title)
         .font(TrawlDesign.Typography.bodyEmphasis)

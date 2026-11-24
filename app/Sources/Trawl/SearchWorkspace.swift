@@ -80,6 +80,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
   @State private var draftStartDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
   @State private var draftEndDate = Date()
   @State private var lastDetailWidth: CGFloat = 960
+  @State private var searchRetryToken = 0
   @State private var searchMatchCountsFromLastSearchOfAllApps: SearchMatchCountsForAllApps?
   @FocusState private var focus: SearchFocus?
 
@@ -385,7 +386,8 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
         query: interaction.query,
         registeredTrawler: interaction.registeredTrawler,
         earliestDateInclusive: interaction.earliestMatchingArchiveRecordTimeInclusive,
-        latestDateInclusive: interaction.latestMatchingArchiveRecordTimeInclusive
+        latestDateInclusive: interaction.latestMatchingArchiveRecordTimeInclusive,
+        retryToken: searchRetryToken
       )
     ) {
       guard destination == .search else { return }
@@ -421,7 +423,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
     .popover(isPresented: $isShowingDatePicker, arrowEdge: .bottom) {
       VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
         Text("Choose dates")
-          .font(.headline)
+          .font(TrawlDesign.Typography.sectionHeader)
         HStack(spacing: TrawlDesign.Space.xs) {
           quickDateRangeButton("7 days", inclusiveDays: 7)
           quickDateRangeButton("30 days", inclusiveDays: 30)
@@ -502,14 +504,18 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
             SearchOutcome(
               phase: model.phase,
               isScoped: selectedScopeTrawler != nil,
-              timedOutLocally: model.timedOutLocally
+              timedOutLocally: model.timedOutLocally,
+              onRetry: retryCurrentSearch,
+              onOpenConnection: isRemoteArchive ? onOpenHostSwitcher : nil
             )
           }
         case .outcome:
           SearchOutcome(
             phase: model.phase,
             isScoped: selectedScopeTrawler != nil,
-            timedOutLocally: model.timedOutLocally
+            timedOutLocally: model.timedOutLocally,
+            onRetry: retryCurrentSearch,
+            onOpenConnection: isRemoteArchive ? onOpenHostSwitcher : nil
           )
         case .results:
           if availableWidth < 740 {
@@ -527,6 +533,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
                   }
                   .buttonStyle(.bordered)
                   .controlSize(.small)
+                  .fixedSize()
                   Spacer()
                 }
                 .padding(.horizontal, TrawlDesign.Space.md)
@@ -534,7 +541,11 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
 
                 Divider()
 
-                ResultPreview(phase: model.openPhase, onOpenLink: openLinkedRecord)
+                ResultPreview(
+                  phase: model.openPhase,
+                  highlightedTerms: highlightedTermsForOpenedRecord,
+                  onOpenLink: openLinkedRecord
+                )
               }
             }
           } else {
@@ -552,7 +563,11 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
               } else {
-                ResultPreview(phase: model.openPhase, onOpenLink: openLinkedRecord)
+                ResultPreview(
+                  phase: model.openPhase,
+                  highlightedTerms: highlightedTermsForOpenedRecord,
+                  onOpenLink: openLinkedRecord
+                )
               }
             }
           }
@@ -622,6 +637,35 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
     )
   }
 
+  private func retryCurrentSearch() {
+    searchRetryToken &+= 1
+  }
+
+  private var highlightedTermsForOpenedRecord: [String] {
+    var terms: [String] = []
+    if let selectedID = interaction.selectedSearchMatchIdentifier,
+      let selectedMatch = model.searchMatches.first(where: { $0.id == selectedID })
+    {
+      for field in selectedMatch.searchMatchPresentation.searchMatchTextFieldsInDisplayOrder {
+        for fragment in field.searchMatchTextFragmentsInDisplayOrder
+        where fragment.searchMatchTextFragmentMatchesSearchQuery {
+          let trimmed = fragment.searchMatchTextFragmentContent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+          if !trimmed.isEmpty {
+            terms.append(trimmed)
+          }
+        }
+      }
+    }
+    if terms.isEmpty, let query = model.committedInput?.query {
+      terms = query
+        .split(whereSeparator: \.isWhitespace)
+        .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) }
+        .filter { !$0.isEmpty }
+    }
+    return terms
+  }
+
   private func closeOpenedRecord() {
     model.clearOpenResult()
     focus = .results
@@ -678,10 +722,21 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
   }
 }
 
-private struct SearchOutcome: View {
+struct SearchOutcome: View {
   let phase: SearchPhase
   let isScoped: Bool
   let timedOutLocally: Bool
+  var onRetry: (() -> Void)? = nil
+  var onOpenConnection: (() -> Void)? = nil
+
+  private var showsRetryActions: Bool {
+    switch phase {
+    case .failed, .timedOut:
+      true
+    case .idle, .loading, .complete, .partial, .skipped:
+      false
+    }
+  }
 
   @ViewBuilder
   var body: some View {
@@ -704,11 +759,30 @@ private struct SearchOutcome: View {
         timedOutLocally: timedOutLocally,
         timeoutSeconds: SearchModel.defaultWaitSeconds
       )
-      ContentUnavailableView(
-        OperationalCopy.Search.outcomeTitle(for: phase),
-        systemImage: phase == .complete ? "magnifyingglass" : "exclamationmark.circle",
-        description: Text(detail.isEmpty ? "Try different words or clear your filters." : detail)
-      )
+      ContentUnavailableView {
+        Label(
+          OperationalCopy.Search.outcomeTitle(for: phase),
+          systemImage: phase == .complete ? "magnifyingglass" : "exclamationmark.circle"
+        )
+      } description: {
+        Text(detail.isEmpty ? "Try different words or clear your filters." : detail)
+      } actions: {
+        if showsRetryActions && (onRetry != nil || onOpenConnection != nil) {
+          HStack(spacing: 10) {
+            if let onOpenConnection {
+              Button(OperationalCopy.Connection.changeArchiveHost, action: onOpenConnection)
+                .buttonStyle(.bordered)
+                .fixedSize()
+            }
+            if let onRetry {
+              Button(OperationalCopy.SharedAction.retry, action: onRetry)
+                .buttonStyle(.borderedProminent)
+                .fixedSize()
+            }
+          }
+          .fixedSize()
+        }
+      }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
   }
@@ -739,4 +813,5 @@ private struct SearchTriggerKey: Equatable {
   let registeredTrawler: RegisteredTrawlerIdentity?
   let earliestDateInclusive: Date?
   let latestDateInclusive: Date?
+  let retryToken: Int
 }

@@ -147,7 +147,7 @@ private struct OpenTrawlCommandDemoTerminalHeader: View {
       Circle().fill(Color.green.opacity(0.9)).frame(width: 10, height: 10)
       Spacer()
       Text(OperationalCopy.CommandDemo.terminalTitle)
-        .font(.system(.caption, design: .monospaced))
+        .font(TrawlDesign.Typography.commandDemoHeader)
         .foregroundStyle(.white.opacity(0.54))
       Spacer()
       ProgressView()
@@ -168,7 +168,7 @@ private struct OpenTrawlCommandDemoComment: View {
 
   var body: some View {
     Text(verbatim: "# \(comment)")
-      .font(.system(size: 16, weight: .regular, design: .monospaced))
+      .font(TrawlDesign.Typography.commandDemoComment)
       .foregroundStyle(Color(red: 0.49, green: 0.76, blue: 0.58))
       .lineLimit(1)
       .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
@@ -180,7 +180,7 @@ private struct OpenTrawlCommandDemoTypedCommand: View {
 
   var body: some View {
     Text(verbatim: "❯ \(command)")
-      .font(.system(size: 18, weight: .medium, design: .monospaced))
+      .font(TrawlDesign.Typography.commandDemoCommand)
       .foregroundStyle(.white)
       .lineLimit(1)
       .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)

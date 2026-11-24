@@ -145,8 +145,10 @@ enum OperationalCopy {
         isScoped
           ? "This app is not available for search. Try another app."
           : "Some apps are not available for search. Try another app."
-      case .failed:
-        "Search failed. Your archive is unchanged. Try again."
+      case .failed(let message):
+        message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+          ? "Search failed. Your archive is unchanged. Try again."
+          : message.trimmingCharacters(in: .whitespacesAndNewlines)
       case .timedOut:
         timedOutLocally
           ? "Search stopped after \(timeoutSeconds) seconds. Your archive is unchanged. Try again."

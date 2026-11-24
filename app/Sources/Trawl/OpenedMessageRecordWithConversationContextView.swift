@@ -5,6 +5,7 @@ import TrawlClient
 struct OpenedMessageRecordWithConversationContextView: View {
   let openedMessage: OpenedMessageRecordWithConversationContext
   let targetAnchor: RecordAnchorIdentifier
+  var highlightedTerms: [String] = []
 
   private var messagesOldestFirst: [MessageRecord] {
     Array(openedMessage.conversationContextMessageRecordsNewestFirst.reversed())
@@ -39,7 +40,8 @@ struct OpenedMessageRecordWithConversationContextView: View {
           OpenedMessageConversationContext(
             messagesOldestFirst: messagesOldestFirst,
             openedMessageRecordReference: openedMessage.openedMessageRecordReference,
-            targetAnchor: targetAnchor)
+            targetAnchor: targetAnchor,
+            highlightedTerms: highlightedTerms)
           if let mediaForOpenedMessage {
             OpenedMessageMediaDetails(messageMedia: mediaForOpenedMessage)
           }
@@ -127,6 +129,7 @@ private struct OpenedMessageConversationContext: View {
   let messagesOldestFirst: [MessageRecord]
   let openedMessageRecordReference: CanonicalArchiveRecordReference
   let targetAnchor: RecordAnchorIdentifier
+  let highlightedTerms: [String]
 
   var body: some View {
     LazyVStack(alignment: .leading, spacing: 12) {
@@ -141,7 +144,8 @@ private struct OpenedMessageConversationContext: View {
           messageTime: message.messageTime,
           senderDisplayNames: senderDisplayNames(for: message),
           messageTextAndMediaDescription: message.messageTextAndMediaDescription,
-          isOpenedMessage: isOpenedMessage
+          isOpenedMessage: isOpenedMessage,
+          highlightedTerms: isOpenedMessage ? highlightedTerms : []
         )
         .id(
           isOpenedMessage
@@ -207,6 +211,7 @@ private struct OpenedMessageConversationRow: View {
   let senderDisplayNames: [String]
   let messageTextAndMediaDescription: String
   let isOpenedMessage: Bool
+  let highlightedTerms: [String]
 
   private static let bubbleMaximumWidth: CGFloat = 540
 
@@ -227,7 +232,10 @@ private struct OpenedMessageConversationRow: View {
       }
       .padding(.leading, 12)
 
-      Text(messageTextAndMediaDescription)
+      HighlightedMessageText.styledText(
+        for: messageTextAndMediaDescription,
+        highlighting: highlightedTerms
+      )
         .font(TrawlDesign.Typography.body)
         .lineSpacing(2)
         .textSelection(.enabled)
@@ -248,6 +256,103 @@ private struct OpenedMessageConversationRow: View {
     }
     .frame(maxWidth: Self.bubbleMaximumWidth, alignment: .leading)
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+enum HighlightedMessageText {
+  struct Segment: Equatable {
+    let text: String
+    let isMatch: Bool
+  }
+
+  /// Splits message text into matched and unmatched segments for highlighting
+  /// search terms inside an opened bubble, preferring longer terms first so
+  /// overlapping matches stay whole.
+  static func segments(in text: String, highlighting rawTerms: [String]) -> [Segment] {
+    guard !text.isEmpty else { return [] }
+    let terms = orderedDistinctTerms(from: rawTerms)
+    guard !terms.isEmpty else {
+      return [Segment(text: text, isMatch: false)]
+    }
+
+    var matches: [Range<String.Index>] = []
+    var cursor = text.startIndex
+    while cursor < text.endIndex {
+      var bestRange: Range<String.Index>?
+      for term in terms {
+        guard
+          let found = text.range(
+            of: term,
+            options: [.caseInsensitive, .diacriticInsensitive],
+            range: cursor..<text.endIndex
+          )
+        else { continue }
+        if let existing = bestRange {
+          if found.lowerBound < existing.lowerBound
+            || (found.lowerBound == existing.lowerBound && found.upperBound > existing.upperBound)
+          {
+            bestRange = found
+          }
+        } else {
+          bestRange = found
+        }
+      }
+      guard let matchRange = bestRange else { break }
+      matches.append(matchRange)
+      cursor = matchRange.upperBound
+    }
+
+    guard !matches.isEmpty else {
+      return [Segment(text: text, isMatch: false)]
+    }
+
+    var result: [Segment] = []
+    var position = text.startIndex
+    for matchRange in matches {
+      if position < matchRange.lowerBound {
+        result.append(Segment(text: String(text[position..<matchRange.lowerBound]), isMatch: false))
+      }
+      result.append(Segment(text: String(text[matchRange]), isMatch: true))
+      position = matchRange.upperBound
+    }
+    if position < text.endIndex {
+      result.append(Segment(text: String(text[position..<text.endIndex]), isMatch: false))
+    }
+    return result
+  }
+
+  static func styledText(
+    for text: String,
+    highlighting terms: [String],
+    highlightColor: Color = TrawlDesign.Colors.matchRed,
+    underlineMatch: Bool = false
+  ) -> Text {
+    let pieces = segments(in: text, highlighting: terms)
+    guard !pieces.isEmpty else { return Text(text) }
+    var combined = Text("")
+    for piece in pieces {
+      var pieceText = Text(piece.text)
+      if piece.isMatch {
+        pieceText = pieceText.bold().foregroundColor(highlightColor)
+        if underlineMatch {
+          pieceText = pieceText.underline()
+        }
+      }
+      combined = Text("\(combined)\(pieceText)")
+    }
+    return combined
+  }
+
+  private static func orderedDistinctTerms(from rawTerms: [String]) -> [String] {
+    var seen = Set<String>()
+    var unique: [String] = []
+    for term in rawTerms {
+      let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+      let key = trimmed.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+      guard !trimmed.isEmpty, seen.insert(key).inserted else { continue }
+      unique.append(trimmed)
+    }
+    return unique.sorted { $0.count > $1.count }
   }
 }
 
@@ -296,7 +401,7 @@ private struct OpenedMessageMediaDetails: View {
         Link("Open media details", destination: messageMediaMetadataHTTPSURL)
       }
     }
-    .font(.callout)
+    .font(TrawlDesign.Typography.meta)
   }
 }
 

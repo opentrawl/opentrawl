@@ -4,6 +4,8 @@ import TrawlClient
 struct RemoteArchiveConnectionView: View {
   let connectionStore: ArchiveConnectionStore
   let showsLocalOption: Bool
+  var showsHeader: Bool = true
+  var isEmbedded: Bool = false
   let onConnectionChanged: () -> Void
   let onDismiss: () -> Void
 
@@ -14,18 +16,20 @@ struct RemoteArchiveConnectionView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
-      HStack(alignment: .firstTextBaseline) {
-        Text(OperationalCopy.Connection.sheetTitle)
-          .font(TrawlDesign.Typography.sectionHeader)
-          .foregroundStyle(TrawlDesign.Colors.ink)
-        Spacer()
-        if connectionStore.isRemote {
-          Text(OperationalCopy.Connection.readOnlyBadge)
-            .font(TrawlDesign.Typography.monoSmall)
-            .foregroundStyle(TrawlDesign.Colors.selectBlue)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(TrawlDesign.Colors.selectBlueSurface, in: Capsule())
+      if showsHeader {
+        HStack(alignment: .firstTextBaseline) {
+          Text(OperationalCopy.Connection.sheetTitle)
+            .font(TrawlDesign.Typography.sectionHeader)
+            .foregroundStyle(TrawlDesign.Colors.ink)
+          Spacer()
+          if connectionStore.isRemote {
+            Text(OperationalCopy.Connection.readOnlyBadge)
+              .font(TrawlDesign.Typography.monoSmall)
+              .foregroundStyle(TrawlDesign.Colors.selectBlue)
+              .padding(.horizontal, 8)
+              .padding(.vertical, 3)
+              .background(TrawlDesign.Colors.selectBlueSurface, in: Capsule())
+          }
         }
       }
 
@@ -36,7 +40,7 @@ struct RemoteArchiveConnectionView: View {
               .font(TrawlDesign.Typography.meta)
               .foregroundStyle(TrawlDesign.Colors.mutedInk)
             Text(connectionStore.activeRemoteURLString ?? connectionStore.activeHostDisplayName)
-              .font(TrawlDesign.Typography.monoSmall)
+              .font(TrawlDesign.Typography.commandCode)
               .foregroundStyle(TrawlDesign.Colors.ink)
               .lineLimit(1)
               .truncationMode(.middle)
@@ -48,6 +52,7 @@ struct RemoteArchiveConnectionView: View {
             onDismiss()
           }
           .buttonStyle(.bordered)
+          .fixedSize()
         }
         .padding(10)
         .background(
@@ -69,7 +74,7 @@ struct RemoteArchiveConnectionView: View {
           text: $urlText
         )
         .textFieldStyle(.roundedBorder)
-        .font(TrawlDesign.Typography.monoSmall)
+        .font(TrawlDesign.Typography.commandCode)
         .disabled(isConnecting)
       }
 
@@ -84,7 +89,7 @@ struct RemoteArchiveConnectionView: View {
           text: $bearerToken
         )
         .textFieldStyle(.roundedBorder)
-        .font(TrawlDesign.Typography.monoSmall)
+        .font(TrawlDesign.Typography.commandCode)
         .disabled(isConnecting)
         .onSubmit(connect)
       }
@@ -111,7 +116,9 @@ struct RemoteArchiveConnectionView: View {
       }
 
       HStack(spacing: 8) {
-        if connectionStore.hasSavedBearerToken && !connectionStore.isEnvironmentOverride {
+        if (connectionStore.hasSavedBearerToken || !connectionStore.savedRemoteURLString.isEmpty)
+          && !connectionStore.isEnvironmentOverride
+        {
           Button(OperationalCopy.Connection.forgetSavedConnection, role: .destructive) {
             do {
               try connectionStore.forgetSavedRemoteArchive()
@@ -124,13 +131,17 @@ struct RemoteArchiveConnectionView: View {
             }
           }
           .buttonStyle(.borderless)
+          .fixedSize()
           .disabled(isConnecting)
         }
         Spacer()
-        Button(OperationalCopy.Connection.cancel) {
-          onDismiss()
+        if !isEmbedded {
+          Button(OperationalCopy.Connection.cancel) {
+            onDismiss()
+          }
+          .fixedSize()
+          .disabled(isConnecting)
         }
-        .disabled(isConnecting)
         Button(action: connect) {
           if isConnecting {
             HStack(spacing: 6) {
@@ -144,11 +155,12 @@ struct RemoteArchiveConnectionView: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(TrawlDesign.Colors.selectBlue)
+        .fixedSize()
         .disabled(isConnecting || urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }
     }
-    .padding(16)
-    .frame(width: 400)
+    .padding(isEmbedded ? 0 : 16)
+    .frame(width: isEmbedded ? nil : 420)
     .onAppear {
       if urlText.isEmpty {
         urlText = connectionStore.savedRemoteURLString

@@ -53,7 +53,7 @@ struct PersonRecordView: View {
                 "Contact",
                 comment: "Heading above a person's contact methods."
               )
-              .font(.headline)
+              .font(TrawlDesign.Typography.sectionHeader)
               ForEach(personRecord.personContactMethodsInDisplayOrder) { contactMethod in
                 PersonContactMethodRow(contactMethod: contactMethod)
                   .id(

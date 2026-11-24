@@ -74,13 +74,13 @@ private struct PermissionDragDemonstration: View {
     case resting, pointerOnTile, lifted, inSlot, switchedOn
   }
 
-  private static let width: CGFloat = 300
+  private static let width: CGFloat = 336
   private static let inset: CGFloat = 10
   private static let rowHeight: CGFloat = 32
-  private static let titleBarHeight: CGFloat = 26
+  private static let titleBarHeight: CGFloat = 28
   private static let slotTop = titleBarHeight + 2 * rowHeight + 6
   private static let guideTop = slotTop + rowHeight + 14
-  private static let tileTopInGuide = guideTop + 24
+  private static let tileTopInGuide = guideTop + 26
   private static let height = tileTopInGuide + rowHeight + 12
   private static let rowWidth = width - 2 * inset
 
@@ -148,7 +148,7 @@ private struct PermissionDragDemonstration: View {
         Circle().fill(colour.opacity(0.75)).frame(width: 7, height: 7)
       }
       Text(HumanCopy.FullDiskAccess.listName)
-        .font(.system(size: 10, weight: .semibold))
+        .font(TrawlDesign.Typography.smallLabel.weight(.semibold))
         .foregroundStyle(.secondary)
         .padding(.leading, 6)
     }
@@ -201,7 +201,7 @@ private struct PermissionDragDemonstration: View {
   private var dockedGuide: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("↑  " + HumanCopy.FullDiskAccess.dragInstruction(appName: appName))
-        .font(.system(size: 9.5, weight: .medium))
+        .font(TrawlDesign.Typography.smallLabel.weight(.medium))
         .foregroundStyle(.secondary)
         .lineLimit(1)
       TrawlDesign.Shape.control
@@ -251,7 +251,7 @@ private struct PermissionDragDemonstration: View {
     let restingPoint = CGPoint(x: Self.width - 24, y: Self.height - 6)
     let point = beat == .resting ? restingPoint : tileGrip
     return Image(systemName: "cursorarrow")
-      .font(.system(size: 15, weight: .regular))
+      .font(TrawlDesign.Typography.itemTitle)
       .foregroundStyle(.primary)
       .shadow(color: .white, radius: 1)
       .offset(x: point.x, y: point.y)
