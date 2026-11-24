@@ -132,7 +132,7 @@ func readIndexedTrawlerSet(ctx context.Context, db *sql.DB) map[string]bool {
 // runUnifiedAndFederatedSearch queries core index.db for all trawlers that
 // implement ArchiveIndexChangeExporter, runs local hybrid semantic search in
 // parallel, and concurrently executes normal federated Search RPCs for any
-// remaining trawlers (such as Photos), returning one merged canonical
+// plugin that does not export to the index, returning one merged canonical
 // FederatedTrawlerSearchOperation used by both `trawl search` and `__app search`.
 func (r *Runtime) runUnifiedAndFederatedSearch(
 	ctx context.Context,
@@ -338,23 +338,10 @@ func mergeUnifiedAndFallbackSearchOperations(
 		op.TrawlersSkippedFromOperation = append(op.TrawlersSkippedFromOperation, fallbackResp.GetTrawlersSkippedFromOperation()...)
 	}
 
+	// Trawlers without an index export have no comparable score, so their
+	// matches follow the ranked index matches.
 	totalCandidatesBeforeCap := len(matches) + len(fallbackMatches)
-	if len(fallbackMatches) > 0 {
-		// Reserve a bounded slice for non-indexed trawlers (such as Photos) when
-		// searching across multiple sources so neither side crowds out the other.
-		fallbackAllowance := max(limit/4, 3)
-		if len(matches) < limit {
-			fallbackAllowance = max(fallbackAllowance, limit-len(matches))
-		}
-		if fallbackAllowance > len(fallbackMatches) {
-			fallbackAllowance = len(fallbackMatches)
-		}
-		keepUnified := min(len(matches), max(0, limit-fallbackAllowance))
-		merged := make([]*federationcontract.FederatedSearchMatch, 0, keepUnified+fallbackAllowance)
-		merged = append(merged, matches[:keepUnified]...)
-		merged = append(merged, fallbackMatches[:fallbackAllowance]...)
-		matches = merged
-	}
+	matches = append(matches, fallbackMatches...)
 	if len(matches) > limit {
 		matches = matches[:limit]
 	}
