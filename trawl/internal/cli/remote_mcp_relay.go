@@ -43,6 +43,7 @@ type remoteMCPRelayLaunchOptions struct {
 	StateRoot             string
 	RelayServerAddress    string
 	RelayBaseDomain       string
+	RelayTrustedCAFile    string
 	ACMEDirectoryURL      string
 	ACMETrustedRootsPEM   string
 	DisableRelayClientTLS bool
@@ -130,7 +131,8 @@ func startRemoteMCPRelayTunnel(
 	if err != nil {
 		return nil, err
 	}
-	deviceHostname := deriveRelayDeviceSubdomain(publicKey) + "." + baseDomain
+	deviceSubdomain := deriveRelayDeviceSubdomain(publicKey)
+	deviceHostname := deviceSubdomain + "." + baseDomain
 
 	rawLoopbackListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -208,6 +210,8 @@ func startRemoteMCPRelayTunnel(
 	httpServer := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 		ErrorLog:          stdlog.New(io.Discard, "", 0),
 	}
 	go func() {
@@ -217,9 +221,10 @@ func startRemoteMCPRelayTunnel(
 	// Silence frp's default stdout info logger so trawlkit/render owns stdout cleanly.
 	frplog.InitLogger("console", "error", 0, true)
 
-	// Connect stock embedded frpc over TLS to frps and claim the key-bound HTTPS SNI domain.
+	// Connect stock embedded frpc over verified TLS to frps and claim the key-bound HTTPS SNI domain.
 	loginFailExit := false
 	tlsEnable := !options.DisableRelayClientTLS
+	trustedCAFile := strings.TrimSpace(options.RelayTrustedCAFile)
 	commonConfig := &v1.ClientCommonConfig{
 		ServerAddr:    serverHost,
 		ServerPort:    serverPort,
@@ -231,6 +236,11 @@ func startRemoteMCPRelayTunnel(
 		Transport: v1.ClientTransportConfig{
 			TLS: v1.TLSClientConfig{
 				Enable: &tlsEnable,
+				TLSConfig: v1.TLSConfig{
+					UseSystemCa:   tlsEnable && trustedCAFile == "",
+					TrustedCaFile: trustedCAFile,
+					ServerName:    serverHost,
+				},
 			},
 		},
 	}
@@ -241,7 +251,7 @@ func startRemoteMCPRelayTunnel(
 	}
 	proxyConfig := &v1.HTTPSProxyConfig{
 		ProxyBaseConfig: v1.ProxyBaseConfig{
-			Name: "opentrawl-mcp",
+			Name: "opentrawl-" + deviceSubdomain,
 			Type: "https",
 			ProxyBackend: v1.ProxyBackend{
 				LocalIP:   "127.0.0.1",
@@ -261,6 +271,14 @@ func startRemoteMCPRelayTunnel(
 	frpService, err := client.NewService(client.ServiceOptions{
 		Common:                 commonConfig,
 		ConfigSourceAggregator: source.NewAggregator(configSource),
+		ConnectorCreator: func(connCtx context.Context, cfg *v1.ClientCommonConfig) client.Connector {
+			return &signingRelayConnector{
+				inner:      client.NewConnector(connCtx, cfg),
+				common:     cfg,
+				privateKey: privateKey,
+				publicKey:  publicKey,
+			}
+		},
 	})
 	if err != nil {
 		_ = httpServer.Close()
@@ -299,4 +317,40 @@ func startRemoteMCPRelayTunnel(
 			certCache.Stop()
 		},
 	}, nil
+}
+
+// resolveRelayDeviceOrigin derives this Mac's deterministic HTTPS origin before
+// starting the HTTP server so fixedPublicOrigin is immutable once serving begins.
+func resolveRelayDeviceOrigin(stateRoot string, relayBaseDomain string) (string, error) {
+	baseDomain := strings.TrimPrefix(strings.TrimSpace(relayBaseDomain), ".")
+	if baseDomain == "" {
+		baseDomain = remoteMCPRelayDefaultBaseDomain
+	}
+	publicKey, _, err := loadOrCreateRelayDeviceIdentity(stateRoot)
+	if err != nil {
+		return "", err
+	}
+	return "https://" + deriveRelayDeviceSubdomain(publicKey) + "." + baseDomain, nil
+}
+
+// signingRelayConnector refreshes the Ed25519 login timestamp and signature on
+// every control connection attempt so reconnects after 60 seconds succeed.
+type signingRelayConnector struct {
+	inner      client.Connector
+	common     *v1.ClientCommonConfig
+	privateKey ed25519.PrivateKey
+	publicKey  ed25519.PublicKey
+}
+
+func (c *signingRelayConnector) Open() error {
+	c.common.Metadatas = signRelayLoginMetadata(c.privateKey, c.publicKey, time.Now())
+	return c.inner.Open()
+}
+
+func (c *signingRelayConnector) Connect() (net.Conn, error) {
+	return c.inner.Connect()
+}
+
+func (c *signingRelayConnector) Close() error {
+	return c.inner.Close()
 }

@@ -17,11 +17,12 @@ import (
 // AroundQuery specifies a cross-plugin join anchor: a trawl link, a calendar
 // date (YYYY-MM-DD), or an indexed time window (--trip).
 type AroundQuery struct {
-	Target        string
-	TripQuery     string
-	Window        time.Duration
-	Limit         int
-	TrawlerFilter []string
+	Target               string
+	TripQuery            string
+	Window               time.Duration
+	Limit                int
+	TrawlerFilter        []string
+	EnforceTrawlerFilter bool
 }
 
 // AroundMatch describes one record joined to the requested anchor.
@@ -84,6 +85,10 @@ func FindAround(ctx context.Context, db *sql.DB, q AroundQuery) (AroundResult, e
 	if q.Limit <= 0 {
 		q.Limit = 30
 	}
+	q.TrawlerFilter = normalizeAroundTrawlerFilter(q.TrawlerFilter)
+	if len(q.TrawlerFilter) > 0 {
+		q.EnforceTrawlerFilter = true
+	}
 	if strings.TrimSpace(q.TripQuery) != "" {
 		return findAroundTimeWindow(ctx, db, q, started)
 	}
@@ -97,17 +102,49 @@ func FindAround(ctx context.Context, db *sql.DB, q AroundQuery) (AroundResult, e
 	return findAroundRecordLink(ctx, db, target, q, started)
 }
 
+func normalizeAroundTrawlerFilter(raw []string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(raw))
+	normalized := make([]string, 0, len(raw))
+	for _, entry := range raw {
+		id := strings.ToLower(strings.TrimSpace(entry))
+		if id == "" {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+	}
+	return normalized
+}
+
 func findAroundTimeWindow(ctx context.Context, db *sql.DB, q AroundQuery, started time.Time) (AroundResult, error) {
+	if q.EnforceTrawlerFilter && len(q.TrawlerFilter) == 0 {
+		return AroundResult{}, fmt.Errorf("no indexed trip matched %q", q.TripQuery)
+	}
 	like := "%" + strings.ToLower(strings.TrimSpace(q.TripQuery)) + "%"
+	args := []any{like, like}
+	trawlerFilterSQL := ""
+	if q.EnforceTrawlerFilter {
+		ph := strings.TrimSuffix(strings.Repeat("?,", len(q.TrawlerFilter)), ",")
+		trawlerFilterSQL = ` and trawler in (` + ph + `)`
+		for _, t := range q.TrawlerFilter {
+			args = append(args, t)
+		}
+	}
 	var winID, placeTitle, dateTitle string
 	var startUnix, endUnix int64
 	err := db.QueryRowContext(ctx, `
 		select window_id, place_title, date_title, start_unix, end_unix
 		from indexed_time_windows
-		where lower(place_title) like ? or lower(date_title) like ?
+		where (lower(place_title) like ? or lower(date_title) like ?)`+trawlerFilterSQL+`
 		order by start_unix desc
 		limit 1
-	`, like, like).Scan(&winID, &placeTitle, &dateTitle, &startUnix, &endUnix)
+	`, args...).Scan(&winID, &placeTitle, &dateTitle, &startUnix, &endUnix)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AroundResult{}, fmt.Errorf("no indexed trip matched %q", q.TripQuery)
 	}
@@ -115,7 +152,7 @@ func findAroundTimeWindow(ctx context.Context, db *sql.DB, q AroundQuery, starte
 		return AroundResult{}, err
 	}
 	pad := int64(24 * time.Hour / time.Second)
-	matches, err := fetchWindowMatches(ctx, db, startUnix-pad, endUnix+pad, 0, 0, q.TrawlerFilter, q.Limit, "during trip")
+	matches, err := fetchWindowMatches(ctx, db, startUnix-pad, endUnix+pad, 0, 0, q.TrawlerFilter, q.EnforceTrawlerFilter, q.Limit, "during trip")
 	if err != nil {
 		return AroundResult{}, err
 	}
@@ -137,7 +174,7 @@ func findAroundDate(ctx context.Context, db *sql.DB, date time.Time, q AroundQue
 	center := date.UTC().Add(12 * time.Hour)
 	start := center.Add(-q.Window).Unix()
 	end := center.Add(q.Window).Unix()
-	matches, err := fetchWindowMatches(ctx, db, start, end, center.Unix(), 0, q.TrawlerFilter, q.Limit, "within window")
+	matches, err := fetchWindowMatches(ctx, db, start, end, center.Unix(), 0, q.TrawlerFilter, q.EnforceTrawlerFilter, q.Limit, "within window")
 	if err != nil {
 		return AroundResult{}, err
 	}
@@ -152,7 +189,7 @@ func findAroundDate(ctx context.Context, db *sql.DB, date time.Time, q AroundQue
 }
 
 func findAroundRecordLink(ctx context.Context, db *sql.DB, targetLink string, q AroundQuery, started time.Time) (AroundResult, error) {
-	anchor, err := loadAnchorRecordByLink(ctx, db, targetLink)
+	anchor, err := loadAnchorRecordByLink(ctx, db, targetLink, q.TrawlerFilter, q.EnforceTrawlerFilter)
 	if err != nil {
 		return AroundResult{}, err
 	}
@@ -177,16 +214,16 @@ func findAroundRecordLink(ctx context.Context, db *sql.DB, targetLink string, q 
 		byDoc[m.DocID] = m
 	}
 
-	if err := collectExactAnchorJoins(ctx, db, anchor, q.TrawlerFilter, addOrBoost); err != nil {
+	if err := collectExactAnchorJoins(ctx, db, anchor, q.TrawlerFilter, q.EnforceTrawlerFilter, addOrBoost); err != nil {
 		return AroundResult{}, err
 	}
 	if anchor.trawler == "money" {
-		if err := collectMoneyReceiptJoins(ctx, db, anchor, q.TrawlerFilter, addOrBoost); err != nil {
+		if err := collectMoneyReceiptJoins(ctx, db, anchor, q.TrawlerFilter, q.EnforceTrawlerFilter, addOrBoost); err != nil {
 			return AroundResult{}, err
 		}
 	}
 	if anchor.occurredUnix.Valid && anchor.occurredUnix.Int64 > 0 {
-		winMatches, err := fetchWindowMatches(ctx, db, startUnix, endUnix, centerUnix, anchor.docID, q.TrawlerFilter, q.Limit*2, "same time window")
+		winMatches, err := fetchWindowMatches(ctx, db, startUnix, endUnix, centerUnix, anchor.docID, q.TrawlerFilter, q.EnforceTrawlerFilter, q.Limit*2, "same time window")
 		if err != nil {
 			return AroundResult{}, err
 		}
@@ -241,13 +278,16 @@ func findAroundRecordLink(ctx context.Context, db *sql.DB, targetLink string, q 
 	}, nil
 }
 
-func loadAnchorRecordByLink(ctx context.Context, db *sql.DB, rawLink string) (anchorRecordRow, error) {
+func loadAnchorRecordByLink(ctx context.Context, db *sql.DB, rawLink string, trawlerFilter []string, enforceTrawlerFilter bool) (anchorRecordRow, error) {
 	trawler, alias, ok := strings.Cut(strings.TrimSpace(rawLink), ":")
 	if !ok || strings.TrimSpace(trawler) == "" || strings.TrimSpace(alias) == "" {
 		return anchorRecordRow{}, fmt.Errorf("invalid link %q (expected trawler:alias)", rawLink)
 	}
 	trawler = strings.ToLower(strings.TrimSpace(trawler))
 	alias = strings.TrimSpace(alias)
+	if enforceTrawlerFilter && !containsString(trawlerFilter, trawler) {
+		return anchorRecordRow{}, fmt.Errorf("source %q is not allowed", trawler)
+	}
 
 	resolvedRefs, err := shortref.NewScopedSQLiteIndex(db, trawler).Lookup(ctx, alias)
 	if err != nil {
@@ -291,8 +331,12 @@ func collectExactAnchorJoins(
 	db *sql.DB,
 	anchor anchorRecordRow,
 	trawlerFilter []string,
+	enforceTrawlerFilter bool,
 	add func(AroundMatch),
 ) error {
+	if enforceTrawlerFilter && len(trawlerFilter) == 0 {
+		return nil
+	}
 	rows, err := db.QueryContext(ctx, `
 		select a2.anchor_kind, r.doc_id, r.trawler, r.trawler_display_name, r.record_kind,
 		       r.canonical_ref, r.resolved_ref, r.occurred_unix, r.has_time_of_day, r.utc_offset_seconds,
@@ -382,8 +426,12 @@ func collectMoneyReceiptJoins(
 	db *sql.DB,
 	anchor anchorRecordRow,
 	trawlerFilter []string,
+	enforceTrawlerFilter bool,
 	add func(AroundMatch),
 ) error {
+	if enforceTrawlerFilter && len(trawlerFilter) == 0 {
+		return nil
+	}
 	var absMinor, origAbsMinor sql.NullInt64
 	var counterparty string
 	err := db.QueryRowContext(ctx, `
@@ -502,12 +550,16 @@ func fetchWindowMatches(
 	centerUnix int64,
 	excludeDocID int64,
 	trawlerFilter []string,
+	enforceTrawlerFilter bool,
 	limit int,
 	reason string,
 ) ([]AroundMatch, error) {
+	if enforceTrawlerFilter && len(trawlerFilter) == 0 {
+		return nil, nil
+	}
 	args := []any{startUnix, endUnix, excludeDocID}
 	filterSQL := ""
-	if len(trawlerFilter) > 0 {
+	if enforceTrawlerFilter {
 		ph := strings.TrimSuffix(strings.Repeat("?,", len(trawlerFilter)), ",")
 		filterSQL = ` and trawler in (` + ph + `)`
 		for _, t := range trawlerFilter {

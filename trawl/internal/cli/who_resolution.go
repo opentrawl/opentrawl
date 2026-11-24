@@ -49,16 +49,65 @@ func resolveWhoThroughContacts(
 		return resolution
 	}
 	resolution.TrawlersConsulted = []string{installedTrawlerIdentityText(contacts)}
-	resolution.Candidates = contactsResult.Candidates
-	for candidateIndex := range resolution.Candidates {
-		resolution.Candidates[candidateIndex].PersonMatchFactsFromTrawlers =
+	serving, isAgentRequest := agentServingContextFrom(r.ctx)
+	restrictToScopedSources := isAgentRequest && !serving.agentSourceScope.allSourcesAllowed
+	filteredCandidates := make([]personMatchCandidate, 0, len(contactsResult.Candidates))
+	for _, candidate := range contactsResult.Candidates {
+		candidate.PersonMatchFactsFromTrawlers =
 			personMatchFactsFromTrawlersMatchingInstalledTrawlerManifestIdentities(
-				resolution.Candidates[candidateIndex].PersonMatchFactsFromTrawlers,
+				candidate.PersonMatchFactsFromTrawlers,
 				installedTrawlers,
 			)
+		candidate.PersonMessageCountsFromTrawlerArchives =
+			personMessageCountsMatchingInstalledTrawlerManifestIdentities(
+				candidate.PersonMessageCountsFromTrawlerArchives,
+				installedTrawlers,
+			)
+		totalAllowedMessages := 0
+		for _, count := range candidate.PersonMessageCountsFromTrawlerArchives {
+			totalAllowedMessages += int(count.GetMessageCountInvolvingPersonInTrawlerArchive())
+		}
+		candidate.MessageCountInvolvingPerson = totalAllowedMessages
+		if restrictToScopedSources {
+			// Clear cross-source latest-record timestamps so disallowed
+			// archive activity times do not leak through a scoped token.
+			candidate.LatestMatchingArchiveRecordTime = time.Time{}
+			if len(candidate.PersonMatchFactsFromTrawlers) == 0 {
+				continue
+			}
+		}
+		filteredCandidates = append(filteredCandidates, candidate)
 	}
+	resolution.Candidates = filteredCandidates
 	sortWhoCandidates(resolution.Candidates)
 	return resolution
+}
+
+func personMessageCountsMatchingInstalledTrawlerManifestIdentities(
+	counts []*person.PersonMessageCountFromTrawlerArchive,
+	installedTrawlers []InstalledTrawler,
+) []*person.PersonMessageCountFromTrawlerArchive {
+	allowedIdentities := make(map[string]struct{}, len(installedTrawlers))
+	for _, installedTrawler := range installedTrawlers {
+		if id := strings.ToLower(strings.TrimSpace(installedTrawlerIdentityText(installedTrawler))); id != "" {
+			allowedIdentities[id] = struct{}{}
+		}
+	}
+	filtered := make([]*person.PersonMessageCountFromTrawlerArchive, 0, len(counts))
+	for _, count := range counts {
+		if count == nil {
+			continue
+		}
+		id := strings.ToLower(strings.TrimSpace(trawlkit.RegisteredTrawlerIdentityText(count.GetRegisteredTrawler())))
+		if id == "apple" {
+			id = "contacts"
+		}
+		if _, allowed := allowedIdentities[id]; !allowed {
+			continue
+		}
+		filtered = append(filtered, count)
+	}
+	return filtered
 }
 
 func closeSpellingOnlyResolution(resolution federatedWhoResolution) (federatedWhoResolution, bool) {

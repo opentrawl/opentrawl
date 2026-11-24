@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -33,6 +34,7 @@ type McpCmd struct {
 	PairWindow    time.Duration `name:"pair-window" default:"5m" help:"How long the one-time OAuth pairing window stays open"`
 	RelayServer   string        `name:"relay-server" default:"relay.mcp.opentrawl.sh:7000" placeholder:"HOST:PORT" help:"Relay frps control address for --relay"`
 	RelayDomain   string        `name:"relay-domain" default:"mcp.opentrawl.sh" placeholder:"DOMAIN" help:"Base relay domain for --relay"`
+	RelayCAFile   string        `name:"relay-ca-file" hidden:"" help:"PEM CA bundle for verifying the relay control server certificate"`
 	ACMECA        string        `name:"acme-ca" hidden:"" help:"Override ACME directory URL for testing --relay"`
 	ACMECARoots   string        `name:"acme-ca-roots" hidden:"" help:"PEM root CA bundle for --acme-ca"`
 	RelayPlainTCP bool          `name:"relay-no-control-tls" hidden:"" help:"Disable TLS on frpc control channel (local testing only)"`
@@ -48,6 +50,7 @@ const (
 	mcpErrorCodeInvalidParameters  = -32602
 	mcpMaximumStandardInputMessage = 16 << 20
 	mcpMaximumHTTPBodyByteCount    = 16 << 20
+	mcpMaximumRemoteQueryLimit     = 200
 )
 
 type mcpJSONRPCRequest struct {
@@ -367,7 +370,11 @@ func (c *McpCmd) runStdio(r *Runtime) error {
 func (c *McpCmd) runRelay(r *Runtime) error {
 	service := newAgentArchiveService(r.ctx, r.stateRoot)
 	sourceNames := discoveredSourceNames(service)
-	oauthServer := newRemoteMCPOAuthServer(r.stateRoot, "", sourceNames)
+	relayOrigin, err := resolveRelayDeviceOrigin(r.stateRoot, c.RelayDomain)
+	if err != nil {
+		return render.AgentAccessOperationFailed("Cannot resolve relay device identity: " + err.Error())
+	}
+	oauthServer := newRemoteMCPOAuthServer(r.stateRoot, relayOrigin, agentAccessTokenSurfaceRelay, sourceNames)
 	var pairingCode string
 	var pairingExpires time.Time
 	if c.Pair {
@@ -381,6 +388,7 @@ func (c *McpCmd) runRelay(r *Runtime) error {
 	handler := &agentMCPHTTPHandler{
 		service:              service,
 		oauth:                oauthServer,
+		surface:              agentAccessTokenSurfaceRelay,
 		allowRemoteAppRoutes: false,
 	}
 
@@ -391,6 +399,7 @@ func (c *McpCmd) runRelay(r *Runtime) error {
 		StateRoot:             r.stateRoot,
 		RelayServerAddress:    c.RelayServer,
 		RelayBaseDomain:       c.RelayDomain,
+		RelayTrustedCAFile:    c.RelayCAFile,
 		ACMEDirectoryURL:      c.ACMECA,
 		ACMETrustedRootsPEM:   c.ACMECARoots,
 		DisableRelayClientTLS: c.RelayPlainTCP,
@@ -400,7 +409,6 @@ func (c *McpCmd) runRelay(r *Runtime) error {
 	}
 	defer tunnel.Close()
 
-	oauthServer.fixedPublicOrigin = tunnel.PublicOrigin
 	facts := []render.FieldValueRow{
 		{FieldLabel: "MCP", FieldValue: tunnel.PublicOrigin + "/mcp"},
 		{FieldLabel: "TLS", FieldValue: "terminated on this Mac (CertMagic TLS-ALPN-01)"},
@@ -450,7 +458,7 @@ func (c *McpCmd) runHTTP(r *Runtime) error {
 		listenAddress = net.JoinHostPort(service.tailscaleIPv4Address, port)
 	}
 	if !useTLS {
-		if err := validatePlainHTTPListenAddress(listenAddress); err != nil {
+		if err := validatePlainHTTPListenAddress(listenAddress, service.tailscaleIPv4Address); err != nil {
 			return render.AgentAccessCommandIsWrong(err.Error())
 		}
 	}
@@ -470,15 +478,15 @@ func (c *McpCmd) runHTTP(r *Runtime) error {
 	if parsedIP := net.ParseIP(listenIP); parsedIP == nil || !parsedIP.IsLoopback() {
 		if service.tailscaleMagicDNSHostName != "" {
 			advertisedHost = service.tailscaleMagicDNSHostName
-		} else if hostName, hostErr := os.Hostname(); hostErr == nil && hostName != "" {
-			advertisedHost = hostName
+		} else if service.tailscaleIPv4Address != "" {
+			advertisedHost = service.tailscaleIPv4Address
 		}
 	}
 	remoteArchiveBaseURL := scheme + "://" + net.JoinHostPort(advertisedHost, port)
 	mcpEndpointURL := remoteArchiveBaseURL + "/mcp"
 
 	sourceNames := discoveredSourceNames(service)
-	oauthServer := newRemoteMCPOAuthServer(r.stateRoot, remoteArchiveBaseURL, sourceNames)
+	oauthServer := newRemoteMCPOAuthServer(r.stateRoot, remoteArchiveBaseURL, agentAccessTokenSurfaceLocal, sourceNames)
 	var pairingCode string
 	var pairingExpires time.Time
 	if c.Pair {
@@ -514,9 +522,12 @@ func (c *McpCmd) runHTTP(r *Runtime) error {
 		Handler: &agentMCPHTTPHandler{
 			service:              service,
 			oauth:                oauthServer,
+			surface:              agentAccessTokenSurfaceLocal,
 			allowRemoteAppRoutes: true,
 		},
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	var serveErr error
 	if useTLS {
@@ -541,9 +552,9 @@ func discoveredSourceNames(service *agentArchiveService) []string {
 }
 
 // validatePlainHTTPListenAddress ensures unencrypted HTTP only binds to
-// loopback or a Tailscale WireGuard address (100.64.0.0/10), never 0.0.0.0 or
+// loopback or this machine's active Tailscale WireGuard IP, never 0.0.0.0 or
 // an unencrypted Wi-Fi/LAN interface.
-func validatePlainHTTPListenAddress(listenAddress string) error {
+func validatePlainHTTPListenAddress(listenAddress string, activeTailscaleIPv4 string) error {
 	host, _, err := net.SplitHostPort(listenAddress)
 	if err != nil {
 		return errors.New("listen address must be HOST:PORT, such as 127.0.0.1:7391")
@@ -556,7 +567,7 @@ func validatePlainHTTPListenAddress(listenAddress string) error {
 	if parsedIP != nil && parsedIP.IsLoopback() {
 		return nil
 	}
-	if isTailscaleCGNATIPv4String(trimmed) {
+	if activeTailscaleIPv4 != "" && trimmed == activeTailscaleIPv4 {
 		return nil
 	}
 	return errors.New("refusing to serve unencrypted HTTP on " + listenAddress + "; pass --tailscale to bind only to your Tailscale WireGuard IP, listen on 127.0.0.1, pass --tls-cert and --tls-key, or use --relay")
@@ -565,6 +576,7 @@ func validatePlainHTTPListenAddress(listenAddress string) error {
 type agentMCPHTTPHandler struct {
 	service              *agentArchiveService
 	oauth                *remoteMCPOAuthServer
+	surface              agentAccessTokenSurface
 	allowRemoteAppRoutes bool
 }
 
@@ -583,6 +595,10 @@ func (handler *agentMCPHTTPHandler) ServeHTTP(response http.ResponseWriter, requ
 	}
 	switch request.URL.Path {
 	case "/mcp":
+		if !handler.isAllowedMCPRequestOrigin(request) {
+			writeMCPHTTPError(response, http.StatusForbidden, "request Origin is not allowed")
+			return
+		}
 		if request.Method == http.MethodDelete {
 			if _, ok := handler.authenticateRequest(response, request); !ok {
 				return
@@ -634,6 +650,31 @@ func (handler *agentMCPHTTPHandler) ServeHTTP(response http.ResponseWriter, requ
 	}
 }
 
+func (handler *agentMCPHTTPHandler) isAllowedMCPRequestOrigin(request *http.Request) bool {
+	origin := strings.TrimSpace(request.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	parsedOrigin, err := url.Parse(origin)
+	if err != nil || parsedOrigin.Host == "" {
+		return false
+	}
+	if handler.oauth != nil {
+		expectedOrigin := strings.TrimRight(handler.oauth.publicOriginForRequest(request), "/")
+		if strings.EqualFold(strings.TrimRight(origin, "/"), expectedOrigin) {
+			return true
+		}
+	}
+	host := parsedOrigin.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return true
+	}
+	return false
+}
+
 func (handler *agentMCPHTTPHandler) authenticateRequest(
 	response http.ResponseWriter,
 	request *http.Request,
@@ -654,7 +695,14 @@ func (handler *agentMCPHTTPHandler) authenticateRequest(
 	}
 	token, err := findActiveAgentAccessToken(handler.service.stateRoot, bearerToken)
 	if err != nil {
-		return writeUnauthorized(err.Error())
+		return writeUnauthorized(errAgentAccessTokenNotRecognised.Error())
+	}
+	requiredSurface := handler.surface
+	if requiredSurface == "" {
+		requiredSurface = agentAccessTokenSurfaceLocal
+	}
+	if !token.allowsSurface(requiredSurface) {
+		return writeUnauthorized(errAgentAccessTokenNotRecognised.Error())
 	}
 	return token.agentSourceScope(), true
 }

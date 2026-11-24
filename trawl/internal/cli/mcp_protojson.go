@@ -46,10 +46,14 @@ func (service *agentArchiveService) executeMCPToolCall(
 ) (mcpToolCallResult, bool) {
 	r := service.newAgentRequestRuntime(ctx, scope)
 	limitOrDefault := func(defaultLimit int) int {
+		limit := defaultLimit
 		if arguments.Limit > 0 {
-			return arguments.Limit
+			limit = arguments.Limit
 		}
-		return defaultLimit
+		if limit > mcpMaximumRemoteQueryLimit {
+			limit = mcpMaximumRemoteQueryLimit
+		}
+		return limit
 	}
 	switch toolName {
 	case "trawl_status":

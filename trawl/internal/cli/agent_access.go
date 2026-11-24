@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -22,17 +23,39 @@ import (
 // the secret bearer token.
 type AgentAccessTokenIdentifier string
 
+// agentAccessTokenSurface names which transport listener may accept a token.
+type agentAccessTokenSurface string
+
+const (
+	agentAccessTokenSurfaceLocal agentAccessTokenSurface = "local"
+	agentAccessTokenSurfaceRelay agentAccessTokenSurface = "relay"
+)
+
 // agentAccessTokenRecord is one stored token. Only the SHA-256 of the bearer
 // token is kept, so the store cannot leak a usable token.
 type agentAccessTokenRecord struct {
 	AgentAccessTokenIdentifier AgentAccessTokenIdentifier `json:"token_id"`
 	AgentName                  string                     `json:"agent_name"`
 	BearerTokenSHA256          string                     `json:"bearer_token_sha256"`
+	AllowedSurface             agentAccessTokenSurface    `json:"allowed_surface,omitempty"`
 	AllSourcesAllowed          bool                       `json:"all_sources_allowed"`
 	AllowedSources             []string                   `json:"allowed_sources"`
 	CreatedTime                time.Time                  `json:"created_time"`
 	ExpiresTime                *time.Time                 `json:"expires_time,omitempty"`
 	RevokedTime                *time.Time                 `json:"revoked_time,omitempty"`
+}
+
+func (token agentAccessTokenRecord) allowsSurface(surface agentAccessTokenSurface) bool {
+	if token.AllowedSurface != "" {
+		return token.AllowedSurface == surface
+	}
+	// Pre-existing tokens written before allowed_surface was stored:
+	// short-lived OAuth tokens (ExpiresTime != nil) belong to the relay surface;
+	// non-expiring manual tokens belong to the local/Tailscale surface only.
+	if token.ExpiresTime != nil {
+		return surface == agentAccessTokenSurfaceRelay
+	}
+	return surface == agentAccessTokenSurfaceLocal
 }
 
 type agentAccessTokenFile struct {
@@ -42,6 +65,7 @@ type agentAccessTokenFile struct {
 const (
 	agentAccessDirectoryName       = "agent-access"
 	agentAccessTokenFileName       = "access-tokens.json"
+	agentAccessStoreLockFileName   = ".store.lock"
 	agentAccessBearerTokenPrefix   = "otk_"
 	agentAccessAllSourcesKeyword   = "all"
 	agentAccessTokenEnvironmentKey = "OPENTRAWL_ACCESS_TOKEN"
@@ -49,9 +73,31 @@ const (
 
 var errAgentAccessTokenNotRecognised = errors.New("access token is not recognised or was revoked")
 
-// agentAccessTokenStoreMutex serialises read-modify-write of the token file
-// within one process.
+// agentAccessTokenStoreMutex serialises access-store mutations within one
+// process; withAgentAccessStoreLock pairs it with syscall.Flock across processes.
 var agentAccessTokenStoreMutex sync.Mutex
+
+func withAgentAccessStoreLock(stateRoot string, operation func() error) error {
+	agentAccessTokenStoreMutex.Lock()
+	defer agentAccessTokenStoreMutex.Unlock()
+
+	lockDir := filepath.Join(stateRoot, agentAccessDirectoryName)
+	if err := os.MkdirAll(lockDir, 0o700); err != nil {
+		return err
+	}
+	lockPath := filepath.Join(lockDir, agentAccessStoreLockFileName)
+	// #nosec G304 -- lockPath is derived solely from stateRoot and a fixed filename.
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lockFile.Close() }()
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer func() { _ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) }()
+	return operation()
+}
 
 func agentAccessTokenFilePath(stateRoot string) string {
 	return filepath.Join(stateRoot, agentAccessDirectoryName, agentAccessTokenFileName)
@@ -130,48 +176,69 @@ func parseAllowedSourcesList(allowedSourcesText string) (bool, []string) {
 }
 
 func createAgentAccessToken(stateRoot, agentName, allowedSourcesText string, now time.Time) (agentAccessTokenRecord, string, error) {
-	return createScopedAgentAccessToken(stateRoot, agentName, allowedSourcesText, now, nil)
+	return createScopedAgentAccessToken(stateRoot, agentName, allowedSourcesText, agentAccessTokenSurfaceLocal, now, nil)
+}
+
+func createAgentAccessTokenForSurface(
+	stateRoot, agentName, allowedSourcesText string,
+	surface agentAccessTokenSurface,
+	now time.Time,
+) (agentAccessTokenRecord, string, error) {
+	return createScopedAgentAccessToken(stateRoot, agentName, allowedSourcesText, surface, now, nil)
 }
 
 func createScopedAgentAccessToken(
 	stateRoot, agentName, allowedSourcesText string,
+	surface agentAccessTokenSurface,
 	now time.Time,
 	expiresTime *time.Time,
 ) (agentAccessTokenRecord, string, error) {
-	agentAccessTokenStoreMutex.Lock()
-	defer agentAccessTokenStoreMutex.Unlock()
-	tokens, err := loadAgentAccessTokens(stateRoot)
+	if surface == "" {
+		surface = agentAccessTokenSurfaceLocal
+	}
+	var createdRecord agentAccessTokenRecord
+	var createdBearer string
+	err := withAgentAccessStoreLock(stateRoot, func() error {
+		tokens, err := loadAgentAccessTokens(stateRoot)
+		if err != nil {
+			return err
+		}
+		secret := make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			return err
+		}
+		bearerToken := agentAccessBearerTokenPrefix + base64.RawURLEncoding.EncodeToString(secret)
+		identifierBytes := make([]byte, 4)
+		if _, err := rand.Read(identifierBytes); err != nil {
+			return err
+		}
+		allSources, sources := parseAllowedSourcesList(allowedSourcesText)
+		var expiresUTC *time.Time
+		if expiresTime != nil {
+			utc := expiresTime.UTC()
+			expiresUTC = &utc
+		}
+		record := agentAccessTokenRecord{
+			AgentAccessTokenIdentifier: AgentAccessTokenIdentifier("tok_" + hex.EncodeToString(identifierBytes)),
+			AgentName:                  strings.TrimSpace(agentName),
+			BearerTokenSHA256:          bearerTokenSHA256Hex(bearerToken),
+			AllowedSurface:             surface,
+			AllSourcesAllowed:          allSources,
+			AllowedSources:             sources,
+			CreatedTime:                now.UTC(),
+			ExpiresTime:                expiresUTC,
+		}
+		if err := saveAgentAccessTokens(stateRoot, append(tokens, record)); err != nil {
+			return err
+		}
+		createdRecord = record
+		createdBearer = bearerToken
+		return nil
+	})
 	if err != nil {
 		return agentAccessTokenRecord{}, "", err
 	}
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		return agentAccessTokenRecord{}, "", err
-	}
-	bearerToken := agentAccessBearerTokenPrefix + base64.RawURLEncoding.EncodeToString(secret)
-	identifierBytes := make([]byte, 4)
-	if _, err := rand.Read(identifierBytes); err != nil {
-		return agentAccessTokenRecord{}, "", err
-	}
-	allSources, sources := parseAllowedSourcesList(allowedSourcesText)
-	var expiresUTC *time.Time
-	if expiresTime != nil {
-		utc := expiresTime.UTC()
-		expiresUTC = &utc
-	}
-	record := agentAccessTokenRecord{
-		AgentAccessTokenIdentifier: AgentAccessTokenIdentifier("tok_" + hex.EncodeToString(identifierBytes)),
-		AgentName:                  strings.TrimSpace(agentName),
-		BearerTokenSHA256:          bearerTokenSHA256Hex(bearerToken),
-		AllSourcesAllowed:          allSources,
-		AllowedSources:             sources,
-		CreatedTime:                now.UTC(),
-		ExpiresTime:                expiresUTC,
-	}
-	if err := saveAgentAccessTokens(stateRoot, append(tokens, record)); err != nil {
-		return agentAccessTokenRecord{}, "", err
-	}
-	return record, bearerToken, nil
+	return createdRecord, createdBearer, nil
 }
 
 // isAgentAccessTokenIdentifierActive reports whether the named token exists and
@@ -190,17 +257,16 @@ func isAgentAccessTokenIdentifierActive(stateRoot string, tokenIdentifier AgentA
 	return false, nil
 }
 
-// replaceActiveAgentAccessTokenSecret rotates the bearer token hash and expiry
-// for an existing active grant (used by OAuth refresh token rotation so
-// trawl token list stays one row per connected cloud agent).
-func replaceActiveAgentAccessTokenSecret(
+// replaceActiveAgentAccessTokenSecretLocked rotates the bearer token hash and
+// expiry for an existing active grant while the caller holds the cross-process
+// store lock (used by OAuth refresh token rotation so trawl token list stays
+// one row per connected cloud agent).
+func replaceActiveAgentAccessTokenSecretLocked(
 	stateRoot string,
 	tokenIdentifier AgentAccessTokenIdentifier,
-	now time.Time,
+	_ time.Time,
 	expiresTime time.Time,
 ) (agentAccessTokenRecord, string, error) {
-	agentAccessTokenStoreMutex.Lock()
-	defer agentAccessTokenStoreMutex.Unlock()
 	tokens, err := loadAgentAccessTokens(stateRoot)
 	if err != nil {
 		return agentAccessTokenRecord{}, "", err
@@ -231,8 +297,19 @@ func replaceActiveAgentAccessTokenSecret(
 // revokeAgentAccessToken revokes one token by identifier and reports whether it
 // existed.
 func revokeAgentAccessToken(stateRoot string, tokenIdentifier AgentAccessTokenIdentifier, now time.Time) (bool, error) {
-	agentAccessTokenStoreMutex.Lock()
-	defer agentAccessTokenStoreMutex.Unlock()
+	var found bool
+	err := withAgentAccessStoreLock(stateRoot, func() error {
+		var innerErr error
+		found, innerErr = revokeAgentAccessTokenLocked(stateRoot, tokenIdentifier, now)
+		return innerErr
+	})
+	if err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+func revokeAgentAccessTokenLocked(stateRoot string, tokenIdentifier AgentAccessTokenIdentifier, now time.Time) (bool, error) {
 	tokens, err := loadAgentAccessTokens(stateRoot)
 	if err != nil {
 		return false, err

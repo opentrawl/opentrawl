@@ -56,7 +56,11 @@ func (c *AroundCmd) execute(r *Runtime) (unifiedindex.AroundResult, error) {
 	defer func() { _ = indexStore.Close() }()
 
 	var trawlerFilter []string
-	if _, isAgentRequest := agentServingContextFrom(r.ctx); isAgentRequest {
+	_, isAgentRequest := agentServingContextFrom(r.ctx)
+	if isAgentRequest {
+		if limit > mcpMaximumRemoteQueryLimit {
+			limit = mcpMaximumRemoteQueryLimit
+		}
 		if err := refuseAroundTargetOutsideAgentScope(installed, c.Target); err != nil {
 			return unifiedindex.AroundResult{}, err
 		}
@@ -77,11 +81,12 @@ func (c *AroundCmd) execute(r *Runtime) (unifiedindex.AroundResult, error) {
 	}
 
 	res, err := unifiedindex.FindAround(r.ctx, indexStore.DB(), unifiedindex.AroundQuery{
-		Target:        c.Target,
-		TripQuery:     c.Trip,
-		Window:        window,
-		Limit:         limit,
-		TrawlerFilter: trawlerFilter,
+		Target:               c.Target,
+		TripQuery:            c.Trip,
+		Window:               window,
+		Limit:                limit,
+		TrawlerFilter:        trawlerFilter,
+		EnforceTrawlerFilter: isAgentRequest || len(trawlerFilter) > 0,
 	})
 	if err != nil {
 		return unifiedindex.AroundResult{}, render.CommandFailureFromTrawler(render.CommandFailureKindNothingOrSeveralThingsMatched, err.Error())
@@ -188,9 +193,12 @@ func refuseAroundTargetOutsideAgentScope(allowedTrawlers []InstalledTrawler, tar
 		}
 		return nil
 	}
-	if prefix, _, hasColon := strings.Cut(trimmed, ":"); hasColon && isTrawlerIdentifierPrefix(prefix) {
-		if _, allowed := findInstalledTrawler(allowedTrawlers, prefix); !allowed {
-			return render.AgentAccessSourceNotAllowed(prefix, installedTrawlerCommandNames(allowedTrawlers))
+	if prefix, _, hasColon := strings.Cut(trimmed, ":"); hasColon {
+		normalizedPrefix := strings.ToLower(strings.TrimSpace(prefix))
+		if isTrawlerIdentifierPrefix(normalizedPrefix) {
+			if _, allowed := findInstalledTrawler(allowedTrawlers, normalizedPrefix); !allowed {
+				return render.AgentAccessSourceNotAllowed(normalizedPrefix, installedTrawlerCommandNames(allowedTrawlers))
+			}
 		}
 	}
 	return nil

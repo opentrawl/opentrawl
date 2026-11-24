@@ -53,7 +53,64 @@ func (c *OpenCmd) execute(r *Runtime) (*open.OpenResponse, []InstalledTrawler, e
 		route.LocalShortReference,
 		requestedTrawlLink,
 	)
+	if serving, isAgentRequest := agentServingContextFrom(r.ctx); isAgentRequest {
+		if err := filterOpenedPersonRecordForAgentScope(
+			serving.agentSourceScope,
+			response.GetRecord().GetPersonRecord(),
+			installedTrawlerCommandNames(installedTrawlers),
+		); err != nil {
+			return nil, nil, err
+		}
+	}
 	return response, installedTrawlers, nil
+}
+
+func contactSourceAllowedByAgentScope(scope agentSourceScope, rawSourceIdentity string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(rawSourceIdentity))
+	if normalized == "apple" {
+		normalized = "contacts"
+	}
+	return scope.allowsSource(normalized)
+}
+
+func filterOpenedPersonRecordForAgentScope(
+	scope agentSourceScope,
+	record *person.PersonRecord,
+	allowedSourceNames []string,
+) error {
+	if record == nil || scope.allSourcesAllowed {
+		return nil
+	}
+	originalContributors := record.GetTrawlersContributingFactsToPersonRecord()
+	allowedContributors := make([]*person.TrawlerContributingFactsToPersonRecord, 0, len(originalContributors))
+	for _, contributor := range originalContributors {
+		if contributor == nil {
+			continue
+		}
+		if contactSourceAllowedByAgentScope(scope, trawlkit.RegisteredTrawlerIdentityText(contributor.GetRegisteredTrawler())) {
+			allowedContributors = append(allowedContributors, contributor)
+		}
+	}
+	if len(originalContributors) > 0 && len(allowedContributors) == 0 {
+		return render.AgentAccessSourceNotAllowed("contacts", allowedSourceNames)
+	}
+	record.TrawlersContributingFactsToPersonRecord = allowedContributors
+
+	allowedCounts := make([]*person.PersonMessageCountFromTrawlerArchive, 0, len(record.GetPersonMessageCountsFromTrawlerArchives()))
+	var allowedMessageTotal uint64
+	for _, count := range record.GetPersonMessageCountsFromTrawlerArchives() {
+		if count == nil {
+			continue
+		}
+		if !contactSourceAllowedByAgentScope(scope, trawlkit.RegisteredTrawlerIdentityText(count.GetRegisteredTrawler())) {
+			continue
+		}
+		allowedCounts = append(allowedCounts, count)
+		allowedMessageTotal += count.GetMessageCountInvolvingPersonInTrawlerArchive()
+	}
+	record.PersonMessageCountsFromTrawlerArchives = allowedCounts
+	record.MessageCountInvolvingPersonAcrossTrawlers = allowedMessageTotal
+	return nil
 }
 
 func (c *OpenCmd) Run(r *Runtime) error {

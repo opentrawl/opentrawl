@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -41,6 +42,7 @@ const (
 	remoteMCPOAuthPendingConsentLifetime    = 5 * time.Minute
 	remoteMCPOAuthDefaultPairingDuration    = 5 * time.Minute
 	remoteMCPOAuthMaxPairingCodeAttempts    = 5
+	remoteMCPOAuthMaxPendingConsents        = 64
 	remoteMCPOAuthMaxCIMDResponseBytes      = 64 << 10
 	remoteMCPOAuthMaxRegisterBodyBytes      = 64 << 10
 	remoteMCPOAuthMaxTokenFormBodyBytes     = 64 << 10
@@ -202,6 +204,7 @@ type remoteMCPOAuthConsentView struct {
 	RedirectHost     string
 	CSRFToken        string
 	Sources          []string
+	SelectedSources  map[string]bool
 	ErrorMessage     string
 	PairingWindowOff bool
 }
@@ -242,7 +245,7 @@ var remoteMCPOAuthConsentHTMLTemplate = template.Must(template.New("consent").Pa
     <label class="field">Allowed sources</label>
     <div class="sources">
       {{range .Sources}}
-      <label><input type="checkbox" name="source" value="{{.}}" checked> {{.}}</label>
+      <label><input type="checkbox" name="source" value="{{.}}"{{if (index $.SelectedSources .)}} checked{{end}}> {{.}}</label>
       {{end}}
     </div>
     <button type="submit" name="decision" value="approve">Approve Read-Only Access</button>
@@ -257,6 +260,7 @@ var remoteMCPOAuthConsentHTMLTemplate = template.Must(template.New("consent").Pa
 type remoteMCPOAuthServer struct {
 	stateRoot         string
 	fixedPublicOrigin string
+	surface           agentAccessTokenSurface
 	availableSources  []string
 	now               func() time.Time
 	cimdHTTPClient    *http.Client
@@ -267,12 +271,16 @@ type remoteMCPOAuthServer struct {
 	authorizationCodes map[string]remoteMCPOAuthAuthorizationCode
 }
 
-func newRemoteMCPOAuthServer(stateRoot, fixedPublicOrigin string, availableSources []string) *remoteMCPOAuthServer {
+func newRemoteMCPOAuthServer(stateRoot, fixedPublicOrigin string, surface agentAccessTokenSurface, availableSources []string) *remoteMCPOAuthServer {
 	sortedSources := slices.Clone(availableSources)
 	slices.Sort(sortedSources)
+	if surface == "" {
+		surface = agentAccessTokenSurfaceLocal
+	}
 	return &remoteMCPOAuthServer{
 		stateRoot:          stateRoot,
 		fixedPublicOrigin:  strings.TrimRight(strings.TrimSpace(fixedPublicOrigin), "/"),
+		surface:            surface,
 		availableSources:   sortedSources,
 		now:                time.Now,
 		cimdHTTPClient:     newSSRFProtectedCIMDHTTPClient(),
@@ -396,7 +404,7 @@ func (server *remoteMCPOAuthServer) handleAuthorizationServerMetadata(response h
 		ResponseTypesSupported:                     []string{"code"},
 		GrantTypesSupported:                        []string{"authorization_code", "refresh_token"},
 		CodeChallengeMethodsSupported:              []string{"S256"},
-		TokenEndpointAuthMethodsSupported:          []string{"none", "client_secret_post"},
+		TokenEndpointAuthMethodsSupported:          []string{"none"},
 		ScopesSupported:                            []string{remoteMCPOAuthReadScope},
 		AuthorizationResponseIssParameterSupported: true,
 		ClientIDMetadataDocumentSupported:          true,
@@ -407,6 +415,10 @@ func (server *remoteMCPOAuthServer) handleClientRegistration(response http.Respo
 	if request.Method != http.MethodPost {
 		response.Header().Set("Allow", http.MethodPost)
 		writeOAuthJSONError(response, http.StatusMethodNotAllowed, "invalid_request", "registration requires POST")
+		return
+	}
+	if !server.isPairingWindowActive() {
+		writeOAuthJSONError(response, http.StatusForbidden, "access_denied", "pairing is closed; open a pairing window on your Mac before registering a client")
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(request.Body, remoteMCPOAuthMaxRegisterBodyBytes))
@@ -532,6 +544,11 @@ func (server *remoteMCPOAuthServer) handleAuthorizeGet(response http.ResponseWri
 	now := server.now().UTC()
 	server.mu.Lock()
 	server.pruneExpiredEphemeralStateLocked(now)
+	if len(server.pendingConsents) >= remoteMCPOAuthMaxPendingConsents {
+		server.mu.Unlock()
+		writeOAuthJSONError(response, http.StatusTooManyRequests, "temporarily_unavailable", "too many pending consent sessions; try again shortly")
+		return
+	}
 	server.pendingConsents[csrfToken] = remoteMCPOAuthPendingConsent{
 		CSRFToken:        csrfToken,
 		ClientIdentifier: clientRecord.ClientIdentifier,
@@ -546,11 +563,20 @@ func (server *remoteMCPOAuthServer) handleAuthorizeGet(response http.ResponseWri
 	server.mu.Unlock()
 
 	renderConsentHTML(response, http.StatusOK, remoteMCPOAuthConsentView{
-		ClientName:   clientRecord.ClientName,
-		RedirectHost: redirectHost,
-		CSRFToken:    csrfToken,
-		Sources:      server.availableSources,
+		ClientName:      clientRecord.ClientName,
+		RedirectHost:    redirectHost,
+		CSRFToken:       csrfToken,
+		Sources:         server.availableSources,
+		SelectedSources: selectedSourcesMap(server.availableSources),
 	})
+}
+
+func selectedSourcesMap(sources []string) map[string]bool {
+	selected := make(map[string]bool, len(sources))
+	for _, s := range sources {
+		selected[s] = true
+	}
+	return selected
 }
 
 func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWriter, request *http.Request) {
@@ -559,10 +585,10 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_request", "could not parse consent form")
 		return
 	}
-	csrfToken := strings.TrimSpace(request.FormValue("csrf_token"))
-	decision := strings.TrimSpace(request.FormValue("decision"))
-	enteredCode := normalizePairingCodeInput(request.FormValue("pairing_code"))
-	selectedSources := request.Form["source"]
+	csrfToken := strings.TrimSpace(request.PostFormValue("csrf_token"))
+	decision := strings.TrimSpace(request.PostFormValue("decision"))
+	enteredCode := normalizePairingCodeInput(request.PostFormValue("pairing_code"))
+	selectedSources := request.PostForm["source"]
 
 	now := server.now().UTC()
 	server.mu.Lock()
@@ -597,11 +623,12 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 			return
 		}
 		renderConsentHTML(response, http.StatusOK, remoteMCPOAuthConsentView{
-			ClientName:   pending.ClientName,
-			RedirectHost: pending.RedirectHost,
-			CSRFToken:    pending.CSRFToken,
-			Sources:      server.availableSources,
-			ErrorMessage: "Pairing code does not match the code shown on your Mac.",
+			ClientName:      pending.ClientName,
+			RedirectHost:    pending.RedirectHost,
+			CSRFToken:       pending.CSRFToken,
+			Sources:         server.availableSources,
+			SelectedSources: selectedSourcesMap(selectedSources),
+			ErrorMessage:    "Pairing code does not match the code shown on your Mac.",
 		})
 		return
 	}
@@ -615,11 +642,12 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 	if len(allowedSources) == 0 {
 		server.mu.Unlock()
 		renderConsentHTML(response, http.StatusOK, remoteMCPOAuthConsentView{
-			ClientName:   pending.ClientName,
-			RedirectHost: pending.RedirectHost,
-			CSRFToken:    pending.CSRFToken,
-			Sources:      server.availableSources,
-			ErrorMessage: "Select at least one source to share.",
+			ClientName:      pending.ClientName,
+			RedirectHost:    pending.RedirectHost,
+			CSRFToken:       pending.CSRFToken,
+			Sources:         server.availableSources,
+			SelectedSources: map[string]bool{},
+			ErrorMessage:    "Select at least one source to share.",
 		})
 		return
 	}
@@ -628,10 +656,9 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 	server.pairing.markConsumed()
 	delete(server.pendingConsents, csrfToken)
 
-	allowedSourcesText := agentAccessAllSourcesKeyword
-	if len(allowedSources) < len(server.availableSources) {
-		allowedSourcesText = strings.Join(allowedSources, ",")
-	}
+	// Persist the exact consented source list so newly installed sources later
+	// are never silently exposed without fresh user consent.
+	allowedSourcesText := strings.Join(allowedSources, ",")
 	authCodeBytes := make([]byte, 32)
 	if _, err := rand.Read(authCodeBytes); err != nil {
 		server.mu.Unlock()
@@ -676,7 +703,7 @@ func (server *remoteMCPOAuthServer) handleToken(response http.ResponseWriter, re
 		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_request", "could not parse token form")
 		return
 	}
-	grantType := strings.TrimSpace(request.FormValue("grant_type"))
+	grantType := strings.TrimSpace(request.PostFormValue("grant_type"))
 	switch grantType {
 	case "authorization_code":
 		server.handleAuthorizationCodeGrant(response, request)
@@ -688,11 +715,11 @@ func (server *remoteMCPOAuthServer) handleToken(response http.ResponseWriter, re
 }
 
 func (server *remoteMCPOAuthServer) handleAuthorizationCodeGrant(response http.ResponseWriter, request *http.Request) {
-	code := strings.TrimSpace(request.FormValue("code"))
-	redirectURI := strings.TrimSpace(request.FormValue("redirect_uri"))
-	clientID := strings.TrimSpace(request.FormValue("client_id"))
-	codeVerifier := strings.TrimSpace(request.FormValue("code_verifier"))
-	resourceURI := strings.TrimSpace(request.FormValue("resource"))
+	code := strings.TrimSpace(request.PostFormValue("code"))
+	redirectURI := strings.TrimSpace(request.PostFormValue("redirect_uri"))
+	clientID := strings.TrimSpace(request.PostFormValue("client_id"))
+	codeVerifier := strings.TrimSpace(request.PostFormValue("code_verifier"))
+	resourceURI := strings.TrimSpace(request.PostFormValue("resource"))
 
 	now := server.now().UTC()
 	server.mu.Lock()
@@ -729,6 +756,7 @@ func (server *remoteMCPOAuthServer) handleAuthorizationCodeGrant(response http.R
 		server.stateRoot,
 		grant.ClientName,
 		grant.AllowedSourcesText,
+		server.surface,
 		now,
 		&accessExpiry,
 	)
@@ -751,9 +779,9 @@ func (server *remoteMCPOAuthServer) handleAuthorizationCodeGrant(response http.R
 }
 
 func (server *remoteMCPOAuthServer) handleRefreshTokenGrant(response http.ResponseWriter, request *http.Request) {
-	refreshToken := strings.TrimSpace(request.FormValue("refresh_token"))
-	clientID := strings.TrimSpace(request.FormValue("client_id"))
-	resourceURI := strings.TrimSpace(request.FormValue("resource"))
+	refreshToken := strings.TrimSpace(request.PostFormValue("refresh_token"))
+	clientID := strings.TrimSpace(request.PostFormValue("client_id"))
+	resourceURI := strings.TrimSpace(request.PostFormValue("resource"))
 	if !strings.HasPrefix(refreshToken, remoteMCPOAuthRefreshTokenPrefix) {
 		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token is invalid")
 		return
@@ -762,96 +790,128 @@ func (server *remoteMCPOAuthServer) handleRefreshTokenGrant(response http.Respon
 	now := server.now().UTC()
 	wantedHash := bearerTokenSHA256Hex(refreshToken)
 
+	var newAccessToken string
+	var newRefreshToken string
+	var oauthErrCode string
+	var oauthErrDesc string
+	oauthErrStatus := http.StatusBadRequest
+
 	server.mu.Lock()
-	records, err := server.loadRefreshTokensLocked()
-	if err != nil {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusInternalServerError, "server_error", "could not read refresh token store")
-		return
-	}
-	matchIndex := -1
-	for index, record := range records {
-		if subtle.ConstantTimeCompare([]byte(record.RefreshTokenSHA256), []byte(wantedHash)) == 1 {
-			matchIndex = index
-			break
+	lockErr := withAgentAccessStoreLock(server.stateRoot, func() error {
+		records, err := server.loadRefreshTokensLocked()
+		if err != nil {
+			oauthErrStatus = http.StatusInternalServerError
+			oauthErrCode = "server_error"
+			oauthErrDesc = "could not read refresh token store"
+			return nil
 		}
-	}
-	if matchIndex < 0 {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token is not recognised")
-		return
-	}
-	matched := records[matchIndex]
-	switch matched.State {
-	case remoteMCPOAuthRefreshTokenStateRotated:
-		// Reuse of an already-rotated refresh token: revoke the underlying grant.
-		records[matchIndex].State = remoteMCPOAuthRefreshTokenStateRevoked
-		_ = server.saveRefreshTokensLocked(records)
-		server.mu.Unlock()
-		_, _ = revokeAgentAccessToken(server.stateRoot, matched.AgentAccessTokenIdentifier, now)
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token was already used; grant revoked")
-		return
-	case remoteMCPOAuthRefreshTokenStateRevoked:
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token was revoked")
-		return
-	case remoteMCPOAuthRefreshTokenStateActive:
-		// Active token; continue validating expiry, binding, and grant liveness.
-	default:
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token state is invalid")
-		return
-	}
-	if now.After(matched.ExpiresTime) {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "refresh token has expired")
-		return
-	}
-	if clientID != "" && clientID != matched.ClientIdentifier {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "client_id does not match refresh token")
-		return
-	}
-	if resourceURI != "" && resourceURI != matched.ResourceURI {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_target", "resource does not match refresh token")
-		return
-	}
-	active, err := isAgentAccessTokenIdentifierActive(server.stateRoot, matched.AgentAccessTokenIdentifier)
-	if err != nil || !active {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "grant was revoked")
-		return
-	}
+		matchIndex := -1
+		for index, record := range records {
+			if subtle.ConstantTimeCompare([]byte(record.RefreshTokenSHA256), []byte(wantedHash)) == 1 {
+				matchIndex = index
+				break
+			}
+		}
+		if matchIndex < 0 {
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token is not recognised"
+			return nil
+		}
+		matched := records[matchIndex]
+		switch matched.State {
+		case remoteMCPOAuthRefreshTokenStateRotated:
+			// Reuse of an already-rotated refresh token: revoke the underlying grant.
+			records[matchIndex].State = remoteMCPOAuthRefreshTokenStateRevoked
+			if saveErr := server.saveRefreshTokensLocked(records); saveErr != nil {
+				oauthErrStatus = http.StatusInternalServerError
+				oauthErrCode = "server_error"
+				oauthErrDesc = "could not persist refresh token revocation"
+				return nil
+			}
+			if _, revokeErr := revokeAgentAccessTokenLocked(server.stateRoot, matched.AgentAccessTokenIdentifier, now); revokeErr != nil {
+				oauthErrStatus = http.StatusInternalServerError
+				oauthErrCode = "server_error"
+				oauthErrDesc = "could not revoke compromised grant"
+				return nil
+			}
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token was already used; grant revoked"
+			return nil
+		case remoteMCPOAuthRefreshTokenStateRevoked:
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token was revoked"
+			return nil
+		case remoteMCPOAuthRefreshTokenStateActive:
+			// Active token; continue validating expiry, binding, and grant liveness.
+		default:
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token state is invalid"
+			return nil
+		}
+		if now.After(matched.ExpiresTime) {
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token has expired"
+			return nil
+		}
+		if clientID != "" && clientID != matched.ClientIdentifier {
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "client_id does not match refresh token"
+			return nil
+		}
+		if resourceURI != "" && resourceURI != matched.ResourceURI {
+			oauthErrCode = "invalid_target"
+			oauthErrDesc = "resource does not match refresh token"
+			return nil
+		}
+		active, err := isAgentAccessTokenIdentifierActive(server.stateRoot, matched.AgentAccessTokenIdentifier)
+		if err != nil || !active {
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "grant was revoked"
+			return nil
+		}
 
-	records[matchIndex].State = remoteMCPOAuthRefreshTokenStateRotated
-	newRefreshSecret := make([]byte, 32)
-	if _, err := rand.Read(newRefreshSecret); err != nil {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusInternalServerError, "server_error", "could not rotate refresh token")
-		return
-	}
-	newRefreshToken := remoteMCPOAuthRefreshTokenPrefix + base64.RawURLEncoding.EncodeToString(newRefreshSecret)
-	records = append(records, remoteMCPOAuthRefreshTokenRecord{
-		RefreshTokenSHA256:         bearerTokenSHA256Hex(newRefreshToken),
-		AgentAccessTokenIdentifier: matched.AgentAccessTokenIdentifier,
-		ClientIdentifier:           matched.ClientIdentifier,
-		ResourceURI:                matched.ResourceURI,
-		State:                      remoteMCPOAuthRefreshTokenStateActive,
-		CreatedTime:                now,
-		ExpiresTime:                now.Add(remoteMCPOAuthRefreshTokenLifetime),
+		records[matchIndex].State = remoteMCPOAuthRefreshTokenStateRotated
+		newRefreshSecret := make([]byte, 32)
+		if _, err := rand.Read(newRefreshSecret); err != nil {
+			oauthErrStatus = http.StatusInternalServerError
+			oauthErrCode = "server_error"
+			oauthErrDesc = "could not rotate refresh token"
+			return nil
+		}
+		candidateRefreshToken := remoteMCPOAuthRefreshTokenPrefix + base64.RawURLEncoding.EncodeToString(newRefreshSecret)
+		records = append(records, remoteMCPOAuthRefreshTokenRecord{
+			RefreshTokenSHA256:         bearerTokenSHA256Hex(candidateRefreshToken),
+			AgentAccessTokenIdentifier: matched.AgentAccessTokenIdentifier,
+			ClientIdentifier:           matched.ClientIdentifier,
+			ResourceURI:                matched.ResourceURI,
+			State:                      remoteMCPOAuthRefreshTokenStateActive,
+			CreatedTime:                now,
+			ExpiresTime:                now.Add(remoteMCPOAuthRefreshTokenLifetime),
+		})
+		accessExpiry := now.Add(remoteMCPOAuthAccessTokenLifetime)
+		_, rotatedAccessToken, err := replaceActiveAgentAccessTokenSecretLocked(server.stateRoot, matched.AgentAccessTokenIdentifier, now, accessExpiry)
+		if err != nil {
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "grant is no longer active"
+			return nil
+		}
+		if err := server.saveRefreshTokensLocked(records); err != nil {
+			oauthErrStatus = http.StatusInternalServerError
+			oauthErrCode = "server_error"
+			oauthErrDesc = "could not save rotated refresh token"
+			return nil
+		}
+		newAccessToken = rotatedAccessToken
+		newRefreshToken = candidateRefreshToken
+		return nil
 	})
-	if err := server.saveRefreshTokensLocked(records); err != nil {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusInternalServerError, "server_error", "could not save rotated refresh token")
+	server.mu.Unlock()
+	if lockErr != nil {
+		writeOAuthJSONError(response, http.StatusInternalServerError, "server_error", "could not lock token store")
 		return
 	}
-	server.mu.Unlock()
-
-	accessExpiry := now.Add(remoteMCPOAuthAccessTokenLifetime)
-	_, newAccessToken, err := replaceActiveAgentAccessTokenSecret(server.stateRoot, matched.AgentAccessTokenIdentifier, now, accessExpiry)
-	if err != nil {
-		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_grant", "grant is no longer active")
+	if oauthErrCode != "" {
+		writeOAuthJSONError(response, oauthErrStatus, oauthErrCode, oauthErrDesc)
 		return
 	}
 	writeOAuthJSON(response, http.StatusOK, remoteMCPOAuthTokenResponse{
@@ -986,11 +1046,48 @@ func newSSRFProtectedCIMDHTTPClient() *http.Client {
 	}
 }
 
+var disallowedCIMDIPPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),          // Current network
+	netip.MustParsePrefix("100.64.0.0/10"),      // RFC 6598 CGNAT (including Tailscale)
+	netip.MustParsePrefix("192.0.0.0/24"),       // IETF protocol assignments
+	netip.MustParsePrefix("192.0.2.0/24"),       // TEST-NET-1
+	netip.MustParsePrefix("198.18.0.0/15"),      // Benchmarking
+	netip.MustParsePrefix("198.51.100.0/24"),    // TEST-NET-2
+	netip.MustParsePrefix("203.0.113.0/24"),     // TEST-NET-3
+	netip.MustParsePrefix("240.0.0.0/4"),        // Reserved / broadcast
+	netip.MustParsePrefix("255.255.255.255/32"), // Limited broadcast
+	netip.MustParsePrefix("64:ff9b::/96"),       // NAT64 well-known prefix
+	netip.MustParsePrefix("64:ff9b:1::/48"),     // NAT64 local-use prefix
+	netip.MustParsePrefix("100::/64"),           // Discard-only
+	netip.MustParsePrefix("2001::/23"),          // IETF protocol assignments
+	netip.MustParsePrefix("2001:db8::/32"),      // Documentation
+}
+
 func isDisallowedCIMDIP(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return true
+	}
+	addr = addr.Unmap()
+	if !addr.IsValid() ||
+		addr.IsLoopback() ||
+		addr.IsPrivate() ||
+		addr.IsLinkLocalUnicast() ||
+		addr.IsLinkLocalMulticast() ||
+		addr.IsInterfaceLocalMulticast() ||
+		addr.IsMulticast() ||
+		addr.IsUnspecified() {
+		return true
+	}
+	for _, prefix := range disallowedCIMDIPPrefixes {
+		if prefix.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateOAuthRedirectURI(rawURI string) error {
@@ -1058,19 +1155,26 @@ func (server *remoteMCPOAuthServer) loadRegisteredClients() ([]remoteMCPOAuthCli
 func (server *remoteMCPOAuthServer) saveRegisteredClient(record remoteMCPOAuthClientRecord) error {
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	var existing []remoteMCPOAuthClientRecord
-	if encoded, err := os.ReadFile(server.clientsFilePath()); err == nil {
-		var store remoteMCPOAuthClientStoreFile
-		if json.Unmarshal(encoded, &store) == nil {
+	return withAgentAccessStoreLock(server.stateRoot, func() error {
+		var existing []remoteMCPOAuthClientRecord
+		encodedExisting, err := os.ReadFile(server.clientsFilePath())
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		if err == nil {
+			var store remoteMCPOAuthClientStoreFile
+			if unmarshalErr := json.Unmarshal(encodedExisting, &store); unmarshalErr != nil {
+				return unmarshalErr
+			}
 			existing = store.RegisteredClients
 		}
-	}
-	existing = append(existing, record)
-	encoded, err := json.MarshalIndent(remoteMCPOAuthClientStoreFile{RegisteredClients: existing}, "", "  ")
-	if err != nil {
-		return err
-	}
-	return writePrivateStateFileAtomically(server.clientsFilePath(), append(encoded, '\n'))
+		existing = append(existing, record)
+		encoded, err := json.MarshalIndent(remoteMCPOAuthClientStoreFile{RegisteredClients: existing}, "", "  ")
+		if err != nil {
+			return err
+		}
+		return writePrivateStateFileAtomically(server.clientsFilePath(), append(encoded, '\n'))
+	})
 }
 
 func (server *remoteMCPOAuthServer) issueRefreshToken(
@@ -1086,20 +1190,23 @@ func (server *remoteMCPOAuthServer) issueRefreshToken(
 	refreshToken := remoteMCPOAuthRefreshTokenPrefix + base64.RawURLEncoding.EncodeToString(secret)
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	records, err := server.loadRefreshTokensLocked()
-	if err != nil {
-		return "", err
-	}
-	records = append(records, remoteMCPOAuthRefreshTokenRecord{
-		RefreshTokenSHA256:         bearerTokenSHA256Hex(refreshToken),
-		AgentAccessTokenIdentifier: tokenIdentifier,
-		ClientIdentifier:           clientID,
-		ResourceURI:                resourceURI,
-		State:                      remoteMCPOAuthRefreshTokenStateActive,
-		CreatedTime:                now,
-		ExpiresTime:                now.Add(remoteMCPOAuthRefreshTokenLifetime),
+	err := withAgentAccessStoreLock(server.stateRoot, func() error {
+		records, err := server.loadRefreshTokensLocked()
+		if err != nil {
+			return err
+		}
+		records = append(records, remoteMCPOAuthRefreshTokenRecord{
+			RefreshTokenSHA256:         bearerTokenSHA256Hex(refreshToken),
+			AgentAccessTokenIdentifier: tokenIdentifier,
+			ClientIdentifier:           clientID,
+			ResourceURI:                resourceURI,
+			State:                      remoteMCPOAuthRefreshTokenStateActive,
+			CreatedTime:                now,
+			ExpiresTime:                now.Add(remoteMCPOAuthRefreshTokenLifetime),
+		})
+		return server.saveRefreshTokensLocked(records)
 	})
-	if err := server.saveRefreshTokensLocked(records); err != nil {
+	if err != nil {
 		return "", err
 	}
 	return refreshToken, nil

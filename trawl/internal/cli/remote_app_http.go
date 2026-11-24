@@ -82,6 +82,9 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppSearch(
 		writeMCPHTTPError(response, http.StatusBadRequest, err.Error())
 		return
 	}
+	if normalizedLimit > mcpMaximumRemoteQueryLimit {
+		normalizedLimit = mcpMaximumRemoteQueryLimit
+	}
 	canonicalSearchQuery, err := trawlkitSearchQuery(queryText, searchOptions{
 		limit:  normalizedLimit,
 		after:  afterText,
@@ -172,6 +175,14 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppOpen(
 		trawlkit.NewRecordAnchorIdentifier(anchor),
 		requestedTrawlLink,
 	)
+	if err := filterOpenedPersonRecordForAgentScope(
+		scope,
+		openResponse.GetRecord().GetPersonRecord(),
+		installedTrawlerCommandNames(installedTrawlers),
+	); err != nil {
+		writeMCPHTTPError(response, http.StatusForbidden, "source is not allowed by this access token")
+		return
+	}
 	openResponse.RequestedTrawlLink = requestedTrawlLink
 	writeAppProtobufHTTPResponse(response, openResponse)
 }

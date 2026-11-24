@@ -18,6 +18,7 @@ type TokenCmd struct {
 type TokenCreateCmd struct {
 	Agent   string `arg:"" name:"agent" help:"Name of the agent that will use the token"`
 	Sources string `name:"sources" default:"all" placeholder:"TRAWLERS" help:"Sources the token may read, separated by commas, or all"`
+	Relay   bool   `name:"relay" help:"Allow this manual token on the public --relay HTTPS endpoint (default: local and Tailscale only)"`
 }
 
 type TokenListCmd struct{}
@@ -40,7 +41,18 @@ func (c *TokenCreateCmd) Run(r *Runtime) error {
 	if strings.TrimSpace(c.Agent) == "" {
 		return render.AgentAccessCommandIsWrong("Name the agent, such as trawl token create claude-code")
 	}
-	token, bearerToken, err := createAgentAccessToken(r.stateRoot, c.Agent, c.Sources, time.Now())
+	allSources, requestedSources := parseAllowedSourcesList(c.Sources)
+	if !allSources {
+		installed := discoverInstalledTrawlers(r.ctx)
+		if _, err := r.selectInstalledTrawlers(installed, requestedSources); err != nil {
+			return err
+		}
+	}
+	surface := agentAccessTokenSurfaceLocal
+	if c.Relay {
+		surface = agentAccessTokenSurfaceRelay
+	}
+	token, bearerToken, err := createAgentAccessTokenForSurface(r.stateRoot, c.Agent, c.Sources, surface, time.Now())
 	if err != nil {
 		return render.AgentAccessOperationFailed("Cannot save the token: " + err.Error())
 	}
