@@ -20,6 +20,44 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Trawl_Message_MessageDirectionRelativeToArchiveOwner: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case sentByArchiveOwner // = 1
+  case receivedFromOtherParticipant // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .sentByArchiveOwner
+    case 2: self = .receivedFromOtherParticipant
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .sentByArchiveOwner: return 1
+    case .receivedFromOtherParticipant: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Message_MessageDirectionRelativeToArchiveOwner] = [
+    .unspecified,
+    .sentByArchiveOwner,
+    .receivedFromOtherParticipant,
+  ]
+
+}
+
 public nonisolated enum Trawl_Message_MessageMediaContentKind: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
@@ -127,6 +165,8 @@ public nonisolated struct Trawl_Message_MessageRecord: Sendable {
   public var hasMessageMedia: Bool {self._messageMedia != nil}
   /// Clears the value of `messageMedia`. Subsequent reads from it will return its default value.
   public mutating func clearMessageMedia() {self._messageMedia = nil}
+
+  public var messageDirectionRelativeToArchiveOwner: Trawl_Message_MessageDirectionRelativeToArchiveOwner = .unspecified
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -251,13 +291,17 @@ public nonisolated struct Trawl_Message_MessageListResponse: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "trawl.message"
 
+nonisolated extension Trawl_Message_MessageDirectionRelativeToArchiveOwner: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_UNSPECIFIED\0\u{1}MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_SENT_BY_ARCHIVE_OWNER\0\u{1}MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_RECEIVED_FROM_OTHER_PARTICIPANT\0")
+}
+
 nonisolated extension Trawl_Message_MessageMediaContentKind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_IMAGE\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_VIDEO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_AUDIO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_FILE\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_GIF\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_STICKER\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_LINK\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_PHOTO_OR_VIDEO\0\u{1}MESSAGE_MEDIA_CONTENT_KIND_VOICE_OR_INSTANT_VIDEO\0")
 }
 
 nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_time\0\u{3}canonical_record_reference\0\u{3}people_related_to_message\0\u{3}message_text\0\u{3}conversation_display_name\0\u{3}message_media\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_time\0\u{3}canonical_record_reference\0\u{3}people_related_to_message\0\u{3}message_text\0\u{3}conversation_display_name\0\u{3}message_media\0\u{3}message_direction_relative_to_archive_owner\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -271,6 +315,7 @@ nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftP
       case 4: try { try decoder.decodeSingularStringField(value: &self.messageText) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.conversationDisplayName) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._messageMedia) }()
+      case 7: try { try decoder.decodeSingularEnumField(value: &self.messageDirectionRelativeToArchiveOwner) }()
       default: break
       }
     }
@@ -299,6 +344,9 @@ nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftP
     try { if let v = self._messageMedia {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     } }()
+    if self.messageDirectionRelativeToArchiveOwner != .unspecified {
+      try visitor.visitSingularEnumField(value: self.messageDirectionRelativeToArchiveOwner, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -309,6 +357,7 @@ nonisolated extension Trawl_Message_MessageRecord: SwiftProtobuf.Message, SwiftP
     if lhs.messageText != rhs.messageText {return false}
     if lhs.conversationDisplayName != rhs.conversationDisplayName {return false}
     if lhs._messageMedia != rhs._messageMedia {return false}
+    if lhs.messageDirectionRelativeToArchiveOwner != rhs.messageDirectionRelativeToArchiveOwner {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

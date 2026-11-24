@@ -15,6 +15,13 @@ message MessageRecord {
   string message_text = 4;
   string conversation_display_name = 5;
   MessageMedia message_media = 6;
+  MessageDirectionRelativeToArchiveOwner message_direction_relative_to_archive_owner = 7;
+}
+
+enum MessageDirectionRelativeToArchiveOwner {
+  MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_UNSPECIFIED = 0;
+  MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_SENT_BY_ARCHIVE_OWNER = 1;
+  MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_RECEIVED_FROM_OTHER_PARTICIPANT = 2;
 }
 
 enum MessageMediaContentKind {

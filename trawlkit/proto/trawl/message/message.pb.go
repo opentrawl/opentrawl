@@ -24,6 +24,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type MessageDirectionRelativeToArchiveOwner int32
+
+const (
+	MessageDirectionRelativeToArchiveOwner_MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_UNSPECIFIED                     MessageDirectionRelativeToArchiveOwner = 0
+	MessageDirectionRelativeToArchiveOwner_MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_SENT_BY_ARCHIVE_OWNER           MessageDirectionRelativeToArchiveOwner = 1
+	MessageDirectionRelativeToArchiveOwner_MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_RECEIVED_FROM_OTHER_PARTICIPANT MessageDirectionRelativeToArchiveOwner = 2
+)
+
+// Enum value maps for MessageDirectionRelativeToArchiveOwner.
+var (
+	MessageDirectionRelativeToArchiveOwner_name = map[int32]string{
+		0: "MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_UNSPECIFIED",
+		1: "MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_SENT_BY_ARCHIVE_OWNER",
+		2: "MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_RECEIVED_FROM_OTHER_PARTICIPANT",
+	}
+	MessageDirectionRelativeToArchiveOwner_value = map[string]int32{
+		"MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_UNSPECIFIED":                     0,
+		"MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_SENT_BY_ARCHIVE_OWNER":           1,
+		"MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_RECEIVED_FROM_OTHER_PARTICIPANT": 2,
+	}
+)
+
+func (x MessageDirectionRelativeToArchiveOwner) Enum() *MessageDirectionRelativeToArchiveOwner {
+	p := new(MessageDirectionRelativeToArchiveOwner)
+	*p = x
+	return p
+}
+
+func (x MessageDirectionRelativeToArchiveOwner) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MessageDirectionRelativeToArchiveOwner) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_message_message_proto_enumTypes[0].Descriptor()
+}
+
+func (MessageDirectionRelativeToArchiveOwner) Type() protoreflect.EnumType {
+	return &file_trawl_message_message_proto_enumTypes[0]
+}
+
+func (x MessageDirectionRelativeToArchiveOwner) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MessageDirectionRelativeToArchiveOwner.Descriptor instead.
+func (MessageDirectionRelativeToArchiveOwner) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_message_message_proto_rawDescGZIP(), []int{0}
+}
+
 type MessageMediaContentKind int32
 
 const (
@@ -81,11 +130,11 @@ func (x MessageMediaContentKind) String() string {
 }
 
 func (MessageMediaContentKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_message_message_proto_enumTypes[0].Descriptor()
+	return file_trawl_message_message_proto_enumTypes[1].Descriptor()
 }
 
 func (MessageMediaContentKind) Type() protoreflect.EnumType {
-	return &file_trawl_message_message_proto_enumTypes[0]
+	return &file_trawl_message_message_proto_enumTypes[1]
 }
 
 func (x MessageMediaContentKind) Number() protoreflect.EnumNumber {
@@ -94,19 +143,20 @@ func (x MessageMediaContentKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MessageMediaContentKind.Descriptor instead.
 func (MessageMediaContentKind) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_message_message_proto_rawDescGZIP(), []int{0}
+	return file_trawl_message_message_proto_rawDescGZIP(), []int{1}
 }
 
 type MessageRecord struct {
-	state                    protoimpl.MessageState                              `protogen:"open.v1"`
-	MessageTime              *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,1,opt,name=message_time,json=messageTime,proto3" json:"message_time,omitempty"`
-	CanonicalRecordReference *identity.CanonicalArchiveRecordReference           `protobuf:"bytes,2,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
-	PeopleRelatedToMessage   []*person.PersonRelatedToArchiveRecord              `protobuf:"bytes,3,rep,name=people_related_to_message,json=peopleRelatedToMessage,proto3" json:"people_related_to_message,omitempty"`
-	MessageText              string                                              `protobuf:"bytes,4,opt,name=message_text,json=messageText,proto3" json:"message_text,omitempty"`
-	ConversationDisplayName  string                                              `protobuf:"bytes,5,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
-	MessageMedia             *MessageMedia                                       `protobuf:"bytes,6,opt,name=message_media,json=messageMedia,proto3" json:"message_media,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state                                  protoimpl.MessageState                              `protogen:"open.v1"`
+	MessageTime                            *presentation.ArchiveRecordAssociatedTimeForDisplay `protobuf:"bytes,1,opt,name=message_time,json=messageTime,proto3" json:"message_time,omitempty"`
+	CanonicalRecordReference               *identity.CanonicalArchiveRecordReference           `protobuf:"bytes,2,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
+	PeopleRelatedToMessage                 []*person.PersonRelatedToArchiveRecord              `protobuf:"bytes,3,rep,name=people_related_to_message,json=peopleRelatedToMessage,proto3" json:"people_related_to_message,omitempty"`
+	MessageText                            string                                              `protobuf:"bytes,4,opt,name=message_text,json=messageText,proto3" json:"message_text,omitempty"`
+	ConversationDisplayName                string                                              `protobuf:"bytes,5,opt,name=conversation_display_name,json=conversationDisplayName,proto3" json:"conversation_display_name,omitempty"`
+	MessageMedia                           *MessageMedia                                       `protobuf:"bytes,6,opt,name=message_media,json=messageMedia,proto3" json:"message_media,omitempty"`
+	MessageDirectionRelativeToArchiveOwner MessageDirectionRelativeToArchiveOwner              `protobuf:"varint,7,opt,name=message_direction_relative_to_archive_owner,json=messageDirectionRelativeToArchiveOwner,proto3,enum=trawl.message.MessageDirectionRelativeToArchiveOwner" json:"message_direction_relative_to_archive_owner,omitempty"`
+	unknownFields                          protoimpl.UnknownFields
+	sizeCache                              protoimpl.SizeCache
 }
 
 func (x *MessageRecord) Reset() {
@@ -179,6 +229,13 @@ func (x *MessageRecord) GetMessageMedia() *MessageMedia {
 		return x.MessageMedia
 	}
 	return nil
+}
+
+func (x *MessageRecord) GetMessageDirectionRelativeToArchiveOwner() MessageDirectionRelativeToArchiveOwner {
+	if x != nil {
+		return x.MessageDirectionRelativeToArchiveOwner
+	}
+	return MessageDirectionRelativeToArchiveOwner_MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_UNSPECIFIED
 }
 
 type MessageMedia struct {
@@ -445,14 +502,15 @@ var File_trawl_message_message_proto protoreflect.FileDescriptor
 
 const file_trawl_message_message_proto_rawDesc = "" +
 	"\n" +
-	"\x1btrawl/message/message.proto\x12\rtrawl.message\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x1dtrawl/identity/identity.proto\"\xe4\x03\n" +
+	"\x1btrawl/message/message.proto\x12\rtrawl.message\x1a\x19trawl/person/person.proto\x1a%trawl/presentation/presentation.proto\x1a\x1dtrawl/identity/identity.proto\"\xf9\x04\n" +
 	"\rMessageRecord\x12\\\n" +
 	"\fmessage_time\x18\x01 \x01(\v29.trawl.presentation.ArchiveRecordAssociatedTimeForDisplayR\vmessageTime\x12m\n" +
 	"\x1acanonical_record_reference\x18\x02 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12e\n" +
 	"\x19people_related_to_message\x18\x03 \x03(\v2*.trawl.person.PersonRelatedToArchiveRecordR\x16peopleRelatedToMessage\x12!\n" +
 	"\fmessage_text\x18\x04 \x01(\tR\vmessageText\x12:\n" +
 	"\x19conversation_display_name\x18\x05 \x01(\tR\x17conversationDisplayName\x12@\n" +
-	"\rmessage_media\x18\x06 \x01(\v2\x1b.trawl.message.MessageMediaR\fmessageMedia\"\xfd\x02\n" +
+	"\rmessage_media\x18\x06 \x01(\v2\x1b.trawl.message.MessageMediaR\fmessageMedia\x12\x92\x01\n" +
+	"+message_direction_relative_to_archive_owner\x18\a \x01(\x0e25.trawl.message.MessageDirectionRelativeToArchiveOwnerR&messageDirectionRelativeToArchiveOwner\"\xfd\x02\n" +
 	"\fMessageMedia\x12c\n" +
 	"\x1amessage_media_content_kind\x18\x01 \x01(\x0e2&.trawl.message.MessageMediaContentKindR\x17messageMediaContentKind\x12.\n" +
 	"\x13message_media_title\x18\x02 \x01(\tR\x11messageMediaTitle\x12<\n" +
@@ -476,7 +534,11 @@ const file_trawl_message_message_proto_rawDesc = "" +
 	"\x1ctotal_matching_message_count\x18\x02 \x01(\x04R\x19totalMatchingMessageCount\x12Z\n" +
 	"+total_matching_message_count_is_lower_bound\x18\x03 \x01(\bR%totalMatchingMessageCountIsLowerBound\x12?\n" +
 	"\x1cmore_matching_messages_exist\x18\x04 \x01(\bR\x19moreMatchingMessagesExist\x12\x99\x01\n" +
-	"Lconversation_display_name_for_message_records_restricted_to_one_conversation\x18\x05 \x01(\tRCconversationDisplayNameForMessageRecordsRestrictedToOneConversation*\xde\x03\n" +
+	"Lconversation_display_name_for_message_records_restricted_to_one_conversation\x18\x05 \x01(\tRCconversationDisplayNameForMessageRecordsRestrictedToOneConversation*\xfd\x01\n" +
+	"&MessageDirectionRelativeToArchiveOwner\x12;\n" +
+	"7MESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_UNSPECIFIED\x10\x00\x12E\n" +
+	"AMESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_SENT_BY_ARCHIVE_OWNER\x10\x01\x12O\n" +
+	"KMESSAGE_DIRECTION_RELATIVE_TO_ARCHIVE_OWNER_RECEIVED_FROM_OTHER_PARTICIPANT\x10\x02*\xde\x03\n" +
 	"\x17MessageMediaContentKind\x12*\n" +
 	"&MESSAGE_MEDIA_CONTENT_KIND_UNSPECIFIED\x10\x00\x12)\n" +
 	"%MESSAGE_MEDIA_CONTENT_KIND_ATTACHMENT\x10\x01\x12$\n" +
@@ -503,37 +565,39 @@ func file_trawl_message_message_proto_rawDescGZIP() []byte {
 	return file_trawl_message_message_proto_rawDescData
 }
 
-var file_trawl_message_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_trawl_message_message_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_trawl_message_message_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_trawl_message_message_proto_goTypes = []any{
-	(MessageMediaContentKind)(0),                               // 0: trawl.message.MessageMediaContentKind
-	(*MessageRecord)(nil),                                      // 1: trawl.message.MessageRecord
-	(*MessageMedia)(nil),                                       // 2: trawl.message.MessageMedia
-	(*OpenedMessageRecordWithConversationContext)(nil),         // 3: trawl.message.OpenedMessageRecordWithConversationContext
-	(*MessageListResponse)(nil),                                // 4: trawl.message.MessageListResponse
-	(*presentation.ArchiveRecordAssociatedTimeForDisplay)(nil), // 5: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
-	(*identity.CanonicalArchiveRecordReference)(nil),           // 6: trawl.identity.CanonicalArchiveRecordReference
-	(*person.PersonRelatedToArchiveRecord)(nil),                // 7: trawl.person.PersonRelatedToArchiveRecord
-	(*identity.RecordAnchorIdentifier)(nil),                    // 8: trawl.identity.RecordAnchorIdentifier
-	(*identity.GloballyRoutableTrawlLink)(nil),                 // 9: trawl.identity.GloballyRoutableTrawlLink
+	(MessageDirectionRelativeToArchiveOwner)(0),                // 0: trawl.message.MessageDirectionRelativeToArchiveOwner
+	(MessageMediaContentKind)(0),                               // 1: trawl.message.MessageMediaContentKind
+	(*MessageRecord)(nil),                                      // 2: trawl.message.MessageRecord
+	(*MessageMedia)(nil),                                       // 3: trawl.message.MessageMedia
+	(*OpenedMessageRecordWithConversationContext)(nil),         // 4: trawl.message.OpenedMessageRecordWithConversationContext
+	(*MessageListResponse)(nil),                                // 5: trawl.message.MessageListResponse
+	(*presentation.ArchiveRecordAssociatedTimeForDisplay)(nil), // 6: trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
+	(*identity.CanonicalArchiveRecordReference)(nil),           // 7: trawl.identity.CanonicalArchiveRecordReference
+	(*person.PersonRelatedToArchiveRecord)(nil),                // 8: trawl.person.PersonRelatedToArchiveRecord
+	(*identity.RecordAnchorIdentifier)(nil),                    // 9: trawl.identity.RecordAnchorIdentifier
+	(*identity.GloballyRoutableTrawlLink)(nil),                 // 10: trawl.identity.GloballyRoutableTrawlLink
 }
 var file_trawl_message_message_proto_depIdxs = []int32{
-	5,  // 0: trawl.message.MessageRecord.message_time:type_name -> trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
-	6,  // 1: trawl.message.MessageRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	7,  // 2: trawl.message.MessageRecord.people_related_to_message:type_name -> trawl.person.PersonRelatedToArchiveRecord
-	2,  // 3: trawl.message.MessageRecord.message_media:type_name -> trawl.message.MessageMedia
-	0,  // 4: trawl.message.MessageMedia.message_media_content_kind:type_name -> trawl.message.MessageMediaContentKind
-	1,  // 5: trawl.message.OpenedMessageRecordWithConversationContext.conversation_context_message_records_newest_first:type_name -> trawl.message.MessageRecord
-	6,  // 6: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	8,  // 7: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
-	6,  // 8: trawl.message.OpenedMessageRecordWithConversationContext.conversation_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
-	9,  // 9: trawl.message.OpenedMessageRecordWithConversationContext.conversation_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	1,  // 10: trawl.message.MessageListResponse.message_records_newest_first:type_name -> trawl.message.MessageRecord
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	6,  // 0: trawl.message.MessageRecord.message_time:type_name -> trawl.presentation.ArchiveRecordAssociatedTimeForDisplay
+	7,  // 1: trawl.message.MessageRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	8,  // 2: trawl.message.MessageRecord.people_related_to_message:type_name -> trawl.person.PersonRelatedToArchiveRecord
+	3,  // 3: trawl.message.MessageRecord.message_media:type_name -> trawl.message.MessageMedia
+	0,  // 4: trawl.message.MessageRecord.message_direction_relative_to_archive_owner:type_name -> trawl.message.MessageDirectionRelativeToArchiveOwner
+	1,  // 5: trawl.message.MessageMedia.message_media_content_kind:type_name -> trawl.message.MessageMediaContentKind
+	2,  // 6: trawl.message.OpenedMessageRecordWithConversationContext.conversation_context_message_records_newest_first:type_name -> trawl.message.MessageRecord
+	7,  // 7: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	9,  // 8: trawl.message.OpenedMessageRecordWithConversationContext.opened_message_record_anchor:type_name -> trawl.identity.RecordAnchorIdentifier
+	7,  // 9: trawl.message.OpenedMessageRecordWithConversationContext.conversation_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	10, // 10: trawl.message.OpenedMessageRecordWithConversationContext.conversation_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	2,  // 11: trawl.message.MessageListResponse.message_records_newest_first:type_name -> trawl.message.MessageRecord
+	12, // [12:12] is the sub-list for method output_type
+	12, // [12:12] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_trawl_message_message_proto_init() }
@@ -547,7 +611,7 @@ func file_trawl_message_message_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_message_message_proto_rawDesc), len(file_trawl_message_message_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      2,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
