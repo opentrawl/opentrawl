@@ -53,7 +53,11 @@ func (r *runtime) loadOpenPostByID(id string) (*open.OpenRecord, error) {
 		if err != nil {
 			return err
 		}
-		value = openValue{result: result, ownerAuthorID: ownerAuthorID}
+		quotedTweet, err := st.QuotedTweetOf(r.ctx, result.Tweet)
+		if err != nil {
+			return err
+		}
+		value = openValue{result: result, ownerAuthorID: ownerAuthorID, quotedTweet: quotedTweet}
 		return nil
 	})
 	if err != nil {

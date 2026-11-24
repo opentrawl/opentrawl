@@ -15,6 +15,7 @@ import (
 type openValue struct {
 	result        store.OpenResult
 	ownerAuthorID string
+	quotedTweet   *store.QuotedTweet
 }
 
 func projectOpenRecord(value openValue) *twitteropen.OpenedTwitterPostRecord {
@@ -47,7 +48,7 @@ func projectOpenRecord(value openValue) *twitteropen.OpenedTwitterPostRecord {
 func projectTwitterPost(value store.Tweet, ownerAuthorID string) *twitteropen.OpenedTwitterPost {
 	record := &twitteropen.OpenedTwitterPost{
 		CanonicalTwitterPostRecordReference: trawlkit.NewCanonicalArchiveRecordReference(store.TweetRef(value.ID)),
-		TwitterPostText:                     value.Text,
+		TwitterPostText:                     store.TweetTextWithExpandedLinks(value),
 	}
 	record.TwitterPostCreatedTime = optionalTimestamp(value.CreatedAt)
 	setOptionalString(&record.TwitterPostAuthorDisplayName, humanName(store.DisplayName(value.AuthorName, value.AuthorHandle), value.AuthorID, ownerAuthorID))
@@ -115,6 +116,24 @@ func projectOpenDetailPresentation(value openValue) *presentation.TrawlerSpecifi
 	}
 	if exactTime := record.OpenedTwitterPost.GetTwitterPostCountsObservedTime(); exactTime != nil {
 		fields = append(fields, twitterDetailExactTimeField("Counts as of", exactTime.AsTime()))
+	}
+	if quoted := value.quotedTweet; quoted != nil {
+		quotedAuthor := store.DisplayName(quoted.AuthorName, quoted.AuthorHandle)
+		if strings.TrimSpace(quoted.AuthorName) == "" && strings.TrimSpace(quoted.AuthorHandle) == "" {
+			quotedAuthor = "Post"
+		}
+		fields = append(fields, &presentation.TrawlerSpecificCommandDetailPresentationField{
+			FieldDisplayName: "Quoting",
+			FieldValue:       twitterPresentationTextValue(quotedAuthor + ": " + strings.TrimSpace(quoted.TextWithExpandedLinks)),
+		})
+		quotedPostLink := twitterPresentationTextValue(quoted.PublicURL())
+		if quoted.ArchivedInThisArchive {
+			quotedPostLink = twitterPresentationCanonicalRecordReferenceValue(store.TweetRef(quoted.ID))
+		}
+		fields = append(fields, &presentation.TrawlerSpecificCommandDetailPresentationField{
+			FieldDisplayName: "Quoted post",
+			FieldValue:       quotedPostLink,
+		})
 	}
 	detail := &presentation.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:    title,

@@ -18,6 +18,7 @@ import (
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	person "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/person"
 	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	status "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/status"
@@ -102,7 +103,15 @@ func (c *Crawler) ExportArchiveIndexChanges(
 	emit func(*indexcontract.ArchiveIndexChangeBatch) error,
 ) error {
 	return c.handler(ctx, req).withReadOnlyStore(func(st *store.Store) error {
-		return st.ExportArchiveIndexChanges(ctx, sinceOpaqueCursor, emit)
+		return st.ExportArchiveIndexChanges(ctx, sinceOpaqueCursor, func(directMessage store.DirectMessage) store.IndexedDirectMessageNames {
+			names := store.IndexedDirectMessageNames{ConversationDisplayName: directMessageWhere(directMessage)}
+			for _, related := range directMessagePeople(directMessage) {
+				if related.GetPersonRoleInArchiveRecord() == person.PersonRoleInArchiveRecord_PERSON_ROLE_IN_ARCHIVE_RECORD_SENDER {
+					names.SenderDisplayName = related.GetPersonDisplayName()
+				}
+			}
+			return names
+		}, emit)
 	})
 }
 

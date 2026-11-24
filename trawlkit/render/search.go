@@ -157,6 +157,11 @@ func searchResultRowFromPresentation(
 			presentation.GetMatchingRecordKindDisplayName(),
 		),
 	}
+	// A direct message or a post names its conversation or title after the
+	// person in the who column; show that name once.
+	if strings.EqualFold(row.what, row.who) {
+		row.what = ""
+	}
 	if amount := presentation.GetMatchingRecordMonetaryAmount(); amount != nil {
 		row.moneyAmountText = FormatExactMonetaryAmount(amount)
 		row.what = ""
