@@ -119,15 +119,17 @@ type mcpToolsListResult struct {
 	Tools []mcpToolDefinition `json:"tools"`
 }
 
-type mcpToolTextContent struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+type mcpToolContentBlock struct {
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	Data     string `json:"data,omitempty"`
+	MIMEType string `json:"mimeType,omitempty"`
 }
 
 type mcpToolCallResult struct {
-	Content           []mcpToolTextContent `json:"content"`
-	StructuredContent json.RawMessage      `json:"structuredContent,omitempty"`
-	IsError           bool                 `json:"isError"`
+	Content           []mcpToolContentBlock `json:"content"`
+	StructuredContent json.RawMessage       `json:"structuredContent,omitempty"`
+	IsError           bool                  `json:"isError"`
 }
 
 type mcpHTTPErrorResponse struct {
@@ -376,7 +378,11 @@ func (c *McpCmd) runRelay(r *Runtime) error {
 		pairingCode = code
 		pairingExpires = expiresAt
 	}
-	handler := &agentMCPHTTPHandler{service: service, oauth: oauthServer}
+	handler := &agentMCPHTTPHandler{
+		service:              service,
+		oauth:                oauthServer,
+		allowRemoteAppRoutes: false,
+	}
 
 	tunnelCtx, stopSignals := signal.NotifyContext(r.ctx, os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
@@ -505,7 +511,11 @@ func (c *McpCmd) runHTTP(r *Runtime) error {
 	}
 
 	httpServer := &http.Server{
-		Handler:           &agentMCPHTTPHandler{service: service, oauth: oauthServer},
+		Handler: &agentMCPHTTPHandler{
+			service:              service,
+			oauth:                oauthServer,
+			allowRemoteAppRoutes: true,
+		},
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	var serveErr error
@@ -553,8 +563,9 @@ func validatePlainHTTPListenAddress(listenAddress string) error {
 }
 
 type agentMCPHTTPHandler struct {
-	service *agentArchiveService
-	oauth   *remoteMCPOAuthServer
+	service              *agentArchiveService
+	oauth                *remoteMCPOAuthServer
+	allowRemoteAppRoutes bool
 }
 
 func (handler *agentMCPHTTPHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -604,14 +615,22 @@ func (handler *agentMCPHTTPHandler) ServeHTTP(response http.ResponseWriter, requ
 			return
 		}
 		writeMCPJSONBytes(response, http.StatusOK, mustMarshalMCPJSON(mcpResponse))
-	case remoteAppStatusPath, remoteAppSearchPath, remoteAppOpenPath:
+	case remoteAppStatusPath, remoteAppSearchPath, remoteAppOpenPath, remoteAppPhotoPath:
+		if !handler.allowRemoteAppRoutes {
+			writeMCPHTTPError(response, http.StatusNotFound, "no such endpoint; use POST /mcp")
+			return
+		}
 		scope, ok := handler.authenticateRequest(response, request)
 		if !ok {
 			return
 		}
 		handler.handleRemoteAppRequest(response, request, scope)
 	default:
-		writeMCPHTTPError(response, http.StatusNotFound, "no such endpoint; use POST /mcp or GET /app/status, /app/search, /app/open")
+		if handler.allowRemoteAppRoutes {
+			writeMCPHTTPError(response, http.StatusNotFound, "no such endpoint; use POST /mcp or GET /app/status, /app/search, /app/open, /app/photo")
+			return
+		}
+		writeMCPHTTPError(response, http.StatusNotFound, "no such endpoint; use POST /mcp")
 	}
 }
 

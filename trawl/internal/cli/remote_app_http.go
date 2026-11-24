@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -14,6 +16,7 @@ const (
 	remoteAppStatusPath       = "/app/status"
 	remoteAppSearchPath       = "/app/search"
 	remoteAppOpenPath         = "/app/open"
+	remoteAppPhotoPath        = "/app/photo"
 	remoteAppProtobufMimeType = "application/x-protobuf"
 )
 
@@ -34,8 +37,10 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppRequest(
 		handler.handleRemoteAppSearch(response, request, scope)
 	case remoteAppOpenPath:
 		handler.handleRemoteAppOpen(response, request, scope)
+	case remoteAppPhotoPath:
+		handler.handleRemoteAppPhoto(response, request, scope)
 	default:
-		writeMCPHTTPError(response, http.StatusNotFound, "no such endpoint; use POST /mcp or GET /app/status, /app/search, /app/open")
+		writeMCPHTTPError(response, http.StatusNotFound, "no such endpoint; use POST /mcp or GET /app/status, /app/search, /app/open, /app/photo")
 	}
 }
 
@@ -169,6 +174,95 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppOpen(
 	)
 	openResponse.RequestedTrawlLink = requestedTrawlLink
 	writeAppProtobufHTTPResponse(response, openResponse)
+}
+
+func (handler *agentMCPHTTPHandler) handleRemoteAppPhoto(
+	response http.ResponseWriter,
+	request *http.Request,
+	scope agentSourceScope,
+) {
+	rawLink := strings.TrimSpace(request.URL.Query().Get("link"))
+	if rawLink == "" {
+		writeMCPHTTPError(response, http.StatusBadRequest, "link is required")
+		return
+	}
+	requestedTrawlLink := trawlkit.NewGloballyRoutableTrawlLink(rawLink)
+	route, err := trawlkit.ParseGloballyRoutableTrawlLink(requestedTrawlLink)
+	if err != nil {
+		applePhotoUUIDArgument := strings.TrimPrefix(rawLink, "photos:")
+		if !applePhotoUUIDAcceptedByOpenCommandPattern.MatchString(applePhotoUUIDArgument) {
+			writeMCPHTTPError(response, http.StatusBadRequest, "photo link is not valid")
+			return
+		}
+		requestedTrawlLink = nil
+		route = trawlkit.GloballyRoutableTrawlLinkRoute{
+			RegisteredTrawler:   trawlkit.NewRegisteredTrawlerIdentity("photos"),
+			LocalShortReference: trawlkit.NewLocalTrawlerShortReference(strings.ToUpper(applePhotoUUIDArgument)),
+		}
+	}
+	targetTrawlerIdentity := trawlkit.RegisteredTrawlerIdentityText(route.RegisteredTrawler)
+	if targetTrawlerIdentity != "photos" {
+		writeMCPHTTPError(response, http.StatusNotFound, "link is not a photo record")
+		return
+	}
+	if !scope.allowsSource("photos") {
+		writeMCPHTTPError(response, http.StatusForbidden, "source is not allowed by this access token")
+		return
+	}
+
+	agentRuntime := handler.service.newAgentRequestRuntime(request.Context(), scope)
+	installedTrawlers := discoverInstalledTrawlers(agentRuntime.ctx)
+	selectedTrawler, found := findInstalledTrawler(installedTrawlers, "photos")
+	if !found {
+		writeMCPHTTPError(response, http.StatusNotFound, "photos source is not available")
+		return
+	}
+	if _, err := trawlersForSharedOperation(
+		[]InstalledTrawler{selectedTrawler},
+		federation.SharedTrawlerOperation_SHARED_TRAWLER_OPERATION_OPEN,
+		true,
+	); err != nil {
+		writeMCPHTTPError(response, http.StatusNotFound, "photos source cannot open records")
+		return
+	}
+
+	openResponse := agentRuntime.canonicalOpen(
+		agentRuntime.federationOpenTrawlers(installedTrawlers),
+		route.RegisteredTrawler,
+		route.LocalShortReference,
+		requestedTrawlLink,
+	)
+	if openResponse.GetFailure() != nil {
+		writeMCPHTTPError(response, http.StatusNotFound, "photo record not found")
+		return
+	}
+	cachedPath := openResponse.GetRecord().GetOpenedPhotoRecord().GetCachedPictureFilePath()
+	verifiedPath, ok := verifiedCachedPhotoFilePath(handler.service.stateRoot, cachedPath)
+	if !ok {
+		writeMCPHTTPError(response, http.StatusNotFound, "photo image is unavailable")
+		return
+	}
+
+	// #nosec G304 -- path is verified to be a regular JPEG inside <stateRoot>/photos/picture-cache.
+	photoFile, err := os.Open(verifiedPath)
+	if err != nil {
+		writeMCPHTTPError(response, http.StatusNotFound, "photo image is unavailable")
+		return
+	}
+	defer func() { _ = photoFile.Close() }()
+
+	info, err := photoFile.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		writeMCPHTTPError(response, http.StatusNotFound, "photo image is unavailable")
+		return
+	}
+
+	response.Header().Set("Content-Type", remotePhotoMIMETypeJPEG)
+	response.Header().Set("Cache-Control", "private, max-age=3600")
+	response.Header().Set("X-Content-Type-Options", "nosniff")
+	response.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	response.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(response, photoFile)
 }
 
 func (scope agentSourceScope) registeredTrawlerManifestSnapshotAllowed(

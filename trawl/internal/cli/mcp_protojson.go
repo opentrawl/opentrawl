@@ -88,9 +88,22 @@ func (service *agentArchiveService) executeMCPToolCall(
 		if err != nil {
 			return mcpErrorToolCallResult(mcpErrorMessageText(err)), true
 		}
+		cachedPhotoPath := response.GetRecord().GetOpenedPhotoRecord().GetCachedPictureFilePath()
 		encoded, marshalErr := marshalMCPProtoJSON(response)
 		failed := response.GetFailure() != nil || response.GetRecord() == nil
-		return mcpToolResultFromOutcome(encoded, failed, marshalErr), true
+		result := mcpToolResultFromOutcome(encoded, failed, marshalErr)
+		if !result.IsError && cachedPhotoPath != "" {
+			if verifiedPath, ok := verifiedCachedPhotoFilePath(service.stateRoot, cachedPhotoPath); ok {
+				if encodedJPEG, encodeErr := encodePhotoForMCPImageBlock(verifiedPath); encodeErr == nil {
+					result.Content = append(result.Content, mcpToolContentBlock{
+						Type:     "image",
+						Data:     encodedJPEG,
+						MIMEType: remotePhotoMIMETypeJPEG,
+					})
+				}
+			}
+		}
+		return result, true
 
 	case "trawl_who":
 		cmd := &WhoCmd{
@@ -154,7 +167,7 @@ func mcpToolResultFromOutcome(payload []byte, failed bool, err error) mcpToolCal
 	}
 	trimmed := strings.TrimSpace(string(payload))
 	return mcpToolCallResult{
-		Content:           []mcpToolTextContent{{Type: "text", Text: trimmed}},
+		Content:           []mcpToolContentBlock{{Type: "text", Text: trimmed}},
 		StructuredContent: json.RawMessage(trimmed),
 		IsError:           failed,
 	}
@@ -164,12 +177,12 @@ func mcpErrorToolCallResult(message string) mcpToolCallResult {
 	encoded, err := json.MarshalIndent(mcpHTTPErrorResponse{Error: message}, "", "  ")
 	if err != nil {
 		return mcpToolCallResult{
-			Content: []mcpToolTextContent{{Type: "text", Text: message}},
+			Content: []mcpToolContentBlock{{Type: "text", Text: message}},
 			IsError: true,
 		}
 	}
 	return mcpToolCallResult{
-		Content:           []mcpToolTextContent{{Type: "text", Text: string(encoded)}},
+		Content:           []mcpToolContentBlock{{Type: "text", Text: string(encoded)}},
 		StructuredContent: json.RawMessage(encoded),
 		IsError:           true,
 	}
@@ -219,13 +232,18 @@ func marshalMCPProtoJSON(message proto.Message) ([]byte, error) {
 }
 
 // stripInternalIdentifiersFromProtoMessage removes internal database record
-// references, anchors, and exact filter handles recursively so MCP ProtoJSON
-// exposes only human/agent-safe links and fields.
+// references, anchors, exact filter handles, and local picture cache paths
+// recursively so MCP ProtoJSON exposes only human/agent-safe links and fields.
 func stripInternalIdentifiersFromProtoMessage(message protoreflect.Message) {
 	if !message.IsValid() {
 		return
 	}
+	messageFullName := message.Descriptor().FullName()
 	message.Range(func(field protoreflect.FieldDescriptor, value protoreflect.Value) bool {
+		if messageFullName == "trawl.photo.OpenedPhotoRecord" && field.Name() == "cached_picture_file_path" {
+			message.Clear(field)
+			return true
+		}
 		if field.Kind() != protoreflect.MessageKind {
 			return true
 		}
