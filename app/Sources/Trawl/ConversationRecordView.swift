@@ -9,39 +9,41 @@ struct ConversationRecordView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 16) {
         Text(conversationRecord.conversationDisplayName)
-          .font(.title2)
+          .font(TrawlDesign.Typography.pageTitle)
           .textSelection(.enabled)
-        if !conversationRecord.conversationParticipantIdentitiesObservedByTrawlerArchive.isEmpty {
-          LabeledContent(
-            "People",
-            value: conversationRecord.conversationParticipantIdentitiesObservedByTrawlerArchive
-              .map(\.personDisplayName)
-              .filter { !$0.isEmpty }
-              .formatted())
-        }
-        if let mostRecentActivity = conversationRecord.mostRecentConversationActivityTime {
-          LabeledContent {
-            Text(
-              mostRecentActivity,
-              format: .dateTime.year().month().day().hour().minute())
-          } label: {
-            Text("Last activity")
+        RecordDetailsGrid {
+          if !conversationRecord.conversationParticipantIdentitiesObservedByTrawlerArchive.isEmpty {
+            LabeledContent(
+              "People",
+              value: conversationRecord.conversationParticipantIdentitiesObservedByTrawlerArchive
+                .map(\.personDisplayName)
+                .filter { !$0.isEmpty }
+                .formatted())
           }
-        }
-        if let unreadMessageCount = conversationRecord.unreadMessageCount {
-          LabeledContent("Unread messages", value: unreadMessageCount.formatted())
-        }
-        if conversationRecord.conversationParticipantIdentitiesObservedByTrawlerArchive.isEmpty,
-          let participantCount =
-          conversationRecord
-          .numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive
-        {
-          LabeledContent("People", value: participantCount.formatted())
-        }
-        if !trawlLink.globallyRoutableTrawlLink.isEmpty {
-          LabeledContent("Link", value: trawlLink.globallyRoutableTrawlLink)
-            .font(TrawlDesign.Typography.smallLabel)
-            .foregroundStyle(.secondary)
+          if let mostRecentActivity = conversationRecord.mostRecentConversationActivityTime {
+            LabeledContent {
+              Text(
+                mostRecentActivity,
+                format: .dateTime.year().month().day().hour().minute())
+            } label: {
+              Text("Last activity")
+            }
+          }
+          if let unreadMessageCount = conversationRecord.unreadMessageCount {
+            LabeledContent("Unread messages", value: unreadMessageCount.formatted())
+          }
+          if conversationRecord.conversationParticipantIdentitiesObservedByTrawlerArchive.isEmpty,
+            let participantCount =
+            conversationRecord
+            .numberOfDistinctConversationParticipantRecordsObservedByTrawlerArchive
+          {
+            LabeledContent("People", value: participantCount.formatted())
+          }
+          if !trawlLink.globallyRoutableTrawlLink.isEmpty {
+            LabeledContent("Link", value: trawlLink.globallyRoutableTrawlLink)
+              .font(TrawlDesign.Typography.smallLabel)
+              .foregroundStyle(.secondary)
+          }
         }
       }
       .textSelection(.enabled)

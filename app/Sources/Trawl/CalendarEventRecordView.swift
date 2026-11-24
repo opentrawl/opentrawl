@@ -10,57 +10,59 @@ struct CalendarEventRecordView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           Text(calendarEventRecord.calendarEventDisplayName)
-            .font(.title2.weight(.semibold))
+            .font(TrawlDesign.Typography.pageTitle)
             .foregroundStyle(TrawlDesign.Colors.ink)
             .textSelection(.enabled)
             .id("summary")
-          CalendarEventTimeRange(
-            startTime: calendarEventRecord.calendarEventStartTime,
-            endTime: calendarEventRecord.calendarEventEndTime)
-          if !calendarEventRecord.calendarDisplayName.isEmpty {
-            LabeledContent("Calendar", value: calendarEventRecord.calendarDisplayName)
-          }
-          if !calendarEventRecord.calendarAccountDisplayName.isEmpty {
-            LabeledContent("Account", value: calendarEventRecord.calendarAccountDisplayName)
-          }
-          if let calendarOwnerOrPurposeAnnotation =
-            calendarEventRecord.calendarOwnerOrPurposeAnnotation
-          {
-            LabeledContent(
-              "Owner or purpose",
-              value: calendarOwnerOrPurposeAnnotation.calendarOwnerOrPurposeDescription)
-          }
-          if let location = calendarEventRecord.calendarEventLocation {
-            VStack(alignment: .leading, spacing: 6) {
-              if !location.calendarEventLocationDisplayName.isEmpty {
-                LabeledContent("Location", value: location.calendarEventLocationDisplayName)
-              }
-              if !location.calendarEventLocationAddress.isEmpty {
-                LabeledContent("Address", value: location.calendarEventLocationAddress)
-              }
+          RecordDetailsGrid {
+            CalendarEventTimeRange(
+              startTime: calendarEventRecord.calendarEventStartTime,
+              endTime: calendarEventRecord.calendarEventEndTime)
+            if !calendarEventRecord.calendarDisplayName.isEmpty {
+              LabeledContent("Calendar", value: calendarEventRecord.calendarDisplayName)
             }
-            .id("location")
-          }
-          if calendarEventRecord.calendarEventOrganizer != nil
-            || !calendarEventRecord.calendarEventAttendees.isEmpty
-          {
-            VStack(alignment: .leading, spacing: 6) {
-              if let organizer = calendarEventRecord.calendarEventOrganizer {
-                LabeledContent("Organizer", value: organizer.personDisplayName)
-              }
-              if !calendarEventRecord.calendarEventAttendees.isEmpty {
-                LabeledContent(
-                  "Attendees",
-                  value: calendarEventRecord.calendarEventAttendees
-                    .map(\.personRelatedToCalendarEvent.personDisplayName)
-                    .filter { !$0.isEmpty }
-                    .formatted())
-              }
+            if !calendarEventRecord.calendarAccountDisplayName.isEmpty {
+              LabeledContent("Account", value: calendarEventRecord.calendarAccountDisplayName)
             }
-            .id("participant")
-          }
-          if calendarEventRecord.calendarEventIsRecurring {
-            LabeledContent("Repeats", value: "Yes")
+            if let calendarOwnerOrPurposeAnnotation =
+              calendarEventRecord.calendarOwnerOrPurposeAnnotation
+            {
+              LabeledContent(
+                "Owner or purpose",
+                value: calendarOwnerOrPurposeAnnotation.calendarOwnerOrPurposeDescription)
+            }
+            if let location = calendarEventRecord.calendarEventLocation {
+              VStack(alignment: .leading, spacing: 0) {
+                if !location.calendarEventLocationDisplayName.isEmpty {
+                  LabeledContent("Location", value: location.calendarEventLocationDisplayName)
+                }
+                if !location.calendarEventLocationAddress.isEmpty {
+                  LabeledContent("Address", value: location.calendarEventLocationAddress)
+                }
+              }
+              .id("location")
+            }
+            if calendarEventRecord.calendarEventOrganizer != nil
+              || !calendarEventRecord.calendarEventAttendees.isEmpty
+            {
+              VStack(alignment: .leading, spacing: 0) {
+                if let organizer = calendarEventRecord.calendarEventOrganizer {
+                  LabeledContent("Organizer", value: organizer.personDisplayName)
+                }
+                if !calendarEventRecord.calendarEventAttendees.isEmpty {
+                  LabeledContent(
+                    "Attendees",
+                    value: calendarEventRecord.calendarEventAttendees
+                      .map(\.personRelatedToCalendarEvent.personDisplayName)
+                      .filter { !$0.isEmpty }
+                      .formatted())
+                }
+              }
+              .id("participant")
+            }
+            if calendarEventRecord.calendarEventIsRecurring {
+              LabeledContent("Repeats", value: "Yes")
+            }
           }
           if let calendarEventHTTPSURL = calendarEventRecord.calendarEventHTTPSURL {
             Link("Open event", destination: calendarEventHTTPSURL)
@@ -88,7 +90,7 @@ private struct CalendarEventTimeRange: View {
   let endTime: ArchiveRecordAssociatedTimeForDisplay?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: 0) {
       if let startTime {
         CalendarEventAssociatedTime(label: "Starts", associatedTime: startTime)
       }

@@ -10,40 +10,42 @@ struct PersonRecordView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
           Text(personRecord.personDisplayName)
-            .font(.title2)
+            .font(TrawlDesign.Typography.pageTitle)
             .textSelection(.enabled)
             .id(PersonRecordAnchorIdentifier.personDisplayName)
-          if !personRecord.alternativePersonDisplayNames.isEmpty {
-            LabeledContent(
-              "Known as",
-              value: personRecord.alternativePersonDisplayNames.formatted()
-            )
-            .id(PersonRecordAnchorIdentifier.alternativePersonDisplayName)
-          }
-          if let annotation = personRecord.personRelationshipOrContextAnnotation {
-            LabeledContent(
-              "Relationship or context",
-              value: annotation.personRelationshipOrContextDescription
-            )
-            .id(
-              PersonRecordAnchorIdentifier.personRelationshipOrContextDescription
-                .recordAnchorIdentifier)
-            LabeledContent(
-              "Stated",
-              value: String(
-                format: "%04d-%02d-%02d",
-                annotation.personRelationshipOrContextDescriptionStatedDate.calendarYear,
-                annotation.personRelationshipOrContextDescriptionStatedDate.calendarMonthNumber,
-                annotation.personRelationshipOrContextDescriptionStatedDate.calendarDayOfMonth)
-            )
-          }
-          if !personRecord.trawlersContributingFactsToPersonRecord.isEmpty {
-            LabeledContent(
-              "Apps",
-              value: personRecord.trawlersContributingFactsToPersonRecord.map(
-                \.registeredTrawlerDisplayName
-              ).formatted()
-            )
+          RecordDetailsGrid {
+            if !personRecord.alternativePersonDisplayNames.isEmpty {
+              LabeledContent(
+                "Known as",
+                value: personRecord.alternativePersonDisplayNames.formatted()
+              )
+              .id(PersonRecordAnchorIdentifier.alternativePersonDisplayName)
+            }
+            if let annotation = personRecord.personRelationshipOrContextAnnotation {
+              LabeledContent(
+                "Relationship or context",
+                value: annotation.personRelationshipOrContextDescription
+              )
+              .id(
+                PersonRecordAnchorIdentifier.personRelationshipOrContextDescription
+                  .recordAnchorIdentifier)
+              LabeledContent(
+                "Stated",
+                value: String(
+                  format: "%04d-%02d-%02d",
+                  annotation.personRelationshipOrContextDescriptionStatedDate.calendarYear,
+                  annotation.personRelationshipOrContextDescriptionStatedDate.calendarMonthNumber,
+                  annotation.personRelationshipOrContextDescriptionStatedDate.calendarDayOfMonth)
+              )
+            }
+            if !personRecord.trawlersContributingFactsToPersonRecord.isEmpty {
+              LabeledContent(
+                "Apps",
+                value: personRecord.trawlersContributingFactsToPersonRecord.map(
+                  \.registeredTrawlerDisplayName
+                ).formatted()
+              )
+            }
           }
           if !personRecord.personContactMethodsInDisplayOrder.isEmpty {
             VStack(alignment: .leading, spacing: 8) {

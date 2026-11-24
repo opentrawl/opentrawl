@@ -86,14 +86,13 @@ private struct OpenedMessageConversationHeader: View {
             }
           } label: {
             Label(
-              copiedLink ? "Copied" : conversationTrawlLink.globallyRoutableTrawlLink,
+              copiedLink ? "Copied" : "Conversation link",
               systemImage: copiedLink ? "checkmark" : "link"
             )
-            .font(TrawlDesign.Typography.smallLabel.monospaced())
           }
           .buttonStyle(.bordered)
           .controlSize(.small)
-          .help("Copy archive link")
+          .help("Copy a link your AI can open to read this conversation")
         }
       }
       if !participantDisplayNames.isEmpty
@@ -116,7 +115,7 @@ private struct OpenedMessageConversationContext: View {
   let targetAnchor: RecordAnchorIdentifier
 
   var body: some View {
-    LazyVStack(alignment: .leading, spacing: 8) {
+    LazyVStack(alignment: .leading, spacing: 12) {
       ForEach(Array(messagesOldestFirst.enumerated()), id: \.element.id) { index, message in
         if shouldShowDayHeader(at: index), let date = messageDate(message.messageTime) {
           OpenedMessageDayDivider(date: date)
@@ -195,40 +194,46 @@ private struct OpenedMessageConversationRow: View {
   let messageTextAndMediaDescription: String
   let isOpenedMessage: Bool
 
+  private static let bubbleMaximumWidth: CGFloat = 540
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 5) {
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack(alignment: .firstTextBaseline, spacing: 6) {
         if !senderDisplayNames.isEmpty {
           Text(senderDisplayNames.formatted())
             .font(TrawlDesign.Typography.meta.weight(.semibold))
-            .foregroundStyle(isOpenedMessage ? TrawlDesign.brandRed : .primary)
+            .foregroundStyle(.primary)
         }
-        if isOpenedMessage {
-          Text("Match")
-            .font(TrawlDesign.Typography.smallLabel.weight(.semibold))
-            .foregroundStyle(TrawlDesign.brandRed)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(TrawlDesign.brandRed.opacity(0.12), in: Capsule())
-        }
-        Spacer(minLength: 0)
         OpenedMessageTime(messageTime: messageTime)
+        if isOpenedMessage {
+          Text("· Match")
+            .font(TrawlDesign.Typography.smallLabel.weight(.semibold))
+            .foregroundStyle(TrawlDesign.Colors.matchRed)
+        }
       }
+      .padding(.leading, 12)
+
       Text(messageTextAndMediaDescription)
+        .font(TrawlDesign.Typography.body)
+        .lineSpacing(2)
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+          isOpenedMessage
+            ? TrawlDesign.Colors.matchRed.opacity(0.06) : TrawlDesign.Colors.messageBubble,
+          in: TrawlDesign.Shape.surface
+        )
+        .overlay {
+          if isOpenedMessage {
+            TrawlDesign.Shape.surface
+              .strokeBorder(TrawlDesign.Colors.matchRed, lineWidth: 1.25)
+          }
+        }
     }
-    .padding(10)
+    .frame(maxWidth: Self.bubbleMaximumWidth, alignment: .leading)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(
-      isOpenedMessage ? TrawlDesign.brandRed.opacity(0.08) : TrawlDesign.Colors.surface,
-      in: TrawlDesign.Shape.control)
-    .overlay {
-      if isOpenedMessage {
-        TrawlDesign.Shape.control
-          .strokeBorder(TrawlDesign.brandRed.opacity(0.32), lineWidth: 1)
-      }
-    }
   }
 }
 
@@ -246,7 +251,7 @@ private struct OpenedMessageTime: View {
         EmptyView()
       }
     }
-    .font(TrawlDesign.Typography.smallLabel)
+    .font(TrawlDesign.Typography.smallNumber)
     .foregroundStyle(.secondary)
   }
 }

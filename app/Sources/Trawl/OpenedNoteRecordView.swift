@@ -48,22 +48,24 @@ private struct OpenedNoteRecordHeader: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text(noteDisplayName.isEmpty ? "Note" : noteDisplayName)
-        .font(.title2)
+        .font(TrawlDesign.Typography.pageTitle)
         .textSelection(.enabled)
         .id(noteDisplayNameAnchor.recordAnchorIdentifier)
-      if !noteFolderDisplayName.isEmpty {
-        LabeledContent("Folder", value: noteFolderDisplayName)
+      RecordDetailsGrid {
+        if !noteFolderDisplayName.isEmpty {
+          LabeledContent("Folder", value: noteFolderDisplayName)
+        }
+        if let noteCreatedTime {
+          OpenedNoteRecordTime(label: "Created", time: noteCreatedTime)
+        }
+        if let noteModifiedTime {
+          OpenedNoteRecordTime(label: "Modified", time: noteModifiedTime)
+        }
+        if specificRecoveredNoteVersionWasOpened, let openedNoteVersionTime {
+          OpenedNoteRecordTime(label: "Recovered version", time: openedNoteVersionTime)
+        }
+        LabeledContent("Versions", value: recoveredNoteVersionCount.formatted())
       }
-      if let noteCreatedTime {
-        OpenedNoteRecordTime(label: "Created", time: noteCreatedTime)
-      }
-      if let noteModifiedTime {
-        OpenedNoteRecordTime(label: "Modified", time: noteModifiedTime)
-      }
-      if specificRecoveredNoteVersionWasOpened, let openedNoteVersionTime {
-        OpenedNoteRecordTime(label: "Recovered version", time: openedNoteVersionTime)
-      }
-      LabeledContent("Versions", value: recoveredNoteVersionCount.formatted())
     }
   }
 }

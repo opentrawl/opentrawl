@@ -8,15 +8,17 @@ struct CalendarRecordView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 16) {
         Text(calendarRecord.calendarDisplayName)
-          .font(.title2)
-        LabeledContent("Account", value: calendarRecord.calendarAccountDisplayName)
-        if let calendarOwnerOrPurposeAnnotation = calendarRecord.calendarOwnerOrPurposeAnnotation {
-          LabeledContent(
-            "Owner or purpose",
-            value: calendarOwnerOrPurposeAnnotation.calendarOwnerOrPurposeDescription)
-        }
-        LabeledContent("Events") {
-          Text(calendarRecord.activeOrFutureCalendarEventCount, format: .number)
+          .font(TrawlDesign.Typography.pageTitle)
+        RecordDetailsGrid {
+          LabeledContent("Account", value: calendarRecord.calendarAccountDisplayName)
+          if let calendarOwnerOrPurposeAnnotation = calendarRecord.calendarOwnerOrPurposeAnnotation {
+            LabeledContent(
+              "Owner or purpose",
+              value: calendarOwnerOrPurposeAnnotation.calendarOwnerOrPurposeDescription)
+          }
+          LabeledContent("Events") {
+            Text(calendarRecord.activeOrFutureCalendarEventCount, format: .number)
+          }
         }
       }
       .textSelection(.enabled)

@@ -29,19 +29,21 @@ struct TrawlerSpecificOpenedRecordPresentationView: View {
                 .textSelection(.enabled)
             }
           }
-          ForEach(
-            Array(openedRecord.detailPresentation.fieldsInDisplayOrder.enumerated()),
-            id: \.offset
-          ) { fieldIndex, field in
-            TrawlerSpecificOpenedRecordPresentationFieldView(
-              field: field,
-              onOpenLink: onOpenLink.map { openLink in
-                { link in openLink(link, defaultLinkAnchor) }
-              }
-            )
-            .id(
-              field.fieldAnchor?.recordAnchorIdentifier
-                ?? "trawler_specific_opened_record_presentation_field_\(fieldIndex)")
+          RecordDetailsGrid {
+            ForEach(
+              Array(openedRecord.detailPresentation.fieldsInDisplayOrder.enumerated()),
+              id: \.offset
+            ) { fieldIndex, field in
+              TrawlerSpecificOpenedRecordPresentationFieldView(
+                field: field,
+                onOpenLink: onOpenLink.map { openLink in
+                  { link in openLink(link, defaultLinkAnchor) }
+                }
+              )
+              .id(
+                field.fieldAnchor?.recordAnchorIdentifier
+                  ?? "trawler_specific_opened_record_presentation_field_\(fieldIndex)")
+            }
           }
           if let body = openedRecord.detailPresentation.body {
             TrawlerSpecificOpenedRecordPresentationBodyView(detailBody: body)

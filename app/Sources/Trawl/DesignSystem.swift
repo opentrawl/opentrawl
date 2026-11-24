@@ -50,6 +50,7 @@ enum TrawlDesign {
       light: NSColor(srgbRed: 0.788, green: 0.118, blue: 0.071, alpha: 1.0),
       dark: NSColor(srgbRed: 0.941, green: 0.353, blue: 0.302, alpha: 1.0)
     )
+    static let messageBubble = Color.primary.opacity(0.06)
     static let selectBlue = Color.accentColor
     static let selectBlueSurface = Color.accentColor.opacity(0.14)
     static let warningAmber = Color.orange

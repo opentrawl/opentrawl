@@ -162,7 +162,8 @@ struct SearchResultsList: View {
         rawTitle: title(searchMatch),
         registeredTrawlerDisplayName: trawlerDisplayName(
           searchMatch.registeredTrawler),
-        showsTrawlerDisplayName: showsTrawlerDisplayName
+        showsTrawlerDisplayName: showsTrawlerDisplayName,
+        isSelected: searchMatch.id == selectedSearchMatchIdentifier
       )
       .tag(searchMatch.id)
     }
@@ -256,12 +257,12 @@ private struct SearchResultsContext: View {
 
 private struct SearchResultRow: View {
   @Environment(\.locale) private var locale
-  @Environment(\.backgroundProminence) private var backgroundProminence
 
   let searchMatch: SearchMatch
   let rawTitle: String
   let registeredTrawlerDisplayName: String
   let showsTrawlerDisplayName: Bool
+  let isSelected: Bool
 
   private var displayTitle: String {
     let trimmed = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -511,7 +512,7 @@ private struct SearchResultRow: View {
       if piece.matchesSearchQuery {
         // Red is unreadable on the selected row's accent fill.
         pieceText =
-          backgroundProminence == .increased
+          isSelected
           ? pieceText.bold().underline()
           : pieceText.bold().foregroundColor(TrawlDesign.Colors.matchRed)
       }
