@@ -134,7 +134,7 @@ func (s *Store) MessagesBySourcePKs(ctx context.Context, sourcePKs []int64) ([]M
 		for _, sourcePK := range sourcePKs[start:end] {
 			args = append(args, sourcePK)
 		}
-		rows, err := s.db.QueryContext(ctx, `select source_pk,coalesce(sender_jid,''),coalesce(sender_name,''),from_me,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(edit_ts,0),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0)
+		rows, err := s.db.QueryContext(ctx, `select source_pk,coalesce(sender_jid,''),coalesce(sender_name,''),from_me,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(media_size,0),coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(edit_ts,0),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0)
 from messages where source_pk in (`+placeholders+`)`, args...)
 		if err != nil {
 			return nil, err
@@ -143,7 +143,7 @@ from messages where source_pk in (`+placeholders+`)`, args...)
 			var message Message
 			var fromMe, pinned int
 			var editTS int64
-			if err := rows.Scan(&message.SourcePK, &message.SenderJID, &message.SenderName, &fromMe, &message.MessageType, &message.MediaType, &message.MediaTitle, &message.MediaPath, &message.TopicID, &message.ReplyToID, &message.ReplyToChat, &message.ThreadID, &editTS, &message.ForwardJSON, &message.ReactionsJSON, &message.Views, &message.Forwards, &message.RepliesCount, &pinned); err != nil {
+			if err := rows.Scan(&message.SourcePK, &message.SenderJID, &message.SenderName, &fromMe, &message.MessageType, &message.MediaType, &message.MediaTitle, &message.MediaPath, &message.MediaSize, &message.TopicID, &message.ReplyToID, &message.ReplyToChat, &message.ThreadID, &editTS, &message.ForwardJSON, &message.ReactionsJSON, &message.Views, &message.Forwards, &message.RepliesCount, &pinned); err != nil {
 				_ = rows.Close()
 				return nil, err
 			}

@@ -5,13 +5,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/historystate"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
 func (c *Crawler) updateFullTelegramHistory(ctx context.Context, r *runtime, st *store.Store, sourcePath string, progress telegramdesktop.ProgressReporter) (store.UpdateStats, error) {
-	state, err := loadTelegramHistoryState(st.Path())
+	state, err := historystate.LoadTelegramHistoryState(st.Path())
 	if err != nil {
 		return store.UpdateStats{}, err
 	}
@@ -50,15 +51,16 @@ func (c *Crawler) updateFullTelegramHistory(ctx context.Context, r *runtime, st 
 		return store.UpdateStats{}, err
 	}
 	multiAccount := len(sources) > 1
-	completed := state.completedSet()
+	completed := state.CompletedDialogSet()
 	var total store.UpdateStats
 	err = telegramdesktop.DownloadPostboxMessageHistory(ctx, sources, multiAccount, telegramdesktop.PostboxHistoryOptions{
+		HTTPClient:       r.req.PluginHTTPClient,
 		CompletedDialogs: completed,
 		ResumeOffsets:    state.DialogOffsets,
 		MessageExists:    st.MessageExists,
 		Incremental:      state.Complete,
 		Progress:         progress,
-		DialogBatch: func(checkpoint string, offset int, complete bool, result telegramdesktop.ImportResult) error {
+		DialogBatch: func(checkpoint telegramdesktop.CloudHistoryCheckpoint, result telegramdesktop.ImportResult) error {
 			result.Stats.SourcePath = sourcePath
 			sourcePKs := make([]int64, len(result.Messages))
 			for index := range result.Messages {
@@ -103,8 +105,8 @@ func (c *Crawler) updateFullTelegramHistory(ctx context.Context, r *runtime, st 
 				total.Updated += counts.Updated
 				total.Removed += counts.Removed
 			}
-			recordTelegramHistoryBatch(&state, completed, checkpoint, offset, complete)
-			if err := saveTelegramHistoryState(st.Path(), state); err != nil {
+			state.RecordHistoryBatch(completed, checkpoint.Dialog, checkpoint.OldestMessageID, checkpoint.Complete)
+			if err := historystate.SaveTelegramHistoryState(st.Path(), state); err != nil {
 				return err
 			}
 			return nil
@@ -118,7 +120,7 @@ func (c *Crawler) updateFullTelegramHistory(ctx context.Context, r *runtime, st 
 	}
 	state.Complete = true
 	state.DialogOffsets = nil
-	if err := saveTelegramHistoryState(st.Path(), state); err != nil {
+	if err := historystate.SaveTelegramHistoryState(st.Path(), state); err != nil {
 		return total, err
 	}
 	if !c.cfg.FullHistory {
@@ -128,25 +130,6 @@ func (c *Crawler) updateFullTelegramHistory(ctx context.Context, r *runtime, st 
 		}
 	}
 	return total, nil
-}
-
-// recordTelegramHistoryBatch persists completion per conversation even after
-// the account-wide initial backfill has completed. That distinction lets later
-// updates update known conversations cheaply without truncating older history in
-// a conversation discovered for the first time.
-func recordTelegramHistoryBatch(state *telegramHistoryState, completed map[string]bool, checkpoint string, offset int, complete bool) {
-	if state.DialogOffsets == nil {
-		state.DialogOffsets = map[string]int{}
-	}
-	if !complete {
-		state.DialogOffsets[checkpoint] = offset
-		return
-	}
-	delete(state.DialogOffsets, checkpoint)
-	if !completed[checkpoint] {
-		completed[checkpoint] = true
-		state.CompletedDialogs = append(state.CompletedDialogs, checkpoint)
-	}
 }
 
 // Cloud history carries current Telegram identity fields but not every field

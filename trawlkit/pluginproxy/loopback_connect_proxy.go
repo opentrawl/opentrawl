@@ -317,6 +317,9 @@ func NormalizeHostAndPort(raw string) (string, error) {
 	if err != nil || port < 1 || port > 65535 {
 		return "", errors.New("port must be between 1 and 65535")
 	}
+	if address, err := netip.ParseAddr(host); err == nil {
+		host = address.String()
+	}
 	return net.JoinHostPort(host, strconv.Itoa(port)), nil
 }
 

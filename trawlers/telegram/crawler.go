@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/trawlers/telegram/directmtproto"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramnetwork"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
@@ -87,7 +87,7 @@ func New() *Crawler {
 
 func (*Crawler) DeclaredPluginCapabilities() *plugincontract.PluginDeclaredCapabilities {
 	return &plugincontract.PluginDeclaredCapabilities{
-		DeclaredNetworkHosts:             directmtproto.NetworkHosts(),
+		DeclaredNetworkHosts:             telegramnetwork.NetworkHosts(),
 		DeclaredReadPaths:                []string{"~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"},
 		SupportsArchiveIndexChangeExport: true,
 	}

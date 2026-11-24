@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/directmtproto"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/historystate"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -50,12 +52,10 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	defer stopProgress()
 	sessionPath := telegramSessionPath(req)
 	if _, err := os.Stat(sessionPath); err == nil && c.update.Path == "" {
-		if c.update.FetchMedia {
-			return nil, usageErr(errors.New("--fetch-media requires a Telegram desktop source"))
-		}
 		counts, err := directmtproto.SyncDirectMTProto(ctx, sessionPath, r.dbPath, directmtproto.SyncOptions{
 			ClientOptions:  c.directClientOptions(req),
 			OpenedArchive:  req.OpenedTrawlerArchiveStore,
+			FetchMedia:     c.update.FetchMedia,
 			ConversationID: providerNativeConversationIdentifier,
 			Progress:       progress.Report,
 		})
@@ -73,11 +73,11 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 	}
 	var report *update.TrawlerArchiveUpdateReport
 	err = r.withStore(func(st *store.Store) error {
-		historyState, err := loadTelegramHistoryState(st.Path())
+		historyState, err := historystate.LoadTelegramHistoryState(st.Path())
 		if err != nil {
 			return err
 		}
-		preserveCloudProjection := c.cfg.FullHistory || telegramHistoryStarted(historyState)
+		preserveCloudProjection := c.cfg.FullHistory || historyState.Started()
 		var existingMediaSourcePath string
 		var existingMediaRefs []telegramdesktop.ExistingMediaRef
 		if c.update.FetchMedia {
@@ -89,6 +89,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		}
 		importStarted := time.Now()
 		result, err := telegramdesktop.Import(r.ctx, telegramdesktop.ImportOptions{
+			HTTPClient:              req.PluginHTTPClient,
 			Path:                    c.update.Path,
 			DialogsLimit:            c.update.DialogsLimit,
 			MessagesLimit:           c.update.MessagesLimit,
@@ -129,7 +130,7 @@ func (c *Crawler) Update(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 			for _, message := range result.Messages {
 				localSourcePKs[message.SourcePK] = struct{}{}
 			}
-			mediaCounts, mediaStats, err := backfillArchivedTelegramMedia(r.ctx, st, result.Stats.SourcePath, providerNativeConversationIdentifier, localSourcePKs, progress)
+			mediaCounts, mediaStats, err := backfillArchivedTelegramMedia(r.ctx, st, result.Stats.SourcePath, providerNativeConversationIdentifier, localSourcePKs, req.PluginHTTPClient, progress)
 			if err != nil {
 				return err
 			}
@@ -229,57 +230,13 @@ func preserveArchivedTelegramProjection(ctx context.Context, st *store.Store, me
 	return nil
 }
 
-func backfillArchivedTelegramMedia(ctx context.Context, st *store.Store, sourcePath, chatID string, excludeSourcePKs map[int64]struct{}, progress telegramdesktop.ProgressReporter) (int64, store.ImportStats, error) {
-	messages, err := archivedTelegramMediaCandidates(ctx, st, chatID, excludeSourcePKs)
+func backfillArchivedTelegramMedia(ctx context.Context, st *store.Store, sourcePath, chatID string, excludeSourcePKs map[int64]struct{}, httpClient *http.Client, progress telegramdesktop.ProgressReporter) (int64, store.ImportStats, error) {
+	messages, err := telegramdesktop.ArchivedTelegramMediaCandidates(ctx, st, chatID, excludeSourcePKs)
 	if err != nil {
 		return 0, store.ImportStats{}, err
 	}
-	result, err := telegramdesktop.BackfillArchiveMedia(ctx, sourcePath, st.Path(), messages, progress)
-	return persistArchivedTelegramMedia(ctx, st, result, err)
-}
-
-func persistArchivedTelegramMedia(ctx context.Context, st *store.Store, result telegramdesktop.ArchiveMediaResult, backfillErr error) (int64, store.ImportStats, error) {
-	updates := make([]store.MessageMediaUpdate, 0, len(result.Updates))
-	for _, update := range result.Updates {
-		updates = append(updates, store.MessageMediaUpdate{
-			SourcePK: update.SourcePK, MediaPath: update.MediaPath, MediaSize: update.MediaSize,
-		})
-	}
-	if len(updates) == 0 {
-		return 0, result.Stats, backfillErr
-	}
-	updateCtx := ctx
-	if backfillErr != nil {
-		// A cancelled remote session can still have completed downloads. Persist
-		// that bounded work before returning cancellation; media_path is the
-		// durable resume marker, so the next run skips these attachments.
-		updateCtx = context.WithoutCancel(ctx)
-	}
-	updated, updateErr := st.UpdateMessageMedia(updateCtx, updates)
-	if updateErr != nil {
-		return 0, result.Stats, errors.Join(backfillErr, updateErr)
-	}
-	return int64(updated), result.Stats, backfillErr
-}
-
-func archivedTelegramMediaCandidates(ctx context.Context, st *store.Store, chatID string, excludeSourcePKs map[int64]struct{}) ([]store.Message, error) {
-	filter := store.MessageFilter{HasMedia: true, Limit: int(^uint(0) >> 1)}
-	filter.ChatJID = strings.TrimSpace(chatID)
-	messages, err := st.Messages(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	result := messages[:0]
-	for _, message := range messages {
-		if strings.TrimSpace(message.MediaPath) != "" {
-			continue
-		}
-		if _, excluded := excludeSourcePKs[message.SourcePK]; excluded {
-			continue
-		}
-		result = append(result, message)
-	}
-	return result, nil
+	result, err := telegramdesktop.BackfillArchiveMedia(ctx, sourcePath, st.Path(), messages, httpClient, progress)
+	return telegramdesktop.PersistArchivedTelegramMedia(ctx, st, result, err)
 }
 
 func updateImportError(err error) error {

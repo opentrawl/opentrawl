@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,6 +19,7 @@ import (
 )
 
 type ImportOptions struct {
+	HTTPClient              *http.Client
 	Path                    string
 	DialogsLimit            int
 	MessagesLimit           int
@@ -145,7 +147,7 @@ func importPostboxGo(ctx context.Context, sourcePath string, opts ImportOptions,
 	}
 	remoteMedia := postboxRemoteMediaStats{Downloaded: 0, Missing: 0}
 	if opts.FetchMedia {
-		remoteMedia = downloadPostboxRemoteMedia(ctx, messages, sources, mediaTempDir, downloadPostboxRemoteMediaForSession, opts.Progress)
+		remoteMedia = downloadPostboxRemoteMedia(ctx, messages, sources, mediaTempDir, opts.HTTPClient, opts.Progress)
 	}
 	sharePostboxDuplicateMedia(messages)
 	sharePostboxResourceMedia(messages)

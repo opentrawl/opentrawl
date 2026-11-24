@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramnetwork"
 )
 
 // ArchiveMediaUpdate is the only archive mutation produced by attachment
@@ -34,8 +36,6 @@ type ArchiveMediaResult struct {
 	Stats   store.ImportStats
 }
 
-type archiveMediaSessionDownloader func(context.Context, postboxRemoteSession, bool, []store.Message, string, ProgressReporter) (archiveMediaSessionResult, error)
-
 type archiveMediaSessionResult struct {
 	messages   []store.Message
 	attempted  int
@@ -50,7 +50,7 @@ type archiveMediaSessionResult struct {
 // A cancellation or later session error may accompany completed Updates;
 // callers must persist those updates before returning the error so media_path
 // remains the resume marker.
-func BackfillArchiveMedia(ctx context.Context, sourcePath, dbPath string, messages []store.Message, progress ProgressReporter) (ArchiveMediaResult, error) {
+func BackfillArchiveMedia(ctx context.Context, sourcePath, dbPath string, messages []store.Message, httpClient *http.Client, progress ProgressReporter) (ArchiveMediaResult, error) {
 	candidates := archiveMediaCandidates(messages)
 	result := ArchiveMediaResult{Stats: store.ImportStats{
 		RemoteMediaCandidates: len(candidates),
@@ -69,11 +69,11 @@ func BackfillArchiveMedia(ctx context.Context, sourcePath, dbPath string, messag
 	}
 	defer func() { _ = os.RemoveAll(mediaTempDir) }()
 
-	result, err = backfillArchiveMedia(ctx, sources, len(sources) > 1, candidates, dbPath, mediaTempDir, progress, downloadArchiveMediaSession)
+	result, err = backfillArchiveMedia(ctx, sources, len(sources) > 1, candidates, dbPath, mediaTempDir, httpClient, progress)
 	return result, err
 }
 
-func backfillArchiveMedia(ctx context.Context, sources []postboxpkg.Source, multiAccount bool, candidates []store.Message, dbPath, mediaTempDir string, progress ProgressReporter, download archiveMediaSessionDownloader) (ArchiveMediaResult, error) {
+func backfillArchiveMedia(ctx context.Context, sources []postboxpkg.Source, multiAccount bool, candidates []store.Message, dbPath, mediaTempDir string, httpClient *http.Client, progress ProgressReporter) (ArchiveMediaResult, error) {
 	result := ArchiveMediaResult{Stats: store.ImportStats{
 		RemoteMediaCandidates: len(candidates),
 		RemoteMediaMissing:    len(candidates),
@@ -98,7 +98,7 @@ func backfillArchiveMedia(ctx context.Context, sources []postboxpkg.Source, mult
 			terminalErr = err
 			break
 		}
-		sessionResult, err := downloadArchiveMediaSessionWithRefresh(ctx, remote, multiAccount, remaining, mediaTempDir, progress, download)
+		sessionResult, err := downloadArchiveMediaSessionWithRefresh(ctx, remote, multiAccount, remaining, mediaTempDir, httpClient, progress)
 		result.Stats.RemoteMediaAttempted += sessionResult.attempted
 		result.Stats.RemoteMediaDownloads += sessionResult.downloaded
 		result.Stats.RemoteMediaTimeouts += sessionResult.timeouts
@@ -127,6 +127,10 @@ func backfillArchiveMedia(ctx context.Context, sources []postboxpkg.Source, mult
 		terminalErr = ctx.Err()
 	}
 
+	return commitDownloadedArchiveMedia(downloaded, dbPath, result, terminalErr)
+}
+
+func commitDownloadedArchiveMedia(downloaded []store.Message, dbPath string, result ArchiveMediaResult, terminalErr error) (ArchiveMediaResult, error) {
 	copyStats := store.ImportStats{}
 	if err := copyImportedMedia(downloaded, mediaArchiveDir(dbPath), &copyStats); err != nil {
 		return ArchiveMediaResult{}, err
@@ -141,12 +145,35 @@ func backfillArchiveMedia(ctx context.Context, sources []postboxpkg.Source, mult
 	}
 	result.Stats.MediaFiles = copyStats.MediaFiles
 	result.Stats.MediaBytes = copyStats.MediaBytes
-	result.Stats.RemoteMediaMissing = len(candidates) - len(result.Updates)
+	result.Stats.RemoteMediaMissing = result.Stats.RemoteMediaCandidates - len(result.Updates)
 	return result, terminalErr
 }
 
-func downloadArchiveMediaSessionWithRefresh(ctx context.Context, remote postboxRemoteSession, multiAccount bool, candidates []store.Message, mediaTempDir string, progress ProgressReporter, download archiveMediaSessionDownloader) (archiveMediaSessionResult, error) {
-	result, err := download(ctx, remote, multiAccount, candidates, mediaTempDir, progress)
+// BackfillAuthenticatedArchiveMedia attaches files using an already connected client.
+func BackfillAuthenticatedArchiveMedia(ctx context.Context, client *telegram.Client, dbPath string, messages []store.Message, progress ProgressReporter) (ArchiveMediaResult, error) {
+	candidates := archiveMediaCandidates(messages)
+	if len(candidates) == 0 {
+		return ArchiveMediaResult{}, nil
+	}
+	mediaTempDir, err := os.MkdirTemp("", "telegram-archive-media-*")
+	if err != nil {
+		return ArchiveMediaResult{}, err
+	}
+	defer func() { _ = os.RemoveAll(mediaTempDir) }()
+	downloaded, err := downloadArchiveMediaFromDialogs(ctx, client.API(), "", false, candidates, mediaTempDir, progress)
+	result := ArchiveMediaResult{Stats: store.ImportStats{
+		RemoteMediaCandidates:  len(candidates),
+		RemoteMediaAttempted:   downloaded.attempted,
+		RemoteMediaDownloads:   downloaded.downloaded,
+		RemoteMediaUnavailable: len(candidates) - downloaded.downloaded,
+		RemoteMediaTimeouts:    downloaded.timeouts,
+		RemoteMediaErrors:      downloaded.errors,
+	}}
+	return commitDownloadedArchiveMedia(downloaded.messages, dbPath, result, err)
+}
+
+func downloadArchiveMediaSessionWithRefresh(ctx context.Context, remote postboxRemoteSession, multiAccount bool, candidates []store.Message, mediaTempDir string, httpClient *http.Client, progress ProgressReporter) (archiveMediaSessionResult, error) {
+	result, err := downloadArchiveMediaSession(ctx, remote, multiAccount, candidates, mediaTempDir, httpClient, progress)
 	if !isPostboxAuthKeyUnregistered(err) {
 		return result, err
 	}
@@ -158,7 +185,7 @@ func downloadArchiveMediaSessionWithRefresh(ctx context.Context, remote postboxR
 		return result, refreshErr
 	}
 	remaining := archiveMediaWithoutSourcePKs(append([]store.Message(nil), candidates...), result.messages)
-	refreshedResult, err := download(ctx, *refreshed, multiAccount, remaining, mediaTempDir, progress)
+	refreshedResult, err := downloadArchiveMediaSession(ctx, *refreshed, multiAccount, remaining, mediaTempDir, httpClient, progress)
 	result.messages = append(result.messages, refreshedResult.messages...)
 	result.attempted += refreshedResult.attempted
 	result.downloaded += refreshedResult.downloaded
@@ -207,7 +234,7 @@ func archiveMediaWithoutSourcePKs(messages, resolved []store.Message) []store.Me
 	return remaining
 }
 
-func downloadArchiveMediaSession(ctx context.Context, remote postboxRemoteSession, multiAccount bool, candidates []store.Message, mediaTempDir string, progress ProgressReporter) (archiveMediaSessionResult, error) {
+func downloadArchiveMediaSession(ctx context.Context, remote postboxRemoteSession, multiAccount bool, candidates []store.Message, mediaTempDir string, httpClient *http.Client, progress ProgressReporter) (archiveMediaSessionResult, error) {
 	storage, err := postboxSessionStorage(ctx, remote.native)
 	if err != nil {
 		return archiveMediaSessionResult{}, err
@@ -215,6 +242,7 @@ func downloadArchiveMediaSession(ctx context.Context, remote postboxRemoteSessio
 	client := telegram.NewClient(telegramMacAPIID, telegramMacAPIHash, telegram.Options{
 		DC: remote.native.DCID, SessionStorage: storage, NoUpdates: true, AllowCDN: true,
 		DialTimeout: 15 * time.Second,
+		Resolver:    telegramnetwork.Resolver(httpClient),
 		ReconnectionBackoff: func() backoff.BackOff {
 			return postboxConnectionBackoff()
 		},
@@ -230,48 +258,43 @@ func downloadArchiveMediaSession(ctx context.Context, remote postboxRemoteSessio
 		if _, err := client.Self(ctx); err != nil {
 			return err
 		}
-		raw := tg.NewClient(client)
-		for _, folderID := range postboxHistoryFolderIDs {
-			err := query.GetDialogs(raw).FolderID(folderID).BatchSize(postboxHistoryBatchSize).ForEach(ctx, func(ctx context.Context, elem dialogs.Elem) error {
-				return downloadArchiveMediaForDialog(ctx, raw, elem, remote.native.AccountID, multiAccount, candidates, mediaTempDir, progress, &result)
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
+		var err error
+		result, err = downloadArchiveMediaFromDialogs(ctx, tg.NewClient(client), remote.native.AccountID, multiAccount, candidates, mediaTempDir, progress)
+		return err
 	})
-	if err != nil {
-		return result, err
-	}
-	return result, nil
+	return result, err
 }
 
-func downloadArchiveMediaForDialog(
-	ctx context.Context,
-	raw *tg.Client,
-	elem dialogs.Elem,
-	accountID string,
-	multiAccount bool,
-	candidates []store.Message,
-	mediaTempDir string,
-	progress ProgressReporter,
-	result *archiveMediaSessionResult,
-) error {
-	if err := ctx.Err(); err != nil {
-		return err
+func downloadArchiveMediaFromDialogs(ctx context.Context, raw *tg.Client, accountID string, multiAccount bool, candidates []store.Message, mediaTempDir string, progress ProgressReporter) (archiveMediaSessionResult, error) {
+	candidatesByChat := make(map[string][]store.Message)
+	for _, candidate := range candidates {
+		candidatesByChat[candidate.ChatJID] = append(candidatesByChat[candidate.ChatJID], candidate)
 	}
-	if elem.Deleted() {
-		return nil
+	var result archiveMediaSessionResult
+	for _, folderID := range postboxHistoryFolderIDs {
+		err := query.GetDialogs(raw).FolderID(folderID).BatchSize(postboxHistoryBatchSize).ForEach(ctx, func(ctx context.Context, elem dialogs.Elem) error {
+			if elem.Deleted() {
+				return nil
+			}
+			rawChatID, ok := postboxpkg.TelegramPeerToPostboxID(elem.Dialog.GetPeer())
+			if !ok {
+				return nil
+			}
+			chatID := postboxpkg.PeerStoreID(accountID, rawChatID, multiAccount)
+			for _, candidate := range candidatesByChat[chatID] {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				downloadArchiveMediaCandidate(ctx, raw, elem, accountID, candidate, mediaTempDir, progress, &result)
+			}
+			delete(candidatesByChat, chatID)
+			return nil
+		})
+		if err != nil {
+			return result, err
+		}
 	}
-	rawChatID, ok := postboxpkg.TelegramPeerToPostboxID(elem.Dialog.GetPeer())
-	if !ok {
-		return nil
-	}
-	for _, candidate := range archiveMediaCandidatesForDialog(candidates, accountID, rawChatID, multiAccount) {
-		downloadArchiveMediaCandidate(ctx, raw, elem, accountID, candidate, mediaTempDir, progress, result)
-	}
-	return nil
+	return result, ctx.Err()
 }
 
 func downloadArchiveMediaCandidate(
@@ -325,17 +348,6 @@ func downloadArchiveMediaCandidate(
 	}
 }
 
-func archiveMediaCandidatesForDialog(candidates []store.Message, accountID string, rawChatID int64, multiAccount bool) []store.Message {
-	chatID := postboxpkg.PeerStoreID(accountID, rawChatID, multiAccount)
-	var result []store.Message
-	for _, candidate := range candidates {
-		if candidate.ChatJID == chatID {
-			result = append(result, candidate)
-		}
-	}
-	return result
-}
-
 func getRemoteMessageForPeer(ctx context.Context, raw *tg.Client, inputPeer tg.InputPeerClass, expectedPeer tg.PeerClass, messageID int) (tg.NotEmptyMessage, error) {
 	if messageID <= 0 {
 		return nil, errors.New("invalid Telegram cloud message id")
@@ -377,4 +389,48 @@ func getRemoteMessageForPeer(ctx context.Context, raw *tg.Client, inputPeer tg.I
 		return nil, firstErr
 	}
 	return nil, nil
+}
+
+func PersistArchivedTelegramMedia(ctx context.Context, st *store.Store, result ArchiveMediaResult, backfillErr error) (int64, store.ImportStats, error) {
+	updates := make([]store.MessageMediaUpdate, 0, len(result.Updates))
+	for _, update := range result.Updates {
+		updates = append(updates, store.MessageMediaUpdate{
+			SourcePK: update.SourcePK, MediaPath: update.MediaPath, MediaSize: update.MediaSize,
+		})
+	}
+	if len(updates) == 0 {
+		return 0, result.Stats, backfillErr
+	}
+	updateCtx := ctx
+	if backfillErr != nil {
+		// A cancelled remote session can still have completed downloads. Persist
+		// that bounded work before returning cancellation; media_path is the
+		// durable resume marker, so the next run skips these attachments.
+		updateCtx = context.WithoutCancel(ctx)
+	}
+	updated, updateErr := st.UpdateMessageMedia(updateCtx, updates)
+	if updateErr != nil {
+		return 0, result.Stats, errors.Join(backfillErr, updateErr)
+	}
+	return int64(updated), result.Stats, backfillErr
+}
+
+func ArchivedTelegramMediaCandidates(ctx context.Context, st *store.Store, chatID string, excludeSourcePKs map[int64]struct{}) ([]store.Message, error) {
+	filter := store.MessageFilter{HasMedia: true, Limit: int(^uint(0) >> 1)}
+	filter.ChatJID = strings.TrimSpace(chatID)
+	messages, err := st.Messages(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	result := messages[:0]
+	for _, message := range messages {
+		if strings.TrimSpace(message.MediaPath) != "" {
+			continue
+		}
+		if _, excluded := excludeSourcePKs[message.SourcePK]; excluded {
+			continue
+		}
+		result = append(result, message)
+	}
+	return result, nil
 }

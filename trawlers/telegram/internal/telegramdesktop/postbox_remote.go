@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,6 +20,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramnetwork"
 )
 
 const (
@@ -26,14 +28,12 @@ const (
 	telegramMacAPIHash = "3975f648bb682ee889f35483bc618d1c" // gitleaks:allow
 )
 
-type postboxRemoteMediaDownloader func(context.Context, *postboxpkg.NativeSession, []postboxpkg.MessageRecord, []int, string, ProgressReporter) (postboxRemoteMediaStats, bool, error)
-
 type postboxRemoteSession struct {
 	source postboxpkg.Source
 	native *postboxpkg.NativeSession
 }
 
-func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.MessageRecord, sources []postboxpkg.Source, mediaTempDir string, downloader postboxRemoteMediaDownloader, progress ProgressReporter) postboxRemoteMediaStats {
+func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.MessageRecord, sources []postboxpkg.Source, mediaTempDir string, httpClient *http.Client, progress ProgressReporter) postboxRemoteMediaStats {
 	sharePostboxDuplicateMedia(messages)
 	sharePostboxResourceMedia(messages)
 	candidates := postboxRemoteMediaCandidateIndexes(messages)
@@ -59,7 +59,7 @@ func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.Messa
 		ordered := preferredPostboxSessions(accountID, sessions)
 		handled := false
 		for _, remoteSession := range ordered {
-			result, ok, err := downloadPostboxRemoteMediaForSessionWithRefresh(ctx, remoteSession, messages, indexes, mediaTempDir, downloader, progress)
+			result, ok, err := downloadPostboxRemoteMediaForSessionWithRefresh(ctx, remoteSession, messages, indexes, mediaTempDir, httpClient, progress)
 			if err != nil || !ok {
 				reportPostboxRemoteMediaUnavailable(progress, err)
 				continue
@@ -136,8 +136,8 @@ func preferredPostboxSessions(accountID string, sessions map[string]postboxRemot
 	return ordered
 }
 
-func downloadPostboxRemoteMediaForSessionWithRefresh(ctx context.Context, remoteSession postboxRemoteSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, downloader postboxRemoteMediaDownloader, progress ProgressReporter) (postboxRemoteMediaStats, bool, error) {
-	result, ok, err := downloader(ctx, remoteSession.native, messages, indexes, mediaTempDir, progress)
+func downloadPostboxRemoteMediaForSessionWithRefresh(ctx context.Context, remoteSession postboxRemoteSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, httpClient *http.Client, progress ProgressReporter) (postboxRemoteMediaStats, bool, error) {
+	result, ok, err := downloadPostboxRemoteMediaForSession(ctx, remoteSession.native, messages, indexes, mediaTempDir, httpClient, progress)
 	if !isPostboxAuthKeyUnregistered(err) {
 		return result, ok, err
 	}
@@ -148,7 +148,7 @@ func downloadPostboxRemoteMediaForSessionWithRefresh(ctx context.Context, remote
 	if refreshErr != nil {
 		return postboxRemoteMediaStats{}, false, refreshErr
 	}
-	result, ok, err = downloader(ctx, refreshed.native, messages, indexes, mediaTempDir, progress)
+	result, ok, err = downloadPostboxRemoteMediaForSession(ctx, refreshed.native, messages, indexes, mediaTempDir, httpClient, progress)
 	return result, ok, err
 }
 
@@ -163,7 +163,7 @@ func refreshPostboxRemoteSession(source postboxpkg.Source) (*postboxRemoteSessio
 	return &postboxRemoteSession{source: source, native: nativeSession}, nil
 }
 
-func downloadPostboxRemoteMediaForSession(ctx context.Context, nativeSession *postboxpkg.NativeSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, progress ProgressReporter) (postboxRemoteMediaStats, bool, error) {
+func downloadPostboxRemoteMediaForSession(ctx context.Context, nativeSession *postboxpkg.NativeSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, httpClient *http.Client, progress ProgressReporter) (postboxRemoteMediaStats, bool, error) {
 	storage, err := postboxSessionStorage(ctx, nativeSession)
 	if err != nil {
 		return postboxRemoteMediaStats{}, false, err
@@ -173,6 +173,7 @@ func downloadPostboxRemoteMediaForSession(ctx context.Context, nativeSession *po
 		SessionStorage: storage,
 		NoUpdates:      true,
 		AllowCDN:       true,
+		Resolver:       telegramnetwork.Resolver(httpClient),
 		Middlewares:    []telegram.Middleware{newTelegramFloodWaitPolicy(progress)},
 		Device: telegram.DeviceConfig{
 			DeviceModel:    "Mac",

@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/historystate"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	archiveStore "github.com/opentrawl/opentrawl/trawlkit/store"
@@ -17,6 +18,7 @@ type SyncOptions struct {
 	ClientOptions
 	OpenedArchive  *archiveStore.Store
 	ConversationID string
+	FetchMedia     bool
 	Progress       func(int64, string) error
 }
 
@@ -54,6 +56,15 @@ func SyncDirectMTProto(ctx context.Context, sessionPath, archiveDBPath string, o
 	}
 	defer func() { _ = archive.Close() }()
 
+	checkpointPath := archiveDBPath + ".direct-mtproto"
+	historyState, err := historystate.LoadTelegramHistoryState(checkpointPath)
+	if err != nil {
+		return report, err
+	}
+	completedDialogs := historyState.CompletedDialogSet()
+	if historyState.NewestArchivedMessageIDs == nil {
+		historyState.NewestArchivedMessageIDs = make(map[string]int)
+	}
 	chats, err := archive.ListChats(ctx, -1, false)
 	if err != nil {
 		return report, err
@@ -70,10 +81,18 @@ func SyncDirectMTProto(ctx context.Context, sessionPath, archiveDBPath string, o
 		}
 		foundConversation := options.ConversationID == ""
 		err = telegramdesktop.DownloadAuthenticatedTelegramHistory(ctx, client, self, telegramdesktop.PostboxHistoryOptions{
-			ConversationID: options.ConversationID,
-			Progress:       progressCallback(options.Progress),
-			DialogBatch: func(_ string, _ int, _ bool, batch telegramdesktop.ImportResult) error {
+			ConversationID:           options.ConversationID,
+			CompletedDialogs:         completedDialogs,
+			ResumeOffsets:            historyState.DialogOffsets,
+			NewestArchivedMessageIDs: historyState.NewestArchivedMessageIDs,
+			Incremental:              true,
+			Progress:                 progressCallback(options.Progress),
+			DialogBatch: func(checkpoint telegramdesktop.CloudHistoryCheckpoint, batch telegramdesktop.ImportResult) error {
 				foundConversation = true
+				wasComplete := completedDialogs[checkpoint.Dialog]
+				if wasComplete && len(batch.Messages) == 0 && checkpoint.NewestMessageID == 0 {
+					return nil
+				}
 				messagePKs := make([]int64, 0, len(batch.Messages))
 				for _, message := range batch.Messages {
 					messagePKs = append(messagePKs, message.SourcePK)
@@ -96,7 +115,12 @@ func SyncDirectMTProto(ctx context.Context, sessionPath, archiveDBPath string, o
 				for index := range batch.Messages {
 					message := &batch.Messages[index]
 					if current, exists := currentMessagesByPK[message.SourcePK]; exists {
-						message.MediaPath = current.MediaPath
+						if message.MediaType != "" {
+							message.MediaPath = current.MediaPath
+							if current.MediaPath != "" {
+								message.MediaSize = current.MediaSize
+							}
+						}
 					} else {
 						chat.MessageCount++
 					}
@@ -105,17 +129,40 @@ func SyncDirectMTProto(ctx context.Context, sessionPath, archiveDBPath string, o
 					}
 				}
 				counts, err := archive.MergeObserved(ctx, batch.Contacts, batch.Chats, nil, nil, nil, batch.Participants, batch.Messages)
-				if err == nil {
-					chatsByID[chat.JID] = *chat
-					report.Added += counts.Added
-					report.Updated += counts.Updated
+				if err != nil {
+					return err
 				}
-				return err
+				chatsByID[chat.JID] = *chat
+				report.Added += counts.Added
+				report.Updated += counts.Updated
+
+				// Keep the prior upper bound until all new messages are stored.
+				// Otherwise an interrupted write can hide older unprocessed pages.
+				if wasComplete && !checkpoint.Complete {
+					return nil
+				}
+				historyState.NewestArchivedMessageIDs[checkpoint.Dialog] = max(
+					historyState.NewestArchivedMessageIDs[checkpoint.Dialog], checkpoint.NewestMessageID)
+				historyState.RecordHistoryBatch(completedDialogs, checkpoint.Dialog, checkpoint.OldestMessageID, checkpoint.Complete)
+				return historystate.SaveTelegramHistoryState(checkpointPath, historyState)
 			},
 		})
-		if err == nil && !foundConversation {
+		if err != nil {
+			return err
+		}
+		if !foundConversation {
 			return errors.New("conversation is unavailable in this Telegram session")
 		}
+		if !options.FetchMedia {
+			return nil
+		}
+		messages, err := telegramdesktop.ArchivedTelegramMediaCandidates(ctx, archive, options.ConversationID, nil)
+		if err != nil {
+			return err
+		}
+		media, err := telegramdesktop.BackfillAuthenticatedArchiveMedia(ctx, client, archiveDBPath, messages, progressCallback(options.Progress))
+		updated, _, err := telegramdesktop.PersistArchivedTelegramMedia(ctx, archive, media, err)
+		report.Updated += updated
 		return err
 	})
 	if err == nil && options.OpenedArchive == nil {

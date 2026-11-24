@@ -5,23 +5,20 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/coder/websocket"
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/auth/qrlogin"
-	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
-	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramnetwork"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
 )
 
 const SessionFilename = "mtproto-session.json"
@@ -32,38 +29,64 @@ type ClientOptions struct {
 	HTTPClient *http.Client
 }
 
-func NetworkHosts() []string {
-	var hosts []string
-	for _, endpoint := range dcs.Prod().Domains {
-		host, _ := url.Parse(endpoint)
-		hosts = append(hosts, host.Hostname()+":443")
-	}
-	sort.Strings(hosts)
-	return hosts
+// Releases can set telegramBuildAPIHash with -ldflags -X. The registered
+// application ID is public. A deployment can also override it with -X.
+var telegramBuildAPIID = "37429334"
+var telegramBuildAPIHash string
+
+type telegramApplicationCredentials struct {
+	APIID   int    `toml:"api_id"`
+	APIHash string `toml:"api_hash"`
 }
 
-func newClient(sessionPath string, options ClientOptions, dispatcher telegram.UpdateHandler) (*telegram.Client, error) {
+func telegramDirectCredentials(sessionPath string, options ClientOptions) (telegramApplicationCredentials, error) {
+	var credentials telegramApplicationCredentials
+	credentialsPath := filepath.Join(filepath.Dir(sessionPath), "opentrawl-app-credentials.toml")
+	if err := config.LoadTOMLFileIfPresent(credentialsPath, &credentials); err != nil {
+		return credentials, errors.New("could not read Telegram application credentials")
+	}
+	if credentials.APIID == 0 {
+		var err error
+		credentials.APIID, err = strconv.Atoi(telegramBuildAPIID)
+		if err != nil {
+			return credentials, errors.New("invalid Telegram build application ID")
+		}
+	}
+	if credentials.APIHash == "" {
+		credentials.APIHash = telegramBuildAPIHash
+	}
+	if options.APIID != 0 {
+		credentials.APIID = options.APIID
+	}
+	if options.APIHash != "" {
+		credentials.APIHash = options.APIHash
+	}
 	if environmentAPIID := os.Getenv("OPENTRAWL_TELEGRAM_API_ID"); environmentAPIID != "" {
 		var err error
-		options.APIID, err = strconv.Atoi(environmentAPIID)
-		if err != nil || options.APIID <= 0 {
-			return nil, errors.New("invalid OPENTRAWL_TELEGRAM_API_ID")
+		credentials.APIID, err = strconv.Atoi(environmentAPIID)
+		if err != nil || credentials.APIID <= 0 {
+			return credentials, errors.New("invalid OPENTRAWL_TELEGRAM_API_ID")
 		}
 	}
 	if environmentAPIHash := os.Getenv("OPENTRAWL_TELEGRAM_API_HASH"); environmentAPIHash != "" {
-		options.APIHash = environmentAPIHash
+		credentials.APIHash = environmentAPIHash
 	}
-	if options.APIID == 0 && options.APIHash == "" {
-		options.APIID, options.APIHash = telegramdesktop.TelegramDesktopAPI()
+	if credentials.APIID <= 0 || credentials.APIHash == "" {
+		return credentials, errors.New("set Telegram api_id and api_hash in opentrawl-app-credentials.toml in the Telegram archive directory")
 	}
-	if options.APIID <= 0 || options.APIHash == "" {
-		return nil, errors.New("set both Telegram api_id and api_hash")
+	return credentials, nil
+}
+
+func newClient(sessionPath string, options ClientOptions, dispatcher telegram.UpdateHandler) (*telegram.Client, error) {
+	credentials, err := telegramDirectCredentials(sessionPath, options)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(sessionPath), 0o700); err != nil {
 		return nil, err
 	}
-	return telegram.NewClient(options.APIID, options.APIHash, telegram.Options{
+	return telegram.NewClient(credentials.APIID, credentials.APIHash, telegram.Options{
 		SessionStorage: privateSessionStorage{path: sessionPath},
 		NoUpdates:      dispatcher == nil,
 		UpdateHandler:  dispatcher,
@@ -80,10 +103,7 @@ func newClient(sessionPath string, options ClientOptions, dispatcher telegram.Up
 				backoff.WithMaxInterval(3*time.Second),
 			)
 		},
-		Resolver: dcs.Websocket(dcs.WebsocketOptions{DialOptions: &websocket.DialOptions{
-			HTTPClient:   options.HTTPClient,
-			Subprotocols: []string{"binary"},
-		}}),
+		Resolver: telegramnetwork.Resolver(options.HTTPClient),
 		Device: telegram.DeviceConfig{
 			DeviceModel:    "OpenTrawl",
 			AppVersion:     "OpenTrawl",

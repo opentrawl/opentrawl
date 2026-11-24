@@ -24,12 +24,18 @@ approve the sign-in.
 
 The signed-in session is stored as `mtproto-session.json` beside the archive,
 with permissions limited to your user. `trawl update telegram` uses it to
-download cloud dialogs, messages and available media metadata. Use
+download cloud dialogs, messages and available media metadata. Interrupted
+first downloads resume, and later updates fetch new messages. Add
+`--fetch-media` to download missing attachments. Use
 `trawl telegram disconnect` to revoke the session while keeping the archive.
 
-Set `api_id` and `api_hash` in Telegram's `config.toml` to use your own
-Telegram application credentials. Standalone Go callers can also set
-`OPENTRAWL_TELEGRAM_API_ID` and `OPENTRAWL_TELEGRAM_API_HASH`.
+A build without an application hash needs Telegram application credentials
+before it can sign in. Save `api_id` and `api_hash` in
+`opentrawl-app-credentials.toml` beside the Telegram archive, with mode `0600`.
+The Telegram crawler also accepts those fields in its `config.toml`.
+Standalone Go callers can set `OPENTRAWL_TELEGRAM_API_ID` and
+`OPENTRAWL_TELEGRAM_API_HASH`. Release builds can set `telegramBuildAPIID` and
+`telegramBuildAPIHash` in the `directmtproto` package with linker flags.
 
 ## Source and storage
 
@@ -41,7 +47,8 @@ Update uses the native Postbox store when there is no direct session:
 
 The archive is `~/.opentrawl/telegram/telegram.db`; archived media is under
 `~/.opentrawl/telegram/media/`. A normal update starts with the messages and media
-cached by Telegram on this Mac.
+cached by Telegram on this Mac, including committed changes in the Postbox
+write-ahead log.
 
 Run `trawl update telegram --full-history` to download older messages into
 OpenTrawl through the existing Telegram session. The download is resumable.
