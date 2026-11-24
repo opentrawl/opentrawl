@@ -91,10 +91,18 @@ public struct AppOperabilityState: Sendable, Equatable {
     isInstalledOnThisMac: Bool,
     fullDiskAccessChoice: FullDiskAccessChoice
   ) -> Self {
-    let count =
+    let contentCount =
       status?.archiveContentCountsAfterLastSuccessfullyCompletedUpdate.reduce(UInt64(0)) {
         $0 + $1.archiveContentCount
       } ?? 0
+    let historyCount: UInt64 = {
+      guard let history = status?.archiveWeeklyHistory else { return 0 }
+      let dated = history.weeklyRecordCountsInChronologicalOrder.reduce(UInt64(0)) {
+        $0 + $1.recordCount
+      }
+      return dated + history.undatedRecordCount
+    }()
+    let count = historyCount > 0 ? historyCount : contentCount
     let id = trawler.id.registeredTrawlerIdentity
     let name = trawler.registeredTrawlerDisplayName
 

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import PermissionGuide
 import SwiftUI
 import TrawlClient
 @preconcurrency import WebKit
@@ -270,8 +271,10 @@ struct XWebSignInSheet: View {
   @State private var activeTask: Task<Void, Never>?
   @State private var webAttemptID = UUID()
   @State private var isConnecting = false
-  @State private var statusMessage = "OpenTrawl only reads your posts, likes, bookmarks, and older messages."
+  @State private var statusMessage = "OpenTrawl reads your posts, likes, bookmarks, mentions and older messages."
   @State private var errorMessage: String?
+
+  private static let twitterTrawlerID = RegisteredTrawlerIdentity(registeredTrawlerIdentity: "twitter")
 
   private var readableBrowsers: [DetectedXBrowser] {
     installedBrowsers.filter(\.isReadableNow)
@@ -282,72 +285,13 @@ struct XWebSignInSheet: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      VStack(alignment: .leading, spacing: TrawlDesign.Space.xs) {
-        Text("Connect X")
-          .font(TrawlDesign.Typography.sectionHeader)
-          .foregroundStyle(TrawlDesign.Colors.ink)
-        Text(statusMessage)
-          .font(TrawlDesign.Typography.meta)
-          .foregroundStyle(TrawlDesign.Colors.mutedInk)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(TrawlDesign.Space.md)
-      .background(TrawlDesign.Colors.surface)
-
-      Divider()
-
-      if let errorMessage {
-        HStack(spacing: TrawlDesign.Space.sm) {
-          Image(systemName: "exclamationmark.triangle.fill")
-            .foregroundStyle(TrawlDesign.Colors.warningAmber)
-          Text(errorMessage)
-            .font(TrawlDesign.Typography.meta)
-            .foregroundStyle(TrawlDesign.Colors.ink)
-            .fixedSize(horizontal: false, vertical: true)
-          Spacer()
-        }
-        .padding(.horizontal, TrawlDesign.Space.md)
-        .padding(.vertical, TrawlDesign.Space.sm)
-        .background(TrawlDesign.Colors.warningAmberSurface)
-      }
-
+    Group {
       if showingManualWebLogin {
-        manualWebLoginBody
+        manualWebLoginSheet
       } else {
-        browserChooserBody
+        chooserSheet
       }
-
-      Divider()
-
-      HStack(spacing: TrawlDesign.Space.sm) {
-        if showingManualWebLogin && !installedBrowsers.isEmpty {
-          Button("Back to browser sign-in") {
-            cancelActiveAttempt()
-            errorMessage = nil
-            showingManualWebLogin = false
-          }
-          .buttonStyle(.bordered)
-          .controlSize(.small)
-        }
-        if isConnecting {
-          ProgressView()
-            .controlSize(.small)
-        }
-        Spacer()
-        Button("Cancel") {
-          cancelActiveAttempt()
-          onDismiss()
-        }
-        .keyboardShortcut(.cancelAction)
-      }
-      .padding(.horizontal, TrawlDesign.Space.md)
-      .padding(.vertical, TrawlDesign.Space.sm)
-      .background(TrawlDesign.Colors.surface)
     }
-    .frame(width: 520)
-    .frame(height: showingManualWebLogin ? 660 : nil)
     .onAppear {
       refreshDetectedBrowsers()
       if readableBrowsers.isEmpty && installedBrowsers.isEmpty {
@@ -364,129 +308,197 @@ struct XWebSignInSheet: View {
     }
   }
 
-  private var browserChooserBody: some View {
-    VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
-      if !readableBrowsers.isEmpty {
-        VStack(alignment: .leading, spacing: TrawlDesign.Space.sm) {
-          HStack {
-            Text("Use an existing browser sign-in")
-              .font(TrawlDesign.Typography.cardTitle)
-              .foregroundStyle(TrawlDesign.Colors.ink)
-            Spacer()
-            if let xURL = URL(string: "https://x.com") {
-              Link("Open x.com", destination: xURL)
-                .font(TrawlDesign.Typography.meta)
-            }
-          }
-          Text(
-            "Because X has no read-only login for personal archives, OpenTrawl reuses your browser's X sign-in after you click a browser below."
-          )
-          .font(TrawlDesign.Typography.meta)
-          .foregroundStyle(TrawlDesign.Colors.mutedInk)
-          .fixedSize(horizontal: false, vertical: true)
+  private var chooserSheet: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      HStack(alignment: .center, spacing: 14) {
+        TrawlerIconView(registeredTrawler: Self.twitterTrawlerID, size: 48)
+        VStack(alignment: .leading, spacing: 3) {
+          Text("Connect X")
+            .font(.headline)
+          Text(statusMessage)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      }
+      .padding(.horizontal, 20)
+      .padding(.top, 20)
 
-          VStack(spacing: 0) {
-            ForEach(Array(readableBrowsers.enumerated()), id: \.element.id) { idx, browser in
-              HStack(spacing: TrawlDesign.Space.sm) {
-                VStack(alignment: .leading, spacing: 2) {
-                  Text(browser.displayName)
-                    .font(TrawlDesign.Typography.laneLabel)
-                    .foregroundStyle(TrawlDesign.Colors.ink)
-                  if browser.requiresKeychainPrompt {
-                    Text(
-                      "macOS asks for \(browser.displayName)'s Keychain key (covers saved cookies and passwords). Choose Allow, not Always Allow."
-                    )
-                    .font(TrawlDesign.Typography.meta)
-                    .foregroundStyle(TrawlDesign.Colors.mutedInk)
-                    .fixedSize(horizontal: false, vertical: true)
-                  } else {
-                    Text("Reads your X sign-in from \(browser.displayName) with no extra prompts.")
-                      .font(TrawlDesign.Typography.meta)
-                      .foregroundStyle(TrawlDesign.Colors.mutedInk)
-                  }
-                }
-                Spacer(minLength: TrawlDesign.Space.sm)
-                Button("Use \(browser.displayName)'s sign-in") {
+      Form {
+        if !readableBrowsers.isEmpty {
+          Section {
+            ForEach(readableBrowsers) { browser in
+              LabeledContent {
+                Button("Use \(browser.displayName)") {
                   importFromBrowser(browser)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
                 .disabled(isConnecting)
+              } label: {
+                Text(browser.displayName)
+                if browser.requiresKeychainPrompt {
+                  Text("macOS asks for \(browser.displayName)'s Keychain key. Choose Allow, not Always Allow.")
+                } else {
+                  Text("Reuses your signed-in \(browser.displayName) session with no extra prompts.")
+                }
               }
-              .padding(.horizontal, TrawlDesign.Space.md)
-              .padding(.vertical, TrawlDesign.Space.sm)
-              if idx < readableBrowsers.count - 1 {
-                Divider()
+            }
+          } header: {
+            HStack {
+              Text("Use your browser's sign-in")
+              Spacer()
+              if let xURL = URL(string: "https://x.com") {
+                Link("Open x.com", destination: xURL)
               }
             }
           }
-          .background(TrawlDesign.Colors.paper, in: TrawlDesign.Shape.surface)
-          .overlay(TrawlDesign.Shape.surface.strokeBorder(TrawlDesign.Colors.hairline, lineWidth: 1))
+
+          Section {
+            LabeledContent {
+              Button("Sign in…") {
+                openManualWebLogin()
+              }
+              .disabled(isConnecting)
+            } label: {
+              Text("Sign in here")
+              Text("For a username, password and verification code.")
+            }
+          }
+        } else {
+          Section {
+            if hasUnreadableBrowsers {
+              LabeledContent {
+                Button("Open System Settings…") {
+                  PermissionGuideController.openSystemSettings()
+                }
+                .disabled(isConnecting)
+              } label: {
+                Text("Use your browser's sign-in")
+                Text("Works with passkeys and Sign in with Google or Apple. Needs Full Disk Access.")
+              }
+            }
+
+            LabeledContent {
+              Button("Sign in…") {
+                openManualWebLogin()
+              }
+              .buttonStyle(.borderedProminent)
+              .keyboardShortcut(.defaultAction)
+              .disabled(isConnecting)
+            } label: {
+              Text("Sign in here")
+              Text("For a username, password and verification code.")
+            }
+          }
         }
-      } else if hasUnreadableBrowsers {
-        VStack(alignment: .leading, spacing: TrawlDesign.Space.xs) {
-          Text("Browser import needs Full Disk Access")
-            .font(TrawlDesign.Typography.cardTitle)
-            .foregroundStyle(TrawlDesign.Colors.ink)
-          Text(
-            "macOS blocks reading Safari and Chrome cookies without Full Disk Access. You can sign in inside OpenTrawl below, or turn on Full Disk Access in Settings to reuse your browser sign-in (needed for passkeys or Sign in with Google/Apple)."
-          )
-          .font(TrawlDesign.Typography.meta)
-          .foregroundStyle(TrawlDesign.Colors.mutedInk)
-          .fixedSize(horizontal: false, vertical: true)
+      }
+      .formStyle(.grouped)
+      .scrollDisabled(true)
+      .fixedSize(horizontal: false, vertical: true)
+
+      if isConnecting || errorMessage != nil {
+        HStack(spacing: 8) {
+          if isConnecting {
+            ProgressView()
+              .controlSize(.small)
+            Text(statusMessage)
+              .font(.callout)
+              .foregroundStyle(.secondary)
+          } else if let errorMessage {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .foregroundStyle(.orange)
+            Text(errorMessage)
+              .font(.callout)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+          Spacer(minLength: 0)
         }
-        .padding(TrawlDesign.Space.md)
-        .background(TrawlDesign.Colors.paper, in: TrawlDesign.Shape.surface)
-        .overlay(TrawlDesign.Shape.surface.strokeBorder(TrawlDesign.Colors.hairline, lineWidth: 1))
+        .padding(.horizontal, 20)
       }
 
-      HStack(alignment: .center, spacing: TrawlDesign.Space.md) {
-        VStack(alignment: .leading, spacing: 2) {
-          Text("Sign in inside OpenTrawl")
-            .font(TrawlDesign.Typography.cardTitle)
-            .foregroundStyle(TrawlDesign.Colors.ink)
-          Text(
-            "Works with X username, password, and 2FA code. Browser extensions, passkeys, and Sign in with Google or Apple need the browser option above."
-          )
-          .font(TrawlDesign.Typography.meta)
-          .foregroundStyle(TrawlDesign.Colors.mutedInk)
-          .fixedSize(horizontal: false, vertical: true)
+      HStack {
+        Spacer()
+        Button("Cancel") {
+          cancelActiveAttempt()
+          onDismiss()
         }
-        Spacer(minLength: TrawlDesign.Space.sm)
-        if readableBrowsers.isEmpty {
-          Button("Sign in inside OpenTrawl") {
-            openManualWebLogin()
-          }
-          .buttonStyle(.borderedProminent)
-          .tint(TrawlDesign.Colors.selectBlue)
-          .controlSize(.small)
-          .disabled(isConnecting)
-        } else {
-          Button("Sign in here") {
-            openManualWebLogin()
-          }
-          .buttonStyle(.bordered)
-          .controlSize(.small)
-          .disabled(isConnecting)
-        }
+        .keyboardShortcut(.cancelAction)
       }
+      .padding(.horizontal, 20)
+      .padding(.bottom, 20)
     }
-    .padding(TrawlDesign.Space.md)
-    .background(TrawlDesign.Colors.surface)
+    .frame(width: 480)
   }
 
-  private var manualWebLoginBody: some View {
-    XLoginWebView(
-      attemptID: webAttemptID,
-      onLoadFailed: {
-        errorMessage = "Could not load x.com. Check your internet connection and try again."
-      },
-      onCapturedSession: { authToken, ct0 in
-        connectWithSession(authToken: authToken, ct0: ct0, sourceName: "X")
+  private var manualWebLoginSheet: some View {
+    VStack(spacing: 0) {
+      HStack(alignment: .center, spacing: 12) {
+        TrawlerIconView(registeredTrawler: Self.twitterTrawlerID, size: 32)
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Sign in to X")
+            .font(.headline)
+          Text(statusMessage)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+        Spacer()
       }
-    )
-    .id(webAttemptID)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .padding(.horizontal, 20)
+      .padding(.vertical, 14)
+
+      Divider()
+
+      if let errorMessage {
+        HStack(spacing: 8) {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .foregroundStyle(.orange)
+          Text(errorMessage)
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+          Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12))
+      }
+
+      XLoginWebView(
+        attemptID: webAttemptID,
+        onLoadFailed: {
+          errorMessage = "Could not load x.com. Check your internet connection and try again."
+        },
+        onCapturedSession: { authToken, ct0 in
+          connectWithSession(authToken: authToken, ct0: ct0, sourceName: "X")
+        }
+      )
+      .id(webAttemptID)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+      Divider()
+
+      HStack(spacing: 12) {
+        if !installedBrowsers.isEmpty {
+          Button("Back") {
+            cancelActiveAttempt()
+            errorMessage = nil
+            showingManualWebLogin = false
+          }
+        }
+        if isConnecting {
+          ProgressView()
+            .controlSize(.small)
+        }
+        Spacer()
+        Button("Cancel") {
+          cancelActiveAttempt()
+          onDismiss()
+        }
+        .keyboardShortcut(.cancelAction)
+      }
+      .padding(.horizontal, 20)
+      .padding(.vertical, 14)
+    }
+    .frame(width: 520, height: 660)
   }
 
   private func openManualWebLogin() {

@@ -72,22 +72,6 @@ struct RootView: View {
         CanvasBackground()
         if showsWorkspace {
           home
-          Button("") {
-            destination = .search
-            searchFocusRequestToken &+= 1
-          }
-          .keyboardShortcut("k", modifiers: .command)
-          .opacity(0)
-          .frame(width: 0, height: 0)
-          .accessibilityHidden(true)
-          Button("") {
-            destination = .search
-            searchFocusRequestToken &+= 1
-          }
-          .keyboardShortcut("f", modifiers: .command)
-          .opacity(0)
-          .frame(width: 0, height: 0)
-          .accessibilityHidden(true)
         } else {
           OnboardingView(
             onboarding: onboarding,
@@ -150,17 +134,6 @@ struct RootView: View {
     }
     .toolbar {
       if showsWorkspace {
-        ToolbarItem(placement: .principal) {
-          Picker("View", selection: $destination) {
-            ForEach(WorkspaceDestination.allCases) { tab in
-              Text(tab.title).tag(tab)
-            }
-          }
-          .pickerStyle(.segmented)
-          .labelsHidden()
-          .frame(width: 176)
-        }
-
         ToolbarItemGroup(placement: .primaryAction) {
           archiveConnectionButton
           archiveUpdateButton
@@ -447,7 +420,25 @@ struct RootView: View {
   }
 
   private var homeTrawlers: [RestingTrawler] {
-    model.homeTrawlers.filter { featureFlags.includes($0.id) }
+    let statusesByID = Dictionary(
+      uniqueKeysWithValues: model.trawlerStatuses.map { ($0.id, $0) }
+    )
+    return model.homeTrawlers.filter { trawler in
+      guard featureFlags.includes(trawler.id) else { return false }
+      // Hide Health when unimported (0 items) outside experimental mode so Overview
+      // and Sidebar never show a dead empty row for an iPhone-export-only source.
+      if trawler.id.registeredTrawlerIdentity == "health", !featureFlags.isExperimental {
+        let status = statusesByID[trawler.id]
+        let hasCounts =
+          (status?.archiveContentCountsAfterLastSuccessfullyCompletedUpdate.contains {
+            $0.archiveContentCount > 0
+          }) ?? false
+        let hasHistory =
+          !(status?.archiveWeeklyHistory?.weeklyRecordCountsInChronologicalOrder.isEmpty ?? true)
+        return hasCounts || hasHistory
+      }
+      return true
+    }
   }
 
   private var searchableHomeTrawlers: [RestingTrawler] {

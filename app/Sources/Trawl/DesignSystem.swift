@@ -41,46 +41,19 @@ enum TrawlDesign {
   }
 
   enum Colors {
-    static let paper = dynamicColor(
-      light: NSColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 1.0),
-      dark: NSColor(srgbRed: 0.043, green: 0.055, blue: 0.075, alpha: 1.0)
-    )
-    static let surface = dynamicColor(
-      light: NSColor(srgbRed: 0.969, green: 0.969, blue: 0.969, alpha: 1.0),
-      dark: NSColor(srgbRed: 0.075, green: 0.094, blue: 0.125, alpha: 1.0)
-    )
-    static let ink = dynamicColor(
-      light: NSColor(srgbRed: 0.063, green: 0.063, blue: 0.063, alpha: 1.0),
-      dark: NSColor(srgbRed: 0.949, green: 0.957, blue: 0.973, alpha: 1.0)
-    )
-    static let mutedInk = dynamicColor(
-      light: NSColor(srgbRed: 0.322, green: 0.322, blue: 0.322, alpha: 1.0),
-      dark: NSColor(srgbRed: 0.651, green: 0.686, blue: 0.741, alpha: 1.0)
-    )
-    static let hairline = dynamicColor(
-      light: NSColor(srgbRed: 0.863, green: 0.863, blue: 0.863, alpha: 1.0),
-      dark: NSColor(srgbRed: 0.145, green: 0.173, blue: 0.220, alpha: 1.0)
-    )
+    static let paper = Color(nsColor: .windowBackgroundColor)
+    static let surface = Color(nsColor: .controlBackgroundColor)
+    static let ink = Color.primary
+    static let mutedInk = Color.secondary
+    static let hairline = Color(nsColor: .separatorColor)
     static let matchRed = dynamicColor(
       light: NSColor(srgbRed: 0.788, green: 0.118, blue: 0.071, alpha: 1.0),
       dark: NSColor(srgbRed: 0.941, green: 0.353, blue: 0.302, alpha: 1.0)
     )
-    static let selectBlue = dynamicColor(
-      light: NSColor(srgbRed: 0.110, green: 0.275, blue: 0.839, alpha: 1.0),
-      dark: NSColor(srgbRed: 0.388, green: 0.569, blue: 1.0, alpha: 1.0)
-    )
-    static let selectBlueSurface = dynamicColor(
-      light: NSColor(srgbRed: 0.110, green: 0.275, blue: 0.839, alpha: 0.10),
-      dark: NSColor(srgbRed: 0.388, green: 0.569, blue: 1.0, alpha: 0.18)
-    )
-    static let warningAmber = dynamicColor(
-      light: NSColor(srgbRed: 0.561, green: 0.341, blue: 0.0, alpha: 1.0),
-      dark: NSColor(srgbRed: 0.941, green: 0.694, blue: 0.267, alpha: 1.0)
-    )
-    static let warningAmberSurface = dynamicColor(
-      light: NSColor(srgbRed: 0.769, green: 0.482, blue: 0.0, alpha: 0.09),
-      dark: NSColor(srgbRed: 0.941, green: 0.659, blue: 0.188, alpha: 0.15)
-    )
+    static let selectBlue = Color.accentColor
+    static let selectBlueSurface = Color.accentColor.opacity(0.14)
+    static let warningAmber = Color.orange
+    static let warningAmberSurface = Color.orange.opacity(0.12)
 
     static func dynamicColor(light: NSColor, dark: NSColor) -> Color {
       Color(
@@ -133,15 +106,15 @@ enum TrawlDesign {
   static let recordReadingWidth: CGFloat = 760
 
   enum Typography {
-    static let pageTitle = Font.system(size: 24, weight: .semibold)
-    static let sectionHeader = Font.system(size: 15, weight: .semibold)
-    static let cardTitle = Font.system(size: 13, weight: .semibold)
-    static let body = Font.system(size: 13, weight: .regular)
-    static let meta = Font.system(size: 12, weight: .regular)
-    static let caption = Font.system(size: 11, weight: .semibold)
-    static let laneLabel = Font.system(size: 13, weight: .regular)
-    static let monoSmall = Font.system(size: 12, weight: .regular)
-    static let monoAxis = Font.system(size: 11, weight: .regular)
+    static let pageTitle = Font.title2.weight(.semibold)
+    static let sectionHeader = Font.headline
+    static let cardTitle = Font.subheadline.weight(.semibold)
+    static let body = Font.body
+    static let meta = Font.callout
+    static let caption = Font.caption
+    static let laneLabel = Font.body
+    static let monoSmall = Font.callout.monospacedDigit()
+    static let monoAxis = Font.caption2.monospacedDigit()
   }
 
   static func usesCompactSearchLayout(width: CGFloat) -> Bool {

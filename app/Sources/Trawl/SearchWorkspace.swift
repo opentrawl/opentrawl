@@ -45,8 +45,8 @@ enum SearchWorkspaceFieldContent: Equatable {
   }
 }
 
-/// Main archive workspace hosting the fixed-order left app rail alongside the
-/// explicit `Overview` | `Search` destination.
+/// Main archive workspace built on native macOS `NavigationSplitView`,
+/// `.listStyle(.sidebar)`, and toolbar `.searchable`.
 struct ArchiveWorkspaceView: View {
   let client: any TrawlClient
   let trawlers: [RestingTrawler]
@@ -70,7 +70,13 @@ struct ArchiveWorkspaceView: View {
   @State private var model: SearchModel
   @State private var interaction: SearchInteraction
   @State private var trawlerResolver: SearchTrawlerResolver
-  @State private var fieldState = SearchFieldState()
+  @State private var sidebarSelection: ArchiveSidebarSelection? = .overview
+  @State private var columnVisibility: NavigationSplitViewVisibility = .all
+  @State private var isSearchPresented = false
+  @State private var isShowingDatePicker = false
+  @State private var draftStartDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+  @State private var draftEndDate = Date()
+  @State private var lastDetailWidth: CGFloat = 960
   @FocusState private var focus: SearchFocus?
 
   init(
@@ -112,11 +118,10 @@ struct ArchiveWorkspaceView: View {
 
     let searchModel = SearchModel(client: client)
     _model = State(initialValue: searchModel)
-    _interaction = State(
-      initialValue: SearchInteraction(model: searchModel, registeredTrawler: nil)
-    )
-    _trawlerResolver = State(
-      initialValue: SearchTrawlerResolver(statuses: trawlerStatuses)
+    _interaction = State(initialValue: SearchInteraction(model: searchModel, registeredTrawler: nil))
+    _trawlerResolver = State(initialValue: SearchTrawlerResolver(statuses: trawlerStatuses))
+    _sidebarSelection = State(
+      initialValue: destination.wrappedValue == .search ? .allItems : .overview
     )
   }
 
@@ -124,8 +129,9 @@ struct ArchiveWorkspaceView: View {
     Dictionary(uniqueKeysWithValues: trawlerStatuses.map { ($0.id, $0) })
   }
 
-  private var totalArchivedItemCount: UInt64 {
-    operabilityByID.values.reduce(UInt64(0)) { $0 + $1.archivedItemCount }
+  private var selectedScopeTrawler: RestingTrawler? {
+    guard let registeredTrawler = interaction.registeredTrawler else { return nil }
+    return trawlers.first(where: { $0.id == registeredTrawler })
   }
 
   private var searchMatchCountByID: [RegisteredTrawlerIdentity: UInt64] {
@@ -136,95 +142,62 @@ struct ArchiveWorkspaceView: View {
     )
   }
 
-  private var selectedScopeTrawler: RestingTrawler? {
-    guard let id = interaction.registeredTrawler else { return nil }
-    return trawlers.first(where: { $0.id == id })
+  private var hasActiveDateRange: Bool {
+    interaction.earliestMatchingArchiveRecordTimeInclusive != nil
+      || interaction.latestMatchingArchiveRecordTimeInclusive != nil
   }
 
   private var isEmptyBrowse: Bool {
     destination == .search
       && interaction.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-      && !interaction.hasActiveDateRange
+      && !hasActiveDateRange
+  }
+
+  private var activeDateRangeLabel: String? {
+    ArchiveTimelineDateRangeFormatting.label(
+      earliestInclusive: interaction.earliestMatchingArchiveRecordTimeInclusive,
+      latestInclusive: interaction.latestMatchingArchiveRecordTimeInclusive
+    )
+  }
+
+  private var navigationTitleText: String {
+    switch destination {
+    case .overview:
+      return "Overview"
+    case .search:
+      if let scope = selectedScopeTrawler {
+        return scope.registeredTrawlerDisplayName
+      }
+      return "All items"
+    }
   }
 
   var body: some View {
-    GeometryReader { proxy in
-      let isCompactRail = proxy.size.width < TrawlDesign.compactRailBreakpoint
-      let contentWidth = max(
-        proxy.size.width - (isCompactRail ? TrawlDesign.compactSidebarWidth : TrawlDesign.wideSidebarWidth),
-        320
+    NavigationSplitView(columnVisibility: $columnVisibility) {
+      AppSidebarRailView(
+        selection: $sidebarSelection,
+        isSearching: destination == .search,
+        trawlers: trawlers,
+        operabilityByID: operabilityByID,
+        searchMatchCountByID: searchMatchCountByID,
+        totalSearchResultsCount: model.totalMatchedRecordCount,
+        totalSearchCountIsLowerBound: model.totalMatchedCountIsLowerBound,
+        hasActiveDateRange: hasActiveDateRange,
+        isEmptyBrowse: isEmptyBrowse,
+        isRemoteArchive: isRemoteArchive,
+        onOpenPluginsSettings: onOpenPluginsSettings
       )
-
-      HStack(spacing: 0) {
-        AppSidebarRailView(
-          mode: destination,
-          isCompact: isCompactRail,
-          trawlers: trawlers,
-          operabilityByID: operabilityByID,
-          searchMatchCountByID: searchMatchCountByID,
-          totalAllAppsCount: totalArchivedItemCount,
-          totalSearchResultsCount: model.totalMatchedRecordCount,
-          totalSearchCountIsLowerBound: model.totalMatchedCountIsLowerBound,
-          hasActiveDateRange: interaction.hasActiveDateRange,
-          isEmptyBrowse: isEmptyBrowse,
-          selectedTrawlerID: destination == .overview ? nil : interaction.registeredTrawler,
-          hostDisplayName: hostDisplayName,
-          hostSubtitle: freshnessLine,
-          isRemoteArchive: isRemoteArchive,
-          onSelectTrawler: { trawlerID in
-            interaction.changeScope(to: trawlerID)
-            destination = .search
-          },
-          onOpenHostSwitcher: onOpenHostSwitcher,
-          onOpenPluginsSettings: onOpenPluginsSettings
-        )
-
-        Divider()
-
-        VStack(spacing: 0) {
-          SearchField(
-            query: $interaction.query,
-            scope: selectedScopeTrawler,
-            earliestDateInclusive: interaction.earliestMatchingArchiveRecordTimeInclusive,
-            latestDateInclusive: interaction.latestMatchingArchiveRecordTimeInclusive,
-            showsDefaultUpToTodayHint: isEmptyBrowse && selectedScopeTrawler?.id.registeredTrawlerIdentity != "contacts",
-            focus: $focus,
-            onClearScope: {
-              interaction.changeScope(to: nil)
-            },
-            onSetDateRange: { earliest, latest in
-              interaction.changeDateRange(earliestInclusive: earliest, latestInclusive: latest)
-              destination = .search
-            },
-            onClearDateRange: {
-              interaction.clearDateRange()
-            },
-            onSubmit: {
-              destination = .search
-              openSelectedResult()
-            },
-            onMoveToResults: {
-              destination = .search
-              focusResults()
-            }
-          )
-          .id(fieldState.identity)
-          .padding(.horizontal, TrawlDesign.Space.md)
-          .padding(.vertical, TrawlDesign.Space.sm)
-          .background(TrawlDesign.Colors.paper)
-
-          Divider()
-
+    } detail: {
+      GeometryReader { proxy in
+        Group {
           switch destination {
           case .overview:
             ArchiveOverviewView(
-              windowWidth: proxy.size.width,
               trawlers: trawlers,
               statusesByID: statusesByID,
               operabilityByID: operabilityByID,
               hostDisplayName: hostDisplayName,
               freshnessLine: freshnessLine,
-              totalItemCount: totalArchivedItemCount,
               isRemoteArchive: isRemoteArchive,
               hasCopiedAIPrompt: hasCopiedAIPrompt,
               onCopyAIPrompt: onCopyAIPrompt,
@@ -239,6 +212,7 @@ struct ArchiveWorkspaceView: View {
                   earliestInclusive: nil,
                   latestInclusive: nil
                 )
+                sidebarSelection = .app(trawlerID)
                 destination = .search
               },
               onBrowseAllItems: {
@@ -248,6 +222,7 @@ struct ArchiveWorkspaceView: View {
                   earliestInclusive: nil,
                   latestInclusive: nil
                 )
+                sidebarSelection = .allItems
                 destination = .search
               },
               onSelectDateRange: { trawlerID, start, end in
@@ -256,20 +231,58 @@ struct ArchiveWorkspaceView: View {
                   earliestInclusive: start,
                   latestInclusive: end
                 )
+                sidebarSelection = trawlerID.map { .app($0) } ?? .allItems
                 destination = .search
               }
             )
           case .search:
-            searchBody(availableWidth: contentWidth)
+            searchBody(availableWidth: proxy.size.width)
           }
         }
-        .frame(width: contentWidth, height: proxy.size.height)
-        .clipped()
+        .frame(width: proxy.size.width, height: proxy.size.height)
+        .onAppear { lastDetailWidth = proxy.size.width }
+        .onChange(of: proxy.size.width) { _, newWidth in
+          lastDetailWidth = newWidth
+        }
       }
-      .background(TrawlDesign.Colors.paper)
+      .navigationTitle(navigationTitleText)
+    }
+    .navigationSplitViewStyle(.balanced)
+    .searchable(
+      text: $interaction.query,
+      isPresented: $isSearchPresented,
+      placement: .toolbar,
+      prompt: "Search your archive"
+    )
+    .toolbar {
+      ToolbarItem(placement: .primaryAction) {
+        dateFilterToolbarButton
+      }
+    }
+    .onChange(of: sidebarSelection) { _, newSelection in
+      guard let newSelection else { return }
+      switch newSelection {
+      case .overview:
+        interaction.query = ""
+        interaction.applyScopeAndDateRange(
+          registeredTrawler: nil,
+          earliestInclusive: nil,
+          latestInclusive: nil
+        )
+        destination = .overview
+      case .allItems:
+        interaction.changeScope(to: nil)
+        destination = .search
+      case .app(let trawlerID):
+        interaction.changeScope(to: trawlerID)
+        destination = .search
+      }
     }
     .onChange(of: interaction.query) { _, newValue in
       if !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && destination != .search {
+        if sidebarSelection == .overview || sidebarSelection == nil {
+          sidebarSelection = .allItems
+        }
         destination = .search
       }
     }
@@ -277,19 +290,20 @@ struct ArchiveWorkspaceView: View {
       if newPhase != .loading {
         interaction.reconcileCommittedResults()
         let hasTextQuery = !interaction.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if hasTextQuery, interaction.selectedSearchMatchIdentifier == nil, let first = model.searchMatches.first {
+        // Only auto-open the first result on wide desktop layouts; narrow layouts stay on the list
+        // so typing never kicks the user out of their search results.
+        if hasTextQuery,
+          lastDetailWidth >= 740,
+          interaction.selectedSearchMatchIdentifier == nil,
+          let first = model.searchMatches.first
+        {
           interaction.selectedSearchMatchIdentifier = first.id
           Task { await model.open(first) }
         }
       }
     }
-    .onChange(of: fieldState.focusRequest) { _, _ in
-      Task { @MainActor in
-        focus = .field
-      }
-    }
     .onChange(of: focusRequestToken) { _, _ in
-      fieldState.requestFocus()
+      isSearchPresented = true
     }
     .onChange(of: trawlerStatuses) { _, statuses in
       trawlerResolver.replace(with: statuses)
@@ -317,9 +331,85 @@ struct ArchiveWorkspaceView: View {
     }
   }
 
+  private var dateFilterToolbarButton: some View {
+    Button {
+      draftStartDate =
+        interaction.earliestMatchingArchiveRecordTimeInclusive
+        ?? Calendar.current.date(byAdding: .day, value: -30, to: Date())
+        ?? Date()
+      draftEndDate = interaction.latestMatchingArchiveRecordTimeInclusive ?? Date()
+      isShowingDatePicker.toggle()
+    } label: {
+      Label(
+        activeDateRangeLabel ?? "Dates",
+        systemImage: "calendar"
+      )
+      .labelStyle(.titleAndIcon)
+    }
+    .help("Choose dates")
+    .popover(isPresented: $isShowingDatePicker, arrowEdge: .bottom) {
+      VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
+        Text("Choose dates")
+          .font(.headline)
+        HStack(spacing: TrawlDesign.Space.xs) {
+          quickDateRangeButton("7 days", inclusiveDays: 7)
+          quickDateRangeButton("30 days", inclusiveDays: 30)
+          quickDateRangeButton("1 year", inclusiveDays: 365)
+        }
+        Divider()
+        DatePicker("From", selection: $draftStartDate, displayedComponents: .date)
+        DatePicker("To", selection: $draftEndDate, displayedComponents: .date)
+        HStack {
+          if hasActiveDateRange {
+            Button("Clear") {
+              interaction.clearDateRange()
+              isShowingDatePicker = false
+            }
+          }
+          Spacer()
+          Button("Apply") {
+            let low = min(draftStartDate, draftEndDate)
+            let high = max(draftStartDate, draftEndDate)
+            let calendar = Calendar.current
+            let start = calendar.startOfDay(for: low)
+            let end = ArchiveTimelineTimeAxis.inclusiveEndOfDay(for: high, calendar: calendar)
+            interaction.changeDateRange(earliestInclusive: start, latestInclusive: max(start, end))
+            if sidebarSelection == .overview || sidebarSelection == nil {
+              sidebarSelection = .allItems
+            }
+            destination = .search
+            isShowingDatePicker = false
+          }
+          .buttonStyle(.borderedProminent)
+        }
+      }
+      .padding(TrawlDesign.Space.md)
+      .frame(width: 280)
+    }
+  }
+
+  private func quickDateRangeButton(_ title: String, inclusiveDays: Int) -> some View {
+    Button(title) {
+      let calendar = Calendar.current
+      let now = Date()
+      let precedingDays = max(0, inclusiveDays - 1)
+      let rawStart = calendar.date(byAdding: .day, value: -precedingDays, to: now) ?? now
+      let start = calendar.startOfDay(for: rawStart)
+      let end = ArchiveTimelineTimeAxis.inclusiveEndOfDay(for: now, calendar: calendar)
+      interaction.changeDateRange(earliestInclusive: start, latestInclusive: max(start, end))
+      if sidebarSelection == .overview || sidebarSelection == nil {
+        sidebarSelection = .allItems
+      }
+      destination = .search
+      isShowingDatePicker = false
+    }
+    .buttonStyle(.bordered)
+    .controlSize(.small)
+  }
+
   private func searchBody(availableWidth: CGFloat) -> some View {
     let resultsColumnWidth = min(
-      max(264, availableWidth * 0.40),
+      max(280, availableWidth * 0.40),
       TrawlDesign.searchResultsMaximumWidth
     )
 
@@ -370,7 +460,6 @@ struct ArchiveWorkspaceView: View {
                 }
                 .padding(.horizontal, TrawlDesign.Space.md)
                 .padding(.vertical, TrawlDesign.Space.sm)
-                .background(TrawlDesign.Colors.surface)
 
                 Divider()
 
@@ -385,13 +474,12 @@ struct ArchiveWorkspaceView: View {
               Divider()
 
               if model.openPhase == .idle {
-                VStack(spacing: TrawlDesign.Space.xs) {
-                  Text("Select a result to open it")
-                    .font(TrawlDesign.Typography.body)
-                    .foregroundStyle(TrawlDesign.Colors.mutedInk)
-                }
+                ContentUnavailableView(
+                  "No Item Selected",
+                  systemImage: "doc.text.magnifyingglass",
+                  description: Text("Select a result from the list to read it.")
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(TrawlDesign.Colors.surface.opacity(0.45))
               } else {
                 ResultPreview(phase: model.openPhase, onOpenLink: openLinkedRecord)
               }
@@ -404,6 +492,7 @@ struct ArchiveWorkspaceView: View {
       SearchDateLineScrubberView(
         trawlerStatuses: trawlerStatuses,
         scopedTrawlerID: interaction.registeredTrawler,
+        scopedTrawlerDisplayName: selectedScopeTrawler?.registeredTrawlerDisplayName,
         resultSummaryText: scrubberResultSummary,
         earliestDateInclusive: interaction.earliestMatchingArchiveRecordTimeInclusive,
         latestDateInclusive: interaction.latestMatchingArchiveRecordTimeInclusive,
@@ -433,6 +522,7 @@ struct ArchiveWorkspaceView: View {
       isLoadingMore: model.isLoadingMore,
       canLoadMore: model.canLoadMore,
       loadMoreFailureMessage: model.loadMoreFailureMessage,
+      showsUpToTodayContext: isEmptyBrowse && selectedScopeTrawler?.id.registeredTrawlerIdentity != "contacts",
       trawlerDisplayName: {
         $0.map(trawlerDisplayName(for:))
           ?? SearchTrawlerResolver.unavailableDisplayName
@@ -489,14 +579,6 @@ struct ArchiveWorkspaceView: View {
     }
   }
 
-  private func focusResults() {
-    guard let first = model.searchMatches.first else { return }
-    if interaction.selectedSearchMatchIdentifier == nil {
-      interaction.selectedSearchMatchIdentifier = first.id
-    }
-    focus = .results
-  }
-
   private func openSelectedResult() {
     guard interaction.resultForReturn() != nil else { return }
     Task { await interaction.handleReturn() }
@@ -511,239 +593,8 @@ struct ArchiveWorkspaceView: View {
     if model.openPhase != .idle {
       model.clearOpenResult()
       focus = .results
-    } else if focus == .results {
-      focus = .field
     } else if !interaction.query.isEmpty {
       interaction.query = ""
-      focus = .field
-    }
-  }
-}
-
-private struct SearchField: View {
-  @Environment(\.locale) private var locale
-
-  @Binding var query: String
-  let scope: RestingTrawler?
-  let earliestDateInclusive: Date?
-  let latestDateInclusive: Date?
-  let showsDefaultUpToTodayHint: Bool
-  @FocusState.Binding var focus: SearchFocus?
-  let onClearScope: () -> Void
-  let onSetDateRange: (Date, Date) -> Void
-  let onClearDateRange: () -> Void
-  let onSubmit: () -> Void
-  let onMoveToResults: () -> Void
-
-  @State private var isShowingDatePicker = false
-  @State private var draftStartDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-  @State private var draftEndDate = Date()
-
-  private var dateRangeLabel: String? {
-    ArchiveTimelineDateRangeFormatting.label(
-      earliestInclusive: earliestDateInclusive,
-      latestInclusive: latestDateInclusive,
-      locale: locale
-    )
-  }
-
-  var body: some View {
-    HStack(spacing: TrawlDesign.Space.sm) {
-      Image(systemName: "magnifyingglass")
-        .font(TrawlDesign.Typography.body)
-        .foregroundStyle(TrawlDesign.Colors.mutedInk)
-
-      TextField(
-        scope.map { "Search \($0.registeredTrawlerDisplayName)" }
-          ?? "Search your apps",
-        text: $query
-      )
-      .font(TrawlDesign.Typography.body)
-      .textFieldStyle(.plain)
-      .focused($focus, equals: .field)
-      .layoutPriority(1)
-      .onSubmit(onSubmit)
-      .onKeyPress(.downArrow) {
-        onMoveToResults()
-        return .handled
-      }
-
-      if let dateRangeLabel {
-        activeFilterChip(
-          title: dateRangeLabel,
-          systemImage: "calendar",
-          accessibilityClearLabel: "Clear date filter",
-          onClear: onClearDateRange
-        )
-        .fixedSize()
-        .layoutPriority(1)
-      } else if showsDefaultUpToTodayHint {
-        Text("Up to today")
-          .font(TrawlDesign.Typography.meta)
-          .foregroundStyle(TrawlDesign.Colors.mutedInk)
-          .lineLimit(1)
-          .fixedSize()
-          .layoutPriority(1)
-          .padding(.horizontal, TrawlDesign.Space.sm)
-          .padding(.vertical, 3)
-          .background(TrawlDesign.Colors.paper, in: TrawlDesign.Shape.control)
-      }
-
-      if let scope {
-        activeAppChip(scope: scope, onClear: onClearScope)
-          .fixedSize()
-          .layoutPriority(1)
-      }
-
-      dateFilterButton
-        .fixedSize()
-        .layoutPriority(1)
-
-      if !query.isEmpty {
-        Button(action: clearQuery) {
-          Image(systemName: "xmark.circle.fill")
-            .font(TrawlDesign.Typography.body)
-            .foregroundStyle(TrawlDesign.Colors.mutedInk)
-            .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .help("Clear search")
-        .accessibilityLabel("Clear search")
-      }
-    }
-    .padding(.horizontal, TrawlDesign.Space.md)
-    .frame(height: 36)
-    .background(TrawlDesign.Colors.surface, in: TrawlDesign.Shape.control)
-  }
-
-  private var dateFilterButton: some View {
-    Button {
-      draftStartDate =
-        earliestDateInclusive
-        ?? Calendar.current.date(byAdding: .day, value: -30, to: Date())
-        ?? Date()
-      draftEndDate = latestDateInclusive ?? Date()
-      isShowingDatePicker.toggle()
-    } label: {
-      Label("Dates", systemImage: "calendar")
-        .labelStyle(.titleAndIcon)
-    }
-    .buttonStyle(.bordered)
-    .controlSize(.small)
-    .help("Choose dates")
-    .accessibilityLabel("Filter by dates")
-    .popover(isPresented: $isShowingDatePicker, arrowEdge: .bottom) {
-      VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
-        Text("Choose dates")
-          .font(TrawlDesign.Typography.cardTitle)
-        HStack(spacing: TrawlDesign.Space.xs) {
-          quickDateRangeButton("7 days", inclusiveDays: 7)
-          quickDateRangeButton("30 days", inclusiveDays: 30)
-          quickDateRangeButton("1 year", inclusiveDays: 365)
-        }
-        Divider()
-        DatePicker("From", selection: $draftStartDate, displayedComponents: .date)
-        DatePicker("To", selection: $draftEndDate, displayedComponents: .date)
-        HStack {
-          if earliestDateInclusive != nil || latestDateInclusive != nil {
-            Button("Clear") {
-              onClearDateRange()
-              isShowingDatePicker = false
-            }
-          }
-          Spacer()
-          Button("Apply") {
-            let low = min(draftStartDate, draftEndDate)
-            let high = max(draftStartDate, draftEndDate)
-            let calendar = Calendar.current
-            let start = calendar.startOfDay(for: low)
-            let end = ArchiveTimelineTimeAxis.inclusiveEndOfDay(for: high, calendar: calendar)
-            onSetDateRange(start, max(start, end))
-            isShowingDatePicker = false
-          }
-          .buttonStyle(.borderedProminent)
-          .tint(TrawlDesign.Colors.selectBlue)
-        }
-      }
-      .padding(TrawlDesign.Space.md)
-      .frame(width: 280)
-    }
-  }
-
-  private func quickDateRangeButton(_ title: String, inclusiveDays: Int) -> some View {
-    Button(title) {
-      let calendar = Calendar.current
-      let now = Date()
-      let precedingDays = max(0, inclusiveDays - 1)
-      let rawStart = calendar.date(byAdding: .day, value: -precedingDays, to: now) ?? now
-      let start = calendar.startOfDay(for: rawStart)
-      let end = ArchiveTimelineTimeAxis.inclusiveEndOfDay(for: now, calendar: calendar)
-      onSetDateRange(start, max(start, end))
-      isShowingDatePicker = false
-    }
-    .buttonStyle(.bordered)
-    .controlSize(.small)
-  }
-
-  private func activeFilterChip(
-    title: String,
-    systemImage: String,
-    accessibilityClearLabel: String,
-    onClear: @escaping () -> Void
-  ) -> some View {
-    HStack(spacing: TrawlDesign.Space.xs) {
-      Image(systemName: systemImage)
-        .font(TrawlDesign.Typography.caption)
-      Text(title)
-        .font(TrawlDesign.Typography.meta)
-        .lineLimit(1)
-      Button(action: onClear) {
-        Image(systemName: "xmark")
-          .font(TrawlDesign.Typography.monoAxis)
-          .padding(2)
-          .contentShape(.circle)
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel(accessibilityClearLabel)
-    }
-    .foregroundStyle(TrawlDesign.Colors.selectBlue)
-    .padding(.leading, TrawlDesign.Space.sm)
-    .padding(.trailing, 6)
-    .padding(.vertical, 3)
-    .background(TrawlDesign.Colors.selectBlueSurface, in: TrawlDesign.Shape.control)
-    .fixedSize()
-  }
-
-  private func activeAppChip(
-    scope: RestingTrawler,
-    onClear: @escaping () -> Void
-  ) -> some View {
-    HStack(spacing: TrawlDesign.Space.xs) {
-      TrawlerIconView(registeredTrawler: scope.id, size: 15)
-      Text(scope.registeredTrawlerDisplayName)
-        .font(TrawlDesign.Typography.meta)
-        .lineLimit(1)
-      Button(action: onClear) {
-        Image(systemName: "xmark")
-          .font(TrawlDesign.Typography.monoAxis)
-          .padding(2)
-          .contentShape(.circle)
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Clear app filter")
-    }
-    .foregroundStyle(TrawlDesign.Colors.selectBlue)
-    .padding(.leading, 6)
-    .padding(.trailing, 6)
-    .padding(.vertical, 3)
-    .background(TrawlDesign.Colors.selectBlueSurface, in: TrawlDesign.Shape.control)
-    .fixedSize()
-  }
-
-  private func clearQuery() {
-    query = ""
-    Task { @MainActor in
-      focus = .field
     }
   }
 }
@@ -753,41 +604,38 @@ private struct SearchOutcome: View {
   let isScoped: Bool
   let timedOutLocally: Bool
 
+  @ViewBuilder
   var body: some View {
-    Group {
-      switch phase {
-      case .loading:
-        VStack(spacing: TrawlDesign.Space.sm) {
-          ProgressView()
-            .controlSize(.small)
-          Text("Searching. Stops after \(SearchModel.defaultWaitSeconds) seconds.")
-        }
-        .font(TrawlDesign.Typography.meta)
-        .foregroundStyle(TrawlDesign.Colors.mutedInk)
-      default:
-        ContentUnavailableView(
-          OperationalCopy.Search.outcomeTitle(for: phase),
-          systemImage: SearchWorkspaceCopy.outcomeSymbol(for: phase),
-          description: Text(detail)
-        )
-      }
+    switch phase {
+    case .idle:
+      ContentUnavailableView(
+        "Search Your Archive",
+        systemImage: "magnifyingglass",
+        description: Text("Type words in the search field or choose dates to browse.")
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    case .loading:
+      ProgressView("Searching…")
+        .controlSize(.large)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    case .complete, .partial, .skipped, .failed, .timedOut:
+      let detail = OperationalCopy.Search.outcomeDetail(
+        for: phase,
+        isScoped: isScoped,
+        timedOutLocally: timedOutLocally,
+        timeoutSeconds: SearchModel.defaultWaitSeconds
+      )
+      ContentUnavailableView(
+        OperationalCopy.Search.outcomeTitle(for: phase),
+        systemImage: phase == .complete ? "magnifyingglass" : "exclamationmark.circle",
+        description: Text(detail.isEmpty ? "Try different words or clear your filters." : detail)
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .multilineTextAlignment(.center)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding()
-  }
-
-  private var detail: String {
-    OperationalCopy.Search.outcomeDetail(
-      for: phase,
-      isScoped: isScoped,
-      timedOutLocally: timedOutLocally,
-      timeoutSeconds: SearchModel.defaultWaitSeconds
-    )
   }
 }
 
-private struct SearchTriggerKey: Hashable {
+private struct SearchTriggerKey: Equatable {
   let destination: WorkspaceDestination
   let query: String
   let registeredTrawler: RegisteredTrawlerIdentity?

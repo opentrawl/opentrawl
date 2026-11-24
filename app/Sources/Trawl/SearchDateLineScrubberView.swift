@@ -8,6 +8,7 @@ import TrawlCore
 struct SearchDateLineScrubberView: View {
   let trawlerStatuses: [TrawlerStatus]
   let scopedTrawlerID: RegisteredTrawlerIdentity?
+  let scopedTrawlerDisplayName: String?
   let resultSummaryText: String
   let earliestDateInclusive: Date?
   let latestDateInclusive: Date?
@@ -82,18 +83,17 @@ struct SearchDateLineScrubberView: View {
 
     VStack(spacing: TrawlDesign.Space.xs) {
       HStack(spacing: TrawlDesign.Space.sm) {
-        Text("All items by week")
-          .font(TrawlDesign.Typography.cardTitle)
-          .foregroundStyle(TrawlDesign.Colors.ink)
+        Text(scopedTrawlerDisplayName.map { "\($0) by week" } ?? "All items by week")
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.primary)
         Text("Drag across the line to choose dates.")
-          .font(TrawlDesign.Typography.meta)
-          .foregroundStyle(TrawlDesign.Colors.mutedInk)
+          .font(.caption)
+          .foregroundStyle(.secondary)
           .lineLimit(1)
         Spacer(minLength: TrawlDesign.Space.sm)
         if let rangeBadgeText {
           Text(rangeBadgeText)
-            .font(TrawlDesign.Typography.meta)
-            .monospacedDigit()
+            .font(.caption.monospacedDigit())
             .foregroundStyle(TrawlDesign.Colors.matchRed)
             .lineLimit(1)
           if !isDragging {

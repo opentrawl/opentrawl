@@ -39,6 +39,7 @@ struct SearchResultsList: View {
   let isLoadingMore: Bool
   let canLoadMore: Bool
   let loadMoreFailureMessage: String?
+  let showsUpToTodayContext: Bool
   let trawlerDisplayName: (RegisteredTrawlerIdentity?) -> String
   let showsTrawlerDisplayName: Bool
   let committedQuery: String?
@@ -98,85 +99,56 @@ struct SearchResultsList: View {
     return sections
   }
 
-  @State private var keyboardScrollToken = 0
-
   var body: some View {
-    GeometryReader { proxy in
-      ScrollViewReader { scrollProxy in
-        ScrollView {
-          LazyVStack(alignment: .leading, spacing: 0) {
-            SearchResultsContext(
-              phase: phase,
-              resultCount: searchMatches.count,
-              totalMatchedRecordCount: totalMatchedRecordCount,
-              totalMatchedCountIsLowerBound: totalMatchedCountIsLowerBound,
-              isTruncated: isTruncated,
-              resultLimit: resultLimit,
-              committedQuery: committedQuery
-            )
-            ForEach(groupedSections) { section in
-              HStack {
-                Text(section.title)
-                  .font(TrawlDesign.Typography.caption)
-                  .foregroundStyle(TrawlDesign.Colors.mutedInk)
-                Spacer()
-              }
-              .padding(.horizontal, TrawlDesign.Space.md)
-              .padding(.vertical, 6)
-              .background(TrawlDesign.Colors.surface)
+    VStack(alignment: .leading, spacing: 0) {
+      SearchResultsContext(
+        phase: phase,
+        resultCount: searchMatches.count,
+        totalMatchedRecordCount: totalMatchedRecordCount,
+        totalMatchedCountIsLowerBound: totalMatchedCountIsLowerBound,
+        isTruncated: isTruncated,
+        resultLimit: resultLimit,
+        committedQuery: committedQuery,
+        showsUpToTodayContext: showsUpToTodayContext
+      )
 
-              ForEach(section.matches) { searchMatch in
-                Button {
-                  selectedSearchMatchIdentifier = searchMatch.id
-                  onOpen(searchMatch)
-                } label: {
-                  SearchResultRow(
-                    searchMatch: searchMatch,
-                    title: title(searchMatch),
-                    registeredTrawlerDisplayName: trawlerDisplayName(
-                      searchMatch.registeredTrawler),
-                    showsTrawlerDisplayName: showsTrawlerDisplayName,
-                    isSelected: selectedSearchMatchIdentifier == searchMatch.id
-                  )
-                }
-                .id(searchMatch.id)
-                .buttonStyle(.plain)
-                Rectangle()
-                  .fill(TrawlDesign.Colors.hairline.opacity(0.75))
-                  .frame(height: 0.5)
-                  .padding(.leading, 44)
-              }
+      Divider()
+
+      List(selection: $selectedSearchMatchIdentifier) {
+        ForEach(groupedSections) { section in
+          Section(section.title) {
+            ForEach(section.matches) { searchMatch in
+              SearchResultRow(
+                searchMatch: searchMatch,
+                rawTitle: title(searchMatch),
+                registeredTrawlerDisplayName: trawlerDisplayName(
+                  searchMatch.registeredTrawler),
+                showsTrawlerDisplayName: showsTrawlerDisplayName
+              )
+              .tag(searchMatch.id)
             }
-
-            paginationFooter
           }
-          .frame(
-            width: min(proxy.size.width, TrawlDesign.recordReadingWidth),
-            alignment: .leading
-          )
         }
-        .onChange(of: keyboardScrollToken) { _, _ in
-          guard let selectedID = selectedSearchMatchIdentifier else { return }
-          withAnimation(.easeInOut(duration: 0.14)) {
-            scrollProxy.scrollTo(selectedID, anchor: .center)
+
+        if loadMoreFailureMessage != nil || isLoadingMore || canLoadMore {
+          Section {
+            paginationFooter
           }
         }
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .focused($focus, equals: .results)
-    .onKeyPress(.upArrow) {
-      moveSelection(by: -1)
-      return .handled
-    }
-    .onKeyPress(.downArrow) {
-      moveSelection(by: 1)
-      return .handled
-    }
-    .onKeyPress(.return) {
-      guard selectedSearchMatchIdentifier != nil else { return .ignored }
-      onReturn()
-      return .handled
+      .listStyle(.inset)
+      .focused($focus, equals: .results)
+      .onChange(of: selectedSearchMatchIdentifier) { _, newID in
+        guard let newID,
+          let match = searchMatches.first(where: { $0.id == newID })
+        else { return }
+        onSelectionChanged(match)
+      }
+      .onKeyPress(.return) {
+        guard selectedSearchMatchIdentifier != nil else { return .ignored }
+        onReturn()
+        return .handled
+      }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
@@ -186,7 +158,7 @@ struct SearchResultsList: View {
     if let loadMoreFailureMessage {
       HStack(spacing: 8) {
         Image(systemName: "exclamationmark.triangle.fill")
-          .foregroundStyle(TrawlDesign.Colors.warningAmber)
+          .foregroundStyle(.orange)
         Text(loadMoreFailureMessage)
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -195,7 +167,7 @@ struct SearchResultsList: View {
           .buttonStyle(.bordered)
           .controlSize(.small)
       }
-      .padding(12)
+      .padding(.vertical, 6)
     } else if isLoadingMore {
       HStack(spacing: 8) {
         Spacer()
@@ -206,7 +178,7 @@ struct SearchResultsList: View {
           .foregroundStyle(.secondary)
         Spacer()
       }
-      .padding(.vertical, 14)
+      .padding(.vertical, 8)
     } else if canLoadMore {
       HStack {
         Spacer()
@@ -215,20 +187,8 @@ struct SearchResultsList: View {
           .controlSize(.small)
         Spacer()
       }
-      .padding(.vertical, 14)
+      .padding(.vertical, 8)
     }
-  }
-
-  private func moveSelection(by offset: Int) {
-    guard !searchMatches.isEmpty else { return }
-    let currentIndex =
-      selectedSearchMatchIdentifier.flatMap { selectedIdentifier in
-        searchMatches.firstIndex(where: { $0.id == selectedIdentifier })
-      } ?? (offset > 0 ? -1 : searchMatches.count)
-    let nextIndex = min(max(currentIndex + offset, 0), searchMatches.count - 1)
-    selectedSearchMatchIdentifier = searchMatches[nextIndex].id
-    keyboardScrollToken &+= 1
-    onSelectionChanged(searchMatches[nextIndex])
   }
 }
 
@@ -240,6 +200,7 @@ private struct SearchResultsContext: View {
   let isTruncated: Bool
   let resultLimit: UInt32
   let committedQuery: String?
+  let showsUpToTodayContext: Bool
 
   @ViewBuilder
   var body: some View {
@@ -250,14 +211,13 @@ private struct SearchResultsContext: View {
       ) {
         Label(retained, systemImage: "magnifyingglass")
       } else if resultLimit > 0 {
-        Text(
-          SearchResultBounds.summary(
-            shownCount: resultCount,
-            totalCount: totalMatchedRecordCount,
-            isLowerBound: totalMatchedCountIsLowerBound,
-            isTruncated: isTruncated
-          )
+        let base = SearchResultBounds.summary(
+          shownCount: resultCount,
+          totalCount: totalMatchedRecordCount,
+          isLowerBound: totalMatchedCountIsLowerBound,
+          isTruncated: isTruncated
         )
+        Text(showsUpToTodayContext ? "\(base) · Up to today" : base)
       }
       if case .partial = phase {
         Label(OperationalCopy.Search.partialResults, systemImage: "exclamationmark.triangle")
@@ -276,134 +236,174 @@ private struct SearchResultRow: View {
   @Environment(\.locale) private var locale
 
   let searchMatch: SearchMatch
-  let title: String
+  let rawTitle: String
   let registeredTrawlerDisplayName: String
   let showsTrawlerDisplayName: Bool
-  let isSelected: Bool
+
+  private var displayTitle: String {
+    let trimmed = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    if Self.isRawChatIdentifier(trimmed) {
+      if let firstPerson = searchMatch.searchMatchPresentation.peopleRelatedToMatchingRecord
+        .map({ $0.personDisplayName.trimmingCharacters(in: .whitespacesAndNewlines) })
+        .first(where: { !$0.isEmpty && !Self.isRawChatIdentifier($0) })
+      {
+        return firstPerson
+      }
+      return "\(registeredTrawlerDisplayName) conversation"
+    }
+    return trimmed.isEmpty ? registeredTrawlerDisplayName : trimmed
+  }
 
   var body: some View {
     HStack(alignment: .top, spacing: TrawlDesign.Space.sm) {
       if let registeredTrawler = searchMatch.registeredTrawler {
         TrawlerIconView(registeredTrawler: registeredTrawler, size: 20)
-          .padding(.top, 1)
+          .padding(.top, 2)
       }
       VStack(alignment: .leading, spacing: 3) {
-        Text(title)
-          .font(TrawlDesign.Typography.cardTitle)
-          .foregroundStyle(TrawlDesign.Colors.ink)
+        Text(displayTitle)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(.primary)
           .lineLimit(2)
 
-        if !metadataSubtitle.isEmpty {
-          Text(metadataSubtitle)
-            .font(TrawlDesign.Typography.meta)
-            .foregroundStyle(TrawlDesign.Colors.mutedInk)
+        if !metadataLine.isEmpty {
+          Text(metadataLine)
+            .font(.caption)
+            .foregroundStyle(.secondary)
             .lineLimit(1)
         }
 
-        if !peopleRelatedToMatchingRecordText.isEmpty {
-          Text(peopleRelatedToMatchingRecordText)
-            .font(TrawlDesign.Typography.meta)
-            .foregroundStyle(TrawlDesign.Colors.mutedInk)
-            .lineLimit(1)
-        }
         if !physicalPlaceNamesSpecificToBroadestText.isEmpty {
           Text(physicalPlaceNamesSpecificToBroadestText)
-            .font(TrawlDesign.Typography.meta)
-            .foregroundStyle(TrawlDesign.Colors.mutedInk)
+            .font(.caption)
+            .foregroundStyle(.secondary)
             .lineLimit(1)
         }
+
         ForEach(
           Array(
             searchMatch.searchMatchPresentation.searchMatchTextFieldsInDisplayOrder.enumerated()),
           id: \.offset
         ) { _, searchMatchTextField in
-          if let fieldLabelledSearchMatchTextEvidence =
-            fieldLabelledSearchMatchTextEvidence(searchMatchTextField)
-          {
-            fieldLabelledSearchMatchTextEvidence
-              .font(TrawlDesign.Typography.meta)
-              .foregroundStyle(TrawlDesign.Colors.mutedInk)
+          if let evidence = fieldLabelledSearchMatchTextEvidence(searchMatchTextField) {
+            evidence
+              .font(.callout)
+              .foregroundStyle(.secondary)
               .lineLimit(2)
           }
         }
       }
     }
-    .padding(.vertical, TrawlDesign.Space.sm)
-    .padding(.horizontal, TrawlDesign.Space.md)
-    .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
-    .background(
-      isSelected ? TrawlDesign.Colors.selectBlueSurface : .clear,
-      in: TrawlDesign.Shape.control
-    )
-    .padding(.horizontal, 6)
-    .padding(.vertical, 2)
-    .contentShape(.rect)
+    .padding(.vertical, 4)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
-    .accessibilityValue(isSelected ? "Selected" : "Not selected")
-    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
-  private var metadataSubtitle: String {
+  /// Combines timestamp, container, and people into one deduplicated metadata line
+  /// so Mail never repeats sender addresses and Telegram never repeats the conversation title.
+  private var metadataLine: String {
     var parts: [String] = []
     if let formattedTime {
       parts.append(formattedTime)
     }
-    if !digitalContainerNamesNearestToBroadestText.isEmpty,
-      digitalContainerNamesNearestToBroadestText.localizedCaseInsensitiveCompare(title)
-        != .orderedSame
+
+    let container = digitalContainerNamesNearestToBroadestText
+    let people = cleanedPeopleSummary(excludingContainer: container)
+
+    if !people.isEmpty {
+      parts.append(people)
+    } else if !container.isEmpty,
+      container.localizedCaseInsensitiveCompare(displayTitle) != .orderedSame,
+      !Self.isRawChatIdentifier(container)
     {
-      parts.append(digitalContainerNamesNearestToBroadestText)
+      parts.append(container)
     }
     return parts.joined(separator: " · ")
   }
 
+  private func cleanedPeopleSummary(excludingContainer container: String) -> String {
+    var seen = Set<String>()
+    var senders: [String] = []
+    var others: [String] = []
+
+    func normalizeKey(_ text: String) -> String {
+      text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    let titleKey = normalizeKey(displayTitle)
+
+    for person in searchMatch.searchMatchPresentation.peopleRelatedToMatchingRecord {
+      let cleaned = Self.stripRedundantEmailEcho(
+        person.personDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+      )
+      let key = normalizeKey(cleaned)
+      guard !key.isEmpty,
+        key != titleKey,
+        !Self.isRawChatIdentifier(cleaned),
+        seen.insert(key).inserted
+      else { continue }
+
+      switch person.personRoleInArchiveRecord {
+      case .sender:
+        senders.append(cleaned)
+      case .recipient:
+        // Omit recipient when a sender is already present so inbox rows don't repeat the user's own address.
+        if senders.isEmpty {
+          others.append(cleaned)
+        }
+      case .organizer:
+        others.append("Organizer: \(cleaned)")
+      case .attendee:
+        others.append("Attendee: \(cleaned)")
+      case .author, .participant, nil:
+        others.append(cleaned)
+      }
+    }
+
+    if !senders.isEmpty {
+      return senders.joined(separator: ", ")
+    }
+    if !others.isEmpty {
+      return others.joined(separator: ", ")
+    }
+    if !container.isEmpty,
+      normalizeKey(container) != titleKey,
+      !Self.isRawChatIdentifier(container)
+    {
+      return container
+    }
+    return ""
+  }
+
+  private static func isRawChatIdentifier(_ text: String) -> Bool {
+    guard text.hasPrefix("chat"), text.count >= 12 else { return false }
+    let suffix = text.dropFirst(4)
+    return !suffix.isEmpty && suffix.allSatisfy(\.isNumber)
+  }
+
+  private static func stripRedundantEmailEcho(_ text: String) -> String {
+    // Collapses "Name <email@host>" or "Name email@host" down to just the clean display name
+    // when a human name precedes the email address.
+    let tokens = text.split(separator: " ")
+    guard tokens.count >= 2, let last = tokens.last, last.contains("@") else {
+      return text
+    }
+    let namePart = tokens.dropLast().joined(separator: " ")
+      .trimmingCharacters(in: CharacterSet(charactersIn: " <>\""))
+    return namePart.isEmpty ? text : namePart
+  }
+
   private var accessibilityLabel: String {
-    var accessibleSearchResultFacts = [
+    var facts = [
       showsTrawlerDisplayName ? registeredTrawlerDisplayName : nil,
-      title,
-      formattedTime,
-      peopleRelatedToMatchingRecordText,
+      displayTitle,
+      metadataLine,
       physicalPlaceNamesSpecificToBroadestText,
-      digitalContainerNamesNearestToBroadestText,
     ]
       .compactMap { $0 }
       .filter { !$0.isEmpty }
-    accessibleSearchResultFacts.append(
-      contentsOf: fieldLabelledSearchMatchTextEvidenceInDisplayOrder)
-    return accessibleSearchResultFacts.joined(separator: ". ")
-  }
-
-  private var peopleRelatedToMatchingRecordText: String {
-    var senders: [String] = []
-    var recipients: [String] = []
-    var others: [String] = []
-    for person in searchMatch.searchMatchPresentation.peopleRelatedToMatchingRecord {
-      let name = person.personDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !name.isEmpty else { continue }
-      switch person.personRoleInArchiveRecord {
-      case .sender:
-        senders.append(name)
-      case .recipient:
-        recipients.append(name)
-      case .organizer:
-        others.append("Organizer: \(name)")
-      case .attendee:
-        others.append("Attendee: \(name)")
-      case .author, .participant, nil:
-        others.append(name)
-      }
-    }
-    var segments: [String] = []
-    if !senders.isEmpty && !recipients.isEmpty {
-      segments.append("\(senders.joined(separator: ", ")) → \(recipients.joined(separator: ", "))")
-    } else if !senders.isEmpty {
-      segments.append(senders.joined(separator: ", "))
-    } else if !recipients.isEmpty {
-      segments.append("To \(recipients.joined(separator: ", "))")
-    }
-    segments.append(contentsOf: others)
-    return segments.joined(separator: " · ")
+    facts.append(contentsOf: fieldLabelledSearchMatchTextEvidenceInDisplayOrder)
+    return facts.joined(separator: ". ")
   }
 
   private var physicalPlaceNamesSpecificToBroadestText: String {
@@ -423,18 +423,16 @@ private struct SearchResultRow: View {
   private var fieldLabelledSearchMatchTextEvidenceInDisplayOrder: [String] {
     searchMatch.searchMatchPresentation.searchMatchTextFieldsInDisplayOrder.compactMap {
       searchMatchTextField in
-      let searchMatchTextFieldName =
-        searchMatchTextField.searchMatchTextFieldName
+      let name = searchMatchTextField.searchMatchTextFieldName
         .trimmingCharacters(in: .whitespacesAndNewlines)
-      let searchMatchTextFieldContent =
-        searchMatchTextField.searchMatchTextFragmentsInDisplayOrder
+      let content = searchMatchTextField.searchMatchTextFragmentsInDisplayOrder
         .map(\.searchMatchTextFragmentContent)
         .joined()
         .trimmingCharacters(in: .whitespacesAndNewlines)
-      switch (searchMatchTextFieldName.isEmpty, searchMatchTextFieldContent.isEmpty) {
-      case (false, false): return "\(searchMatchTextFieldName): \(searchMatchTextFieldContent)"
-      case (false, true): return searchMatchTextFieldName
-      case (true, false): return searchMatchTextFieldContent
+      switch (name.isEmpty, content.isEmpty) {
+      case (false, false): return "\(name): \(content)"
+      case (false, true): return name
+      case (true, false): return content
       case (true, true): return nil
       }
     }
@@ -443,36 +441,27 @@ private struct SearchResultRow: View {
   private func fieldLabelledSearchMatchTextEvidence(
     _ searchMatchTextField: SearchMatchTextField
   ) -> Text? {
-    let searchMatchTextFieldName =
-      searchMatchTextField.searchMatchTextFieldName
+    let fieldName = searchMatchTextField.searchMatchTextFieldName
       .trimmingCharacters(in: .whitespacesAndNewlines)
-    let nonEmptySearchMatchTextFragments =
-      searchMatchTextField.searchMatchTextFragmentsInDisplayOrder
+    let fragments = searchMatchTextField.searchMatchTextFragmentsInDisplayOrder
       .filter { !$0.searchMatchTextFragmentContent.isEmpty }
-    guard !searchMatchTextFieldName.isEmpty || !nonEmptySearchMatchTextFragments.isEmpty
-    else { return nil }
+    guard !fieldName.isEmpty || !fragments.isEmpty else { return nil }
 
-    var fieldLabelledSearchMatchTextEvidence = Text("")
-    if !searchMatchTextFieldName.isEmpty {
-      fieldLabelledSearchMatchTextEvidence = Text(
-        nonEmptySearchMatchTextFragments.isEmpty
-          ? searchMatchTextFieldName
-          : "\(searchMatchTextFieldName): "
-      )
-      .foregroundStyle(TrawlDesign.Colors.mutedInk)
+    var result = Text("")
+    if !fieldName.isEmpty {
+      result = Text(fragments.isEmpty ? fieldName : "\(fieldName): ")
+        .foregroundStyle(.secondary)
     }
-    for searchMatchTextFragment in nonEmptySearchMatchTextFragments {
-      var searchMatchTextFragmentText = Text(
-        searchMatchTextFragment.searchMatchTextFragmentContent)
-      if searchMatchTextFragment.searchMatchTextFragmentMatchesSearchQuery {
-        searchMatchTextFragmentText = searchMatchTextFragmentText
+    for fragment in fragments {
+      var piece = Text(fragment.searchMatchTextFragmentContent)
+      if fragment.searchMatchTextFragmentMatchesSearchQuery {
+        piece = piece
           .bold()
           .foregroundColor(TrawlDesign.brandRed)
       }
-      fieldLabelledSearchMatchTextEvidence =
-        Text("\(fieldLabelledSearchMatchTextEvidence)\(searchMatchTextFragmentText)")
+      result = Text("\(result)\(piece)")
     }
-    return fieldLabelledSearchMatchTextEvidence
+    return result
   }
 
   private var formattedTime: String? {
