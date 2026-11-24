@@ -205,7 +205,10 @@ remove_old_development_candidates
 # candidate is usually still running. Two candidates at once look like one app
 # with two versions. Stop the earlier one and its trawl helpers first.
 stop_running_development_apps() {
-  local running_development_processes='/OpenTrawl Dev\.app/Contents/(MacOS/Trawl|Helpers/trawl)'
+  # Anchored to the start of the command line, so only a process whose own
+  # executable is a development candidate matches, never a tool that was given
+  # the app's path as an argument.
+  local running_development_processes="^$development_builds_directory/[^/]+/OpenTrawl Dev\\.app/Contents/(MacOS/Trawl|Helpers/trawl)( |\$)"
   pgrep -f "$running_development_processes" >/dev/null || return 0
   echo "Stopping the OpenTrawl Dev app that is already running"
   pkill -f "$running_development_processes" || true
