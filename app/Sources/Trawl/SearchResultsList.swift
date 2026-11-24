@@ -299,13 +299,6 @@ private struct SearchAppFilterChipStrip: View {
           name: "All",
           countText: allAppsSearchMatchCountText,
           isSelected: selection == nil)
-        ForEach(chips) { chip in
-          appChip(
-            registeredTrawler: chip.registeredTrawler,
-            name: chip.registeredTrawlerDisplayName,
-            countText: chip.searchMatchCountText,
-            isSelected: selection == chip.registeredTrawler)
-        }
         if let activeDateRangeLabel {
           Button(action: onClearDateRange) {
             HStack(spacing: 5) {
@@ -323,6 +316,13 @@ private struct SearchAppFilterChipStrip: View {
           .buttonStyle(.plain)
           .help("Clear dates")
           .accessibilityLabel("Clear dates: \(activeDateRangeLabel)")
+        }
+        ForEach(chips) { chip in
+          appChip(
+            registeredTrawler: chip.registeredTrawler,
+            name: chip.registeredTrawlerDisplayName,
+            countText: chip.searchMatchCountText,
+            isSelected: selection == chip.registeredTrawler)
         }
       }
       .padding(.horizontal, 12)

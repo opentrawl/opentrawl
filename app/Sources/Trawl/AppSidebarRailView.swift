@@ -19,7 +19,7 @@ struct AppSidebarRailView: View {
   let isSearching: Bool
   let trawlers: [RestingTrawler]
   let operabilityByID: [RegisteredTrawlerIdentity: AppOperabilityState]
-  let searchMatchCountByID: [RegisteredTrawlerIdentity: UInt64]
+  let searchMatchCountByID: [RegisteredTrawlerIdentity: AppSearchMatchCount]
   let totalSearchResultsCount: UInt64
   let totalSearchCountIsLowerBound: Bool
   let hasActiveDateRange: Bool
@@ -83,11 +83,14 @@ struct AppSidebarRailView: View {
       if isUndatedExcluded {
         return "No dates"
       }
-      let count =
-        isSearching
-        ? (searchMatchCountByID[trawler.id] ?? 0)
-        : (operability?.archivedItemCount ?? 0)
-      return count > 0 ? count.formatted() : nil
+      if isSearching {
+        guard let count = searchMatchCountByID[trawler.id], count.searchMatchCount > 0 else {
+          return nil
+        }
+        return count.text
+      }
+      let archivedItemCount = operability?.archivedItemCount ?? 0
+      return archivedItemCount > 0 ? archivedItemCount.formatted() : nil
     }()
 
     return HStack(spacing: 8) {

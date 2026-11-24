@@ -143,11 +143,13 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
   /// A search of one app returns counts for that app only. The other apps keep
   /// the counts from the last search of all apps for the same words and dates,
   /// so choosing an app never blanks the counts beside it.
-  private var searchMatchCountByID: [RegisteredTrawlerIdentity: UInt64] {
+  private var searchMatchCountByID: [RegisteredTrawlerIdentity: AppSearchMatchCount] {
     var counts = searchMatchCountsFromLastSearchOfAllAppsForCurrentQueryAndDates?
       .searchMatchCountByRegisteredTrawler ?? [:]
     for trawlerSearchResult in model.trawlerSearchResults {
-      counts[trawlerSearchResult.registeredTrawler] = trawlerSearchResult.totalSearchMatches
+      counts[trawlerSearchResult.registeredTrawler] = AppSearchMatchCount(
+        searchMatchCount: trawlerSearchResult.totalSearchMatches,
+        isLowerBound: trawlerSearchResult.totalSearchMatchesIsLowerBound)
     }
     return counts
   }
@@ -169,23 +171,23 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
   private var allAppsSearchMatchCountText: String? {
     if interaction.registeredTrawler == nil {
       guard model.totalMatchedRecordCount > 0 else { return nil }
-      return SearchMatchCountsForAllApps.countText(
-        model.totalMatchedRecordCount, isLowerBound: model.totalMatchedCountIsLowerBound)
+      return AppSearchMatchCount(
+        searchMatchCount: model.totalMatchedRecordCount,
+        isLowerBound: model.totalMatchedCountIsLowerBound
+      ).text
     }
-    return searchMatchCountsFromLastSearchOfAllAppsForCurrentQueryAndDates.map {
-      SearchMatchCountsForAllApps.countText(
-        $0.totalSearchMatchCount, isLowerBound: $0.totalSearchMatchCountIsLowerBound)
-    }
+    return searchMatchCountsFromLastSearchOfAllAppsForCurrentQueryAndDates?
+      .totalSearchMatchCount.text
   }
 
   private var searchAppFilterChips: [SearchAppFilterChip] {
     let counts = searchMatchCountByID
     return trawlers.compactMap { trawler in
-      guard let count = counts[trawler.id], count > 0 else { return nil }
+      guard let count = counts[trawler.id], count.searchMatchCount > 0 else { return nil }
       return SearchAppFilterChip(
         registeredTrawler: trawler.id,
         registeredTrawlerDisplayName: trawler.registeredTrawlerDisplayName,
-        searchMatchCountText: count.formatted())
+        searchMatchCountText: count.text)
     }
   }
 
@@ -346,10 +348,16 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
             latestDateInclusive: committedInput.latestMatchingArchiveRecordTimeInclusive,
             searchMatchCountByRegisteredTrawler: Dictionary(
               uniqueKeysWithValues: model.trawlerSearchResults.map {
-                ($0.registeredTrawler, $0.totalSearchMatches)
+                (
+                  $0.registeredTrawler,
+                  AppSearchMatchCount(
+                    searchMatchCount: $0.totalSearchMatches,
+                    isLowerBound: $0.totalSearchMatchesIsLowerBound)
+                )
               }),
-            totalSearchMatchCount: model.totalMatchedRecordCount,
-            totalSearchMatchCountIsLowerBound: model.totalMatchedCountIsLowerBound)
+            totalSearchMatchCount: AppSearchMatchCount(
+              searchMatchCount: model.totalMatchedRecordCount,
+              isLowerBound: model.totalMatchedCountIsLowerBound))
         }
         let hasTextQuery = !interaction.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         // Only auto-open the first result on wide desktop layouts; narrow layouts stay on the list
@@ -710,12 +718,18 @@ private struct SearchMatchCountsForAllApps {
   let query: String
   let earliestDateInclusive: Date?
   let latestDateInclusive: Date?
-  let searchMatchCountByRegisteredTrawler: [RegisteredTrawlerIdentity: UInt64]
-  let totalSearchMatchCount: UInt64
-  let totalSearchMatchCountIsLowerBound: Bool
+  let searchMatchCountByRegisteredTrawler: [RegisteredTrawlerIdentity: AppSearchMatchCount]
+  let totalSearchMatchCount: AppSearchMatchCount
+}
 
-  static func countText(_ count: UInt64, isLowerBound: Bool) -> String {
-    isLowerBound ? "\(count.formatted())+" : count.formatted()
+/// How many records of one app match the search. A lower bound is shown with
+/// a plus sign everywhere, so a count never looks more exact than it is.
+struct AppSearchMatchCount: Equatable {
+  let searchMatchCount: UInt64
+  let isLowerBound: Bool
+
+  var text: String {
+    isLowerBound ? "\(searchMatchCount.formatted())+" : searchMatchCount.formatted()
   }
 }
 
