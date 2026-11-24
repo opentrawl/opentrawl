@@ -80,6 +80,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
   @State private var draftStartDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
   @State private var draftEndDate = Date()
   @State private var lastDetailWidth: CGFloat = 960
+  @State private var searchMatchCountsFromLastSearchOfAllApps: SearchMatchCountsForAllApps?
   @FocusState private var focus: SearchFocus?
 
   init(
@@ -139,12 +140,53 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
     return trawlers.first(where: { $0.id == registeredTrawler })
   }
 
+  /// A search of one app returns counts for that app only. The other apps keep
+  /// the counts from the last search of all apps for the same words and dates,
+  /// so choosing an app never blanks the counts beside it.
   private var searchMatchCountByID: [RegisteredTrawlerIdentity: UInt64] {
-    Dictionary(
-      uniqueKeysWithValues: model.trawlerSearchResults.map {
-        ($0.registeredTrawler, $0.totalSearchMatches)
-      }
-    )
+    var counts = searchMatchCountsFromLastSearchOfAllAppsForCurrentQueryAndDates?
+      .searchMatchCountByRegisteredTrawler ?? [:]
+    for trawlerSearchResult in model.trawlerSearchResults {
+      counts[trawlerSearchResult.registeredTrawler] = trawlerSearchResult.totalSearchMatches
+    }
+    return counts
+  }
+
+  private var searchMatchCountsFromLastSearchOfAllAppsForCurrentQueryAndDates:
+    SearchMatchCountsForAllApps?
+  {
+    guard interaction.registeredTrawler != nil,
+      let counts = searchMatchCountsFromLastSearchOfAllApps,
+      counts.query == interaction.query.trimmingCharacters(in: .whitespacesAndNewlines),
+      counts.earliestDateInclusive == interaction.earliestMatchingArchiveRecordTimeInclusive,
+      counts.latestDateInclusive == interaction.latestMatchingArchiveRecordTimeInclusive
+    else {
+      return nil
+    }
+    return counts
+  }
+
+  private var allAppsSearchMatchCountText: String? {
+    if interaction.registeredTrawler == nil {
+      guard model.totalMatchedRecordCount > 0 else { return nil }
+      return SearchMatchCountsForAllApps.countText(
+        model.totalMatchedRecordCount, isLowerBound: model.totalMatchedCountIsLowerBound)
+    }
+    return searchMatchCountsFromLastSearchOfAllAppsForCurrentQueryAndDates.map {
+      SearchMatchCountsForAllApps.countText(
+        $0.totalSearchMatchCount, isLowerBound: $0.totalSearchMatchCountIsLowerBound)
+    }
+  }
+
+  private var searchAppFilterChips: [SearchAppFilterChip] {
+    let counts = searchMatchCountByID
+    return trawlers.compactMap { trawler in
+      guard let count = counts[trawler.id], count > 0 else { return nil }
+      return SearchAppFilterChip(
+        registeredTrawler: trawler.id,
+        registeredTrawlerDisplayName: trawler.registeredTrawlerDisplayName,
+        searchMatchCountText: count.formatted())
+    }
   }
 
   private var hasActiveDateRange: Bool {
@@ -297,6 +339,18 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
     .onChange(of: model.phase) { _, newPhase in
       if newPhase != .loading {
         interaction.reconcileCommittedResults()
+        if let committedInput = model.committedInput, committedInput.registeredTrawler == nil {
+          searchMatchCountsFromLastSearchOfAllApps = SearchMatchCountsForAllApps(
+            query: committedInput.query.trimmingCharacters(in: .whitespacesAndNewlines),
+            earliestDateInclusive: committedInput.earliestMatchingArchiveRecordTimeInclusive,
+            latestDateInclusive: committedInput.latestMatchingArchiveRecordTimeInclusive,
+            searchMatchCountByRegisteredTrawler: Dictionary(
+              uniqueKeysWithValues: model.trawlerSearchResults.map {
+                ($0.registeredTrawler, $0.totalSearchMatches)
+              }),
+            totalSearchMatchCount: model.totalMatchedRecordCount,
+            totalSearchMatchCountIsLowerBound: model.totalMatchedCountIsLowerBound)
+        }
         let hasTextQuery = !interaction.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         // Only auto-open the first result on wide desktop layouts; narrow layouts stay on the list
         // so typing never kicks the user out of their search results.
@@ -532,6 +586,14 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
       canLoadMore: model.canLoadMore,
       loadMoreFailureMessage: model.loadMoreFailureMessage,
       showsUpToTodayContext: isEmptyBrowse && selectedScopeTrawler?.id.registeredTrawlerIdentity != "contacts",
+      appFilterChips: searchAppFilterChips,
+      allAppsSearchMatchCountText: allAppsSearchMatchCountText,
+      appFilterSelection: interaction.registeredTrawler,
+      onSelectAppFilter: { registeredTrawler in
+        sidebarSelection = registeredTrawler.map { .app($0) } ?? .allItems
+      },
+      activeDateRangeLabel: activeDateRangeLabel,
+      onClearDateRange: { interaction.clearDateRange() },
       trawlerDisplayName: {
         $0.map(trawlerDisplayName(for:))
           ?? SearchTrawlerResolver.unavailableDisplayName
@@ -641,6 +703,19 @@ private struct SearchOutcome: View {
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+  }
+}
+
+private struct SearchMatchCountsForAllApps {
+  let query: String
+  let earliestDateInclusive: Date?
+  let latestDateInclusive: Date?
+  let searchMatchCountByRegisteredTrawler: [RegisteredTrawlerIdentity: UInt64]
+  let totalSearchMatchCount: UInt64
+  let totalSearchMatchCountIsLowerBound: Bool
+
+  static func countText(_ count: UInt64, isLowerBound: Bool) -> String {
+    isLowerBound ? "\(count.formatted())+" : count.formatted()
   }
 }
 

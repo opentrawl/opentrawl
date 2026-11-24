@@ -40,6 +40,12 @@ struct SearchResultsList: View {
   let canLoadMore: Bool
   let loadMoreFailureMessage: String?
   let showsUpToTodayContext: Bool
+  let appFilterChips: [SearchAppFilterChip]
+  let allAppsSearchMatchCountText: String?
+  let appFilterSelection: RegisteredTrawlerIdentity?
+  let onSelectAppFilter: (RegisteredTrawlerIdentity?) -> Void
+  let activeDateRangeLabel: String?
+  let onClearDateRange: () -> Void
   let trawlerDisplayName: (RegisteredTrawlerIdentity?) -> String
   let showsTrawlerDisplayName: Bool
   let committedQuery: String?
@@ -110,6 +116,15 @@ struct SearchResultsList: View {
         resultLimit: resultLimit,
         committedQuery: committedQuery,
         showsUpToTodayContext: showsUpToTodayContext
+      )
+
+      SearchAppFilterChipStrip(
+        chips: appFilterChips,
+        allAppsSearchMatchCountText: allAppsSearchMatchCountText,
+        selection: appFilterSelection,
+        onSelect: onSelectAppFilter,
+        activeDateRangeLabel: activeDateRangeLabel,
+        onClearDateRange: onClearDateRange
       )
 
       Divider()
@@ -251,7 +266,103 @@ private struct SearchResultsContext: View {
     .foregroundStyle(.secondary)
     .fixedSize(horizontal: false, vertical: true)
     .padding(.horizontal, 14)
-    .padding(.vertical, 10)
+    .padding(.top, 10)
+    .padding(.bottom, 8)
+  }
+}
+
+struct SearchAppFilterChip: Identifiable, Equatable {
+  let registeredTrawler: RegisteredTrawlerIdentity
+  let registeredTrawlerDisplayName: String
+  let searchMatchCountText: String
+
+  var id: RegisteredTrawlerIdentity { registeredTrawler }
+}
+
+/// One chip for all apps and one for each app with matches, in the same order
+/// as the sidebar, then the active date range as a red chip that clears it.
+private struct SearchAppFilterChipStrip: View {
+  let chips: [SearchAppFilterChip]
+  let allAppsSearchMatchCountText: String?
+  let selection: RegisteredTrawlerIdentity?
+  let onSelect: (RegisteredTrawlerIdentity?) -> Void
+  let activeDateRangeLabel: String?
+  let onClearDateRange: () -> Void
+
+  private static let chipHeight: CGFloat = 26
+
+  var body: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 6) {
+        appChip(
+          registeredTrawler: nil,
+          name: "All",
+          countText: allAppsSearchMatchCountText,
+          isSelected: selection == nil)
+        ForEach(chips) { chip in
+          appChip(
+            registeredTrawler: chip.registeredTrawler,
+            name: chip.registeredTrawlerDisplayName,
+            countText: chip.searchMatchCountText,
+            isSelected: selection == chip.registeredTrawler)
+        }
+        if let activeDateRangeLabel {
+          Button(action: onClearDateRange) {
+            HStack(spacing: 5) {
+              Text(activeDateRangeLabel)
+              Image(systemName: "xmark")
+                .imageScale(.small)
+            }
+            .font(TrawlDesign.Typography.meta.weight(.medium))
+            .foregroundStyle(TrawlDesign.Colors.matchRed)
+            .padding(.horizontal, 8)
+            .frame(height: Self.chipHeight)
+            .background(TrawlDesign.Colors.matchRed.opacity(0.10), in: TrawlDesign.Shape.control)
+            .contentShape(TrawlDesign.Shape.control)
+          }
+          .buttonStyle(.plain)
+          .help("Clear dates")
+          .accessibilityLabel("Clear dates: \(activeDateRangeLabel)")
+        }
+      }
+      .padding(.horizontal, 12)
+      .padding(.bottom, 8)
+    }
+  }
+
+  private func appChip(
+    registeredTrawler: RegisteredTrawlerIdentity?,
+    name: String,
+    countText: String?,
+    isSelected: Bool
+  ) -> some View {
+    Button {
+      onSelect(registeredTrawler)
+    } label: {
+      HStack(spacing: 5) {
+        if let registeredTrawler {
+          TrawlerIconView(registeredTrawler: registeredTrawler, size: 14)
+        }
+        Text(name)
+          .font(TrawlDesign.Typography.meta.weight(.medium))
+          .foregroundStyle(isSelected ? Color.white : Color.primary)
+        if let countText {
+          Text(countText)
+            .font(TrawlDesign.Typography.smallNumber)
+            .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
+        }
+      }
+      .padding(.horizontal, 8)
+      .frame(height: Self.chipHeight)
+      .background(
+        isSelected ? TrawlDesign.Colors.selectBlue : TrawlDesign.Colors.messageBubble,
+        in: TrawlDesign.Shape.control
+      )
+      .contentShape(TrawlDesign.Shape.control)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(countText.map { "\(name), \($0)" } ?? name)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 
