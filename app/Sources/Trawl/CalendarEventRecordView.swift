@@ -68,8 +68,11 @@ struct CalendarEventRecordView: View {
             Link("Open event", destination: calendarEventHTTPSURL)
           }
           if !calendarEventRecord.calendarEventDescription.isEmpty {
-            Text(calendarEventRecord.calendarEventDescription)
+            Text(RichBodyText.attributedString(for: calendarEventRecord.calendarEventDescription))
+              .font(TrawlDesign.Typography.body)
+              .lineSpacing(3)
               .textSelection(.enabled)
+              .fixedSize(horizontal: false, vertical: true)
               .id("description")
           }
         }
@@ -78,8 +81,9 @@ struct CalendarEventRecordView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
-        guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
-        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
+        let anchor = targetAnchor.recordAnchorIdentifier
+        guard !anchor.isEmpty, anchor != "summary", anchor != "description" else { return }
+        proxy.scrollTo(anchor, anchor: .top)
       }
     }
   }

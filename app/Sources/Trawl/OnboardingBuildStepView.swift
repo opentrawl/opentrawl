@@ -147,7 +147,10 @@ private struct ArchiveTrawlerSummary: View {
   let onOpenSourceApp: ((String) -> Void)?
 
   private var statusesByID: [RegisteredTrawlerIdentity: TrawlerStatus] {
-    Dictionary(uniqueKeysWithValues: appModel.trawlerStatuses.map { ($0.id, $0) })
+    Dictionary(
+      appModel.trawlerStatuses.map { ($0.id, $0) },
+      uniquingKeysWith: { _, latest in latest }
+    )
   }
 
   private var failuresByID: [RegisteredTrawlerIdentity: TrawlerOperationFailure] {

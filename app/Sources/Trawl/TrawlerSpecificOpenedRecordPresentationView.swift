@@ -63,10 +63,26 @@ struct TrawlerSpecificOpenedRecordPresentationView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
-        guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
-        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
+        guard shouldScrollToTargetAnchor else { return }
+        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .top)
       }
     }
+  }
+
+  /// A document record (email, post, transaction) opens at the top so the
+  /// subject, metadata grid, and start of the body are immediately readable.
+  /// Scrolling to `.center` on a long body drops the reader halfway down the
+  /// page. Only jump when targeting a specific field below the header.
+  private var shouldScrollToTargetAnchor: Bool {
+    let anchor = targetAnchor.recordAnchorIdentifier
+    guard !anchor.isEmpty else { return false }
+    if anchor == openedRecord.detailPresentation.detailDisplayNameAnchor?.recordAnchorIdentifier {
+      return false
+    }
+    if anchor == openedRecord.detailPresentation.bodyAnchor?.recordAnchorIdentifier {
+      return false
+    }
+    return true
   }
 }
 
@@ -129,8 +145,11 @@ private struct TrawlerSpecificOpenedRecordPresentationBodyView: View {
   var body: some View {
     switch detailBody {
     case .text(let text):
-      Text(text)
+      Text(RichBodyText.attributedString(for: text))
+        .font(TrawlDesign.Typography.body)
+        .lineSpacing(3)
         .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
     case .unavailableExplanation:
       ContentUnavailableView(
         OperationalCopy.Record.unavailableTitle,

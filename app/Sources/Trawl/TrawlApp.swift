@@ -318,10 +318,11 @@ struct TrawlApp: App {
             delegate.shellState.isShowingXSignInFromSettings = false
           }
         )
+        .environment(delegate.trawlerIconStore)
       }
     }
 
-    MenuBarExtra("OpenTrawl", systemImage: "tray.full.fill") {
+    MenuBarExtra {
       OpenTrawlMenuBarContent(
         delegate: delegate,
         onOpenWindow: {
@@ -330,7 +331,83 @@ struct TrawlApp: App {
           openWindow(id: "main")
         }
       )
+    } label: {
+      OpenTrawlMenuBarLabel()
     }
+  }
+}
+
+private struct OpenTrawlMenuBarLabel: View {
+  /// Vector template rendering of the OpenTrawl faceted diamond-net mark
+  /// (`assets/brand/src/mark-small.svg`), drawn crisply at menu-bar scale so
+  /// macOS renders it sharp at 1x/2x and tints it automatically for light and
+  /// dark menu bars.
+  private static let templateImage: NSImage = {
+    let size = NSSize(width: 18, height: 18)
+    let image = NSImage(size: size, flipped: true) { rect in
+      // Map the 1024x1024 mark-small.svg coordinate space into 18x18 with a
+      // 1pt optical margin so strokes and vertex nodes stay razor sharp.
+      let pad: CGFloat = 1.2
+      let scale = (min(rect.width, rect.height) - pad * 2) / 1024.0
+      let offsetX = (rect.width - 1024.0 * scale) / 2.0
+      let offsetY = (rect.height - 1024.0 * scale) / 2.0
+      func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+        NSPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+      }
+
+      NSColor.black.setStroke()
+      NSColor.black.setFill()
+
+      let strokePath = NSBezierPath()
+      strokePath.lineWidth = 1.35
+      strokePath.lineCapStyle = .round
+      strokePath.lineJoinStyle = .round
+
+      // Outer gem silhouette
+      strokePath.move(to: pt(292, 196))
+      strokePath.line(to: pt(732, 196))
+      strokePath.line(to: pt(968, 428))
+      strokePath.line(to: pt(512, 952))
+      strokePath.line(to: pt(56, 428))
+      strokePath.close()
+
+      // Horizontal facet line
+      strokePath.move(to: pt(56, 428))
+      strokePath.line(to: pt(968, 428))
+
+      // Interior net ribs
+      strokePath.move(to: pt(292, 196))
+      strokePath.line(to: pt(270, 428))
+      strokePath.line(to: pt(512, 952))
+
+      strokePath.move(to: pt(732, 196))
+      strokePath.line(to: pt(754, 428))
+      strokePath.line(to: pt(512, 952))
+
+      strokePath.stroke()
+
+      // Five vertex nodes
+      let nodeRadius: CGFloat = 1.45
+      for (x, y) in [(292.0, 196.0), (732.0, 196.0), (56.0, 428.0), (968.0, 428.0), (512.0, 952.0)] {
+        let center = pt(x, y)
+        let dotRect = NSRect(
+          x: center.x - nodeRadius,
+          y: center.y - nodeRadius,
+          width: nodeRadius * 2,
+          height: nodeRadius * 2
+        )
+        NSBezierPath(ovalIn: dotRect).fill()
+      }
+
+      return true
+    }
+    image.isTemplate = true
+    return image
+  }()
+
+  var body: some View {
+    Image(nsImage: Self.templateImage)
+      .accessibilityLabel("OpenTrawl")
   }
 }
 
@@ -340,7 +417,7 @@ private struct OpenTrawlMenuBarContent: View {
 
   private var statusLine: String {
     if delegate.connectionStore.isRemote {
-      return "Connected to \(delegate.connectionStore.activeHostDisplayName)"
+      return "Connected to \(delegate.connectionStore.activeHostShortDisplayName)"
     }
     if delegate.model.isUpdating {
       return "Updating your archive…"

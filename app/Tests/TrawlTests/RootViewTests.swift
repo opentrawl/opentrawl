@@ -92,7 +92,7 @@ struct RootViewTests {
       "Could not connect to the server."
     ).localizedDescription
 
-    let failureHost = hostedView(
+    let failureWindow = hostedWindow(
       FailureView(
         detail: errorDetail,
         onOpenConnection: {},
@@ -100,9 +100,15 @@ struct RootViewTests {
       ),
       size: TrawlDesign.minimumWindow
     )
-    assertNoTruncatedButtons(in: failureHost, expectedMinimumButtonCount: 2)
+    withExtendedLifetime(failureWindow) {
+      assertRenderedButtonsFitTitles(
+        [OperationalCopy.Connection.changeArchiveHost, OperationalCopy.SharedAction.retry],
+        in: failureWindow.contentView!
+      )
+      failureWindow.orderOut(nil)
+    }
 
-    let searchOutcomeHost = hostedView(
+    let searchOutcomeWindow = hostedWindow(
       SearchOutcome(
         phase: .failed(errorDetail),
         isScoped: true,
@@ -112,7 +118,13 @@ struct RootViewTests {
       ),
       size: TrawlDesign.minimumWindow
     )
-    assertNoTruncatedButtons(in: searchOutcomeHost, expectedMinimumButtonCount: 2)
+    withExtendedLifetime(searchOutcomeWindow) {
+      assertRenderedButtonsFitTitles(
+        [OperationalCopy.Connection.changeArchiveHost, OperationalCopy.SharedAction.retry],
+        in: searchOutcomeWindow.contentView!
+      )
+      searchOutcomeWindow.orderOut(nil)
+    }
   }
 
   @MainActor
@@ -127,7 +139,7 @@ struct RootViewTests {
     let iconStore = TrawlerIconStore()
 
     for pane in SettingsPane.allCases {
-      let host = hostedView(
+      let window = hostedWindow(
         OpenTrawlSettingsView(
           model: model,
           connectionStore: connectionStore,
@@ -148,12 +160,15 @@ struct RootViewTests {
         .environment(iconStore),
         size: CGSize(width: 600, height: 500)
       )
-      assertNoTruncatedButtons(in: host, expectedMinimumButtonCount: 0)
+      withExtendedLifetime(window) {
+        #expect(window.contentView!.bounds.width == 600)
+        window.orderOut(nil)
+      }
     }
 
     // Also mount TrawlerIconView directly with the shared environment to ensure
     // the Settings → Apps icon path never hits a missing Environment assertion.
-    let iconHost = hostedView(
+    let iconWindow = hostedWindow(
       TrawlerIconView(
         registeredTrawler: RegisteredTrawlerIdentity(registeredTrawlerIdentity: "imessage"),
         size: 22
@@ -161,7 +176,10 @@ struct RootViewTests {
       .environment(iconStore),
       size: CGSize(width: 44, height: 44)
     )
-    #expect(iconHost.fittingSize.width >= 22)
+    withExtendedLifetime(iconWindow) {
+      #expect(iconWindow.contentView!.fittingSize.width >= 22)
+      iconWindow.orderOut(nil)
+    }
   }
 
   @MainActor
@@ -211,12 +229,48 @@ struct RootViewTests {
     )
   }
 
+  @Test func inlineLinksAndLongTrackingURLsRenderAsClickableLinks() {
+    let raw =
+      "Help (https://example.com/click?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) · "
+      + "X (Twitter) (https://example.com/x) · "
+      + "[Docs](https://example.com/docs) · "
+      + "See https://example.com/short."
+    let rendered = RichBodyText.attributedString(for: raw)
+    let renderedPlain = String(rendered.characters)
+    #expect(renderedPlain == "Help · X (Twitter) · Docs · See https://example.com/short.")
+
+    let links = rendered.runs.compactMap { run -> (String, String)? in
+      guard let url = run.link else { return nil }
+      return (String(rendered[run.range].characters), url.absoluteString)
+    }
+    #expect(links.count == 4)
+    #expect(links[0].0 == "Help")
+    #expect(links[0].1.hasPrefix("https://example.com/click?token="))
+    #expect(links[1].0 == "X (Twitter)")
+    #expect(links[1].1 == "https://example.com/x")
+    #expect(links[2].0 == "Docs")
+    #expect(links[2].1 == "https://example.com/docs")
+    #expect(links[3].0 == "https://example.com/short")
+    #expect(links[3].1 == "https://example.com/short")
+  }
+
+  @Test func longBareTrackingURLShortensVisuallyWhileKeepingFullDestination() {
+    let longURL =
+      "https://mail.example.com/ls/click?upn=u001.abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    let rendered = RichBodyText.attributedString(for: "Open \(longURL) now")
+    let renderedPlain = String(rendered.characters)
+    #expect(renderedPlain == "Open mail.example.com/ls/click… now")
+    let linkRuns = rendered.runs.compactMap(\.link)
+    #expect(linkRuns.map(\.absoluteString) == [longURL])
+  }
+
 }
 
 @MainActor
-private func hostedView<V: View>(_ view: V, size: CGSize) -> NSHostingView<V> {
+private func hostedWindow<V: View>(_ view: V, size: CGSize) -> NSWindow {
+  _ = NSApplication.shared
   let window = NSWindow(
-    contentRect: NSRect(origin: .zero, size: size),
+    contentRect: NSRect(origin: NSPoint(x: -20_000, y: -20_000), size: size),
     styleMask: [.titled, .closable, .resizable],
     backing: .buffered,
     defer: false
@@ -224,35 +278,42 @@ private func hostedView<V: View>(_ view: V, size: CGSize) -> NSHostingView<V> {
   let host = NSHostingView(rootView: view)
   host.frame = NSRect(origin: .zero, size: size)
   window.contentView = host
+  window.orderBack(nil)
   window.layoutIfNeeded()
   host.layoutSubtreeIfNeeded()
-  return host
+  host.displayIfNeeded()
+  RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+  return window
 }
 
 @MainActor
-private func assertNoTruncatedButtons(in root: NSView, expectedMinimumButtonCount: Int) {
-  let buttons = allButtons(in: root).filter { !$0.isHidden && !$0.title.isEmpty }
-  #expect(buttons.count >= expectedMinimumButtonCount)
-  for button in buttons {
-    let requiredWidth = button.fittingSize.width
-    let actualWidth = button.bounds.width
+private func assertRenderedButtonsFitTitles(_ expectedTitles: [String], in root: NSView) {
+  let renderedControls = renderedButtonFrames(in: root)
+  #expect(renderedControls.count == expectedTitles.count)
+  let labelFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+  for (title, frame) in zip(expectedTitles, renderedControls) {
+    let textWidth = (title as NSString).size(withAttributes: [.font: labelFont]).width
+    let minimumReadableWidth = ceil(textWidth) + 16
     #expect(
-      actualWidth >= requiredWidth - 1.0,
-      "Button '\(button.title)' truncated: actual width \(actualWidth)pt < fitting width \(requiredWidth)pt"
+      frame.width >= minimumReadableWidth,
+      "Button '\(title)' truncated: rendered width \(frame.width)pt < minimum \(minimumReadableWidth)pt (text \(textWidth)pt)"
     )
   }
 }
 
 @MainActor
-private func allButtons(in view: NSView) -> [NSButton] {
-  var result: [NSButton] = []
-  if let button = view as? NSButton {
-    result.append(button)
+private func renderedButtonFrames(in view: NSView) -> [CGRect] {
+  var result: [CGRect] = []
+  let typeName = String(describing: type(of: view))
+  if let button = view as? NSButton, !button.isHidden, button.bounds.width > 0 {
+    result.append(button.frame)
+  } else if typeName == "KeyViewProxy", !view.isHidden, view.frame.width > 0 {
+    result.append(view.frame)
   }
   for subview in view.subviews {
-    result.append(contentsOf: allButtons(in: subview))
+    result.append(contentsOf: renderedButtonFrames(in: subview))
   }
-  return result
+  return result.sorted { $0.minX < $1.minX }
 }
 
 private func isolatedUserDefaults() -> UserDefaults {

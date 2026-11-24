@@ -193,7 +193,21 @@ extension Trawl_Message_MessageRecord {
         peopleRelatedToMessage.map { $0.decodedPersonRelatedToArchiveRecord() },
       messageText: messageText,
       conversationDisplayName: conversationDisplayName,
-      messageMedia: hasMessageMedia ? try messageMedia.decodedMessageMedia() : nil)
+      messageMedia: hasMessageMedia ? try messageMedia.decodedMessageMedia() : nil,
+      messageDirectionRelativeToArchiveOwner:
+        messageDirectionRelativeToArchiveOwner.decodedMessageDirectionRelativeToArchiveOwner())
+  }
+}
+
+extension Trawl_Message_MessageDirectionRelativeToArchiveOwner {
+  fileprivate func decodedMessageDirectionRelativeToArchiveOwner()
+    -> MessageDirectionRelativeToArchiveOwner?
+  {
+    switch self {
+    case .sentByArchiveOwner: .sentByArchiveOwner
+    case .receivedFromOtherParticipant: .receivedFromOtherParticipant
+    case .unspecified, .UNRECOGNIZED: nil
+    }
   }
 }
 

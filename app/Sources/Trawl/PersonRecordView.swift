@@ -67,8 +67,11 @@ struct PersonRecordView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
-        guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
-        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
+        let anchor = targetAnchor.recordAnchorIdentifier
+        guard !anchor.isEmpty,
+          anchor != PersonRecordAnchorIdentifier.personDisplayName.recordAnchorIdentifier
+        else { return }
+        proxy.scrollTo(anchor, anchor: .top)
       }
     }
   }

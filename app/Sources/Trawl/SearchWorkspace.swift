@@ -133,7 +133,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
   }
 
   private var statusesByID: [RegisteredTrawlerIdentity: TrawlerStatus] {
-    Dictionary(uniqueKeysWithValues: trawlerStatuses.map { ($0.id, $0) })
+    Dictionary(trawlerStatuses.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
   }
 
   private var selectedScopeTrawler: RestingTrawler? {
@@ -348,23 +348,24 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
             earliestDateInclusive: committedInput.earliestMatchingArchiveRecordTimeInclusive,
             latestDateInclusive: committedInput.latestMatchingArchiveRecordTimeInclusive,
             searchMatchCountByRegisteredTrawler: Dictionary(
-              uniqueKeysWithValues: model.trawlerSearchResults.map {
+              model.trawlerSearchResults.map {
                 (
                   $0.registeredTrawler,
                   AppSearchMatchCount(
                     searchMatchCount: $0.totalSearchMatches,
                     isLowerBound: $0.totalSearchMatchesIsLowerBound)
                 )
-              }),
+              },
+              uniquingKeysWith: { _, latest in latest }
+            ),
             totalSearchMatchCount: AppSearchMatchCount(
               searchMatchCount: model.totalMatchedRecordCount,
               isLowerBound: model.totalMatchedCountIsLowerBound))
         }
-        let hasTextQuery = !interaction.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        // Only auto-open the first result on wide desktop layouts; narrow layouts stay on the list
-        // so typing never kicks the user out of their search results.
-        if hasTextQuery,
-          lastDetailWidth >= 740,
+        // Auto-open the first result on wide desktop layouts for both text search
+        // and browsing; narrow layouts stay on the list so typing never kicks the
+        // user out of their results.
+        if lastDetailWidth >= 740,
           interaction.selectedSearchMatchIdentifier == nil,
           let first = model.searchMatches.first
         {
@@ -759,14 +760,22 @@ struct SearchOutcome: View {
         timedOutLocally: timedOutLocally,
         timeoutSeconds: SearchModel.defaultWaitSeconds
       )
-      ContentUnavailableView {
-        Label(
-          OperationalCopy.Search.outcomeTitle(for: phase),
-          systemImage: phase == .complete ? "magnifyingglass" : "exclamationmark.circle"
-        )
-      } description: {
-        Text(detail.isEmpty ? "Try different words or clear your filters." : detail)
-      } actions: {
+      VStack(spacing: 14) {
+        Image(systemName: phase == .complete ? "magnifyingglass" : "exclamationmark.circle")
+          .font(TrawlDesign.Typography.pageTitle)
+          .imageScale(.large)
+          .foregroundStyle(.secondary)
+        VStack(spacing: 6) {
+          Text(OperationalCopy.Search.outcomeTitle(for: phase))
+            .font(TrawlDesign.Typography.itemTitle)
+            .foregroundStyle(.primary)
+          Text(detail.isEmpty ? "Try different words or clear your filters." : detail)
+            .font(TrawlDesign.Typography.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: 440)
         if showsRetryActions && (onRetry != nil || onOpenConnection != nil) {
           HStack(spacing: 10) {
             if let onOpenConnection {
@@ -780,9 +789,10 @@ struct SearchOutcome: View {
                 .fixedSize()
             }
           }
-          .fixedSize()
+          .padding(.top, 4)
         }
       }
+      .padding(24)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
   }

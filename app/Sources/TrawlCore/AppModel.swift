@@ -61,12 +61,18 @@ public final class AppModel {
       failures: statusOperationFailures,
       trawlersSkippedFromOperation: trawlersSkippedFromStatus
     )
-    let byID = Dictionary(uniqueKeysWithValues: runtimeTrawlers.map { ($0.id, $0) })
+    let byID = Dictionary(
+      runtimeTrawlers.map { ($0.id, $0) },
+      uniquingKeysWith: { _, latest in latest }
+    )
     return displayedTrawlers.compactMap { byID[$0] }
   }
 
   public var homeTrawlers: [RestingTrawler] {
-    let runtimeByID = Dictionary(uniqueKeysWithValues: restingTrawlers.map { ($0.id, $0) })
+    let runtimeByID = Dictionary(
+      restingTrawlers.map { ($0.id, $0) },
+      uniquingKeysWith: { _, latest in latest }
+    )
     return displayedTrawlers.compactMap { registeredTrawler in
       if let runtime = runtimeByID[registeredTrawler] { return runtime }
       guard

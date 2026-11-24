@@ -81,6 +81,11 @@ public enum ArchiveRecordAssociatedTimeForDisplay: Sendable, Equatable {
   case calendarDate(Date)
 }
 
+public enum MessageDirectionRelativeToArchiveOwner: Sendable, Equatable {
+  case sentByArchiveOwner
+  case receivedFromOtherParticipant
+}
+
 public struct MessageRecord: Sendable, Equatable, Identifiable {
   public let messageTime: ArchiveRecordAssociatedTimeForDisplay?
   public let canonicalRecordReference: CanonicalArchiveRecordReference
@@ -88,6 +93,25 @@ public struct MessageRecord: Sendable, Equatable, Identifiable {
   public let messageText: String
   public let conversationDisplayName: String
   public let messageMedia: MessageMedia?
+  public let messageDirectionRelativeToArchiveOwner: MessageDirectionRelativeToArchiveOwner?
+
+  public init(
+    messageTime: ArchiveRecordAssociatedTimeForDisplay?,
+    canonicalRecordReference: CanonicalArchiveRecordReference,
+    peopleRelatedToMessage: [PersonRelatedToArchiveRecord],
+    messageText: String,
+    conversationDisplayName: String,
+    messageMedia: MessageMedia?,
+    messageDirectionRelativeToArchiveOwner: MessageDirectionRelativeToArchiveOwner? = nil
+  ) {
+    self.messageTime = messageTime
+    self.canonicalRecordReference = canonicalRecordReference
+    self.peopleRelatedToMessage = peopleRelatedToMessage
+    self.messageText = messageText
+    self.conversationDisplayName = conversationDisplayName
+    self.messageMedia = messageMedia
+    self.messageDirectionRelativeToArchiveOwner = messageDirectionRelativeToArchiveOwner
+  }
 
   public var messageTextAndMediaDescription: String {
     let trimmedMessageText = messageText.trimmingCharacters(in: .whitespacesAndNewlines)

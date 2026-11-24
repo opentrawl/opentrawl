@@ -375,16 +375,25 @@ private struct SearchResultRow: View {
   let showsTrawlerDisplayName: Bool
   let isSelected: Bool
 
+  private static let genericTwitterRoleTitles: Set<String> = [
+    "like", "bookmark", "post", "repost", "mention", "reply", "dm",
+  ]
+
   private var displayTitle: String {
     let trimmed = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-    if Self.isRawChatIdentifier(trimmed) {
+    if Self.isRawChatIdentifier(trimmed)
+      || (searchMatch.registeredTrawler?.registeredTrawlerIdentity == "twitter"
+        && Self.genericTwitterRoleTitles.contains(trimmed.lowercased()))
+    {
       if let firstPerson = searchMatch.searchMatchPresentation.peopleRelatedToMatchingRecord
         .map({ $0.personDisplayName.trimmingCharacters(in: .whitespacesAndNewlines) })
         .first(where: { !$0.isEmpty && !Self.isRawChatIdentifier($0) })
       {
         return firstPerson
       }
-      return "\(registeredTrawlerDisplayName) conversation"
+      if Self.isRawChatIdentifier(trimmed) {
+        return "\(registeredTrawlerDisplayName) conversation"
+      }
     }
     return trimmed.isEmpty ? registeredTrawlerDisplayName : trimmed
   }

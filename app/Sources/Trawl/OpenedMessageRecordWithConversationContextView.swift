@@ -144,6 +144,8 @@ private struct OpenedMessageConversationContext: View {
           messageTime: message.messageTime,
           senderDisplayNames: senderDisplayNames(for: message),
           messageTextAndMediaDescription: message.messageTextAndMediaDescription,
+          isSentByArchiveOwner:
+            message.messageDirectionRelativeToArchiveOwner == .sentByArchiveOwner,
           isOpenedMessage: isOpenedMessage,
           highlightedTerms: isOpenedMessage ? highlightedTerms : []
         )
@@ -210,13 +212,30 @@ private struct OpenedMessageConversationRow: View {
   let messageTime: ArchiveRecordAssociatedTimeForDisplay?
   let senderDisplayNames: [String]
   let messageTextAndMediaDescription: String
+  let isSentByArchiveOwner: Bool
   let isOpenedMessage: Bool
   let highlightedTerms: [String]
 
   private static let bubbleMaximumWidth: CGFloat = 540
 
+  private var horizontalAlignment: HorizontalAlignment {
+    isSentByArchiveOwner ? .trailing : .leading
+  }
+
+  private var frameAlignment: Alignment {
+    isSentByArchiveOwner ? .trailing : .leading
+  }
+
+  private var bubbleFill: Color {
+    if isSentByArchiveOwner {
+      return TrawlDesign.Colors.ownMessageBubble
+    }
+    return isOpenedMessage
+      ? TrawlDesign.Colors.matchRed.opacity(0.06) : TrawlDesign.Colors.messageBubble
+  }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: horizontalAlignment, spacing: 4) {
       HStack(alignment: .firstTextBaseline, spacing: 6) {
         if !senderDisplayNames.isEmpty {
           Text(senderDisplayNames.formatted())
@@ -230,11 +249,13 @@ private struct OpenedMessageConversationRow: View {
             .foregroundStyle(TrawlDesign.Colors.matchRed)
         }
       }
-      .padding(.leading, 12)
+      .padding(isSentByArchiveOwner ? .trailing : .leading, 12)
 
-      HighlightedMessageText.styledText(
-        for: messageTextAndMediaDescription,
-        highlighting: highlightedTerms
+      Text(
+        RichBodyText.attributedString(
+          for: messageTextAndMediaDescription,
+          highlighting: highlightedTerms
+        )
       )
         .font(TrawlDesign.Typography.body)
         .lineSpacing(2)
@@ -242,20 +263,19 @@ private struct OpenedMessageConversationRow: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(
-          isOpenedMessage
-            ? TrawlDesign.Colors.matchRed.opacity(0.06) : TrawlDesign.Colors.messageBubble,
-          in: TrawlDesign.Shape.surface
-        )
+        .background(bubbleFill, in: TrawlDesign.Shape.surface)
         .overlay {
           if isOpenedMessage {
             TrawlDesign.Shape.surface
-              .strokeBorder(TrawlDesign.Colors.matchRed, lineWidth: 1.25)
+              .strokeBorder(TrawlDesign.Colors.matchRed, lineWidth: 1.5)
+          } else if isSentByArchiveOwner {
+            TrawlDesign.Shape.surface
+              .strokeBorder(TrawlDesign.Colors.ownMessageBubbleBorder, lineWidth: 1)
           }
         }
     }
-    .frame(maxWidth: Self.bubbleMaximumWidth, alignment: .leading)
-    .frame(maxWidth: .infinity, alignment: .leading)
+    .frame(maxWidth: Self.bubbleMaximumWidth, alignment: frameAlignment)
+    .frame(maxWidth: .infinity, alignment: frameAlignment)
   }
 }
 

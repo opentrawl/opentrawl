@@ -182,7 +182,10 @@ struct OpenTrawlSettingsView: View {
   // MARK: - Apps
 
   private var appsPane: some View {
-    let statusesByID = Dictionary(uniqueKeysWithValues: model.trawlerStatuses.map { ($0.id, $0) })
+    let statusesByID = Dictionary(
+      model.trawlerStatuses.map { ($0.id, $0) },
+      uniquingKeysWith: { _, latest in latest }
+    )
     let failuresByID = Dictionary(
       (model.statusOperationFailures + model.updateOperationFailures).map { ($0.failedTrawler, $0) },
       uniquingKeysWith: { _, latest in latest }

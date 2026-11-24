@@ -28,8 +28,12 @@ struct OpenedNoteRecordView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
-        guard !targetAnchor.recordAnchorIdentifier.isEmpty else { return }
-        proxy.scrollTo(targetAnchor.recordAnchorIdentifier, anchor: .center)
+        let anchor = targetAnchor.recordAnchorIdentifier
+        guard !anchor.isEmpty,
+          anchor != openedNoteRecord.noteDisplayNameAnchor.recordAnchorIdentifier,
+          anchor != openedNoteRecord.openedNoteBodyAnchor.recordAnchorIdentifier
+        else { return }
+        proxy.scrollTo(anchor, anchor: .top)
       }
     }
   }
@@ -90,8 +94,11 @@ private struct OpenedNoteRecordBody: View {
   var body: some View {
     switch openedNoteBody {
     case .available(let noteBodyText):
-      Text(noteBodyText)
+      Text(RichBodyText.attributedString(for: noteBodyText))
+        .font(TrawlDesign.Typography.body)
+        .lineSpacing(3)
         .textSelection(.enabled)
+        .fixedSize(horizontal: false, vertical: true)
         .id(openedNoteBodyAnchor.recordAnchorIdentifier)
     case .unavailable:
       ContentUnavailableView(

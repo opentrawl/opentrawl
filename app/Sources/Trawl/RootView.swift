@@ -122,6 +122,7 @@ struct RootView: View {
           isShowingXSignInSheet = false
         }
       )
+      .environment(trawlerIconStore)
     }
     .alert(
       "Could not connect account",
@@ -257,7 +258,8 @@ struct RootView: View {
 
   private var operabilityByID: [RegisteredTrawlerIdentity: AppOperabilityState] {
     let statusesByID = Dictionary(
-      uniqueKeysWithValues: model.trawlerStatuses.map { ($0.id, $0) }
+      model.trawlerStatuses.map { ($0.id, $0) },
+      uniquingKeysWith: { _, latest in latest }
     )
     let failuresByID = Dictionary(
       (model.statusOperationFailures + model.updateOperationFailures).map {
@@ -266,7 +268,7 @@ struct RootView: View {
       uniquingKeysWith: { _, latest in latest }
     )
     return Dictionary(
-      uniqueKeysWithValues: homeTrawlers.map { trawler in
+      homeTrawlers.map { trawler in
         (
           trawler.id,
           AppOperabilityState.resolve(
@@ -279,7 +281,8 @@ struct RootView: View {
             fullDiskAccessChoice: model.fullDiskAccessChoice
           )
         )
-      }
+      },
+      uniquingKeysWith: { _, latest in latest }
     )
   }
 
@@ -437,7 +440,8 @@ struct RootView: View {
 
   private var homeTrawlers: [RestingTrawler] {
     let statusesByID = Dictionary(
-      uniqueKeysWithValues: model.trawlerStatuses.map { ($0.id, $0) }
+      model.trawlerStatuses.map { ($0.id, $0) },
+      uniquingKeysWith: { _, latest in latest }
     )
     return model.homeTrawlers.filter { trawler in
       guard featureFlags.includes(trawler.id) else { return false }
@@ -611,16 +615,34 @@ struct FailureView: View {
   let retry: () -> Void
 
   var body: some View {
-    ContentUnavailableView {
-      Label(OperationalCopy.AppStatus.appsUnavailable, systemImage: "exclamationmark.triangle")
-    } description: {
-      if let detail, !detail.isEmpty {
-        Text(detail)
-      } else {
-        Text(OperationalCopy.AppStatus.statusCheckFailed)
-        Text(OperationalCopy.AppStatus.statusCheckRecovery)
+    VStack(spacing: 14) {
+      Image(systemName: "exclamationmark.triangle")
+        .font(TrawlDesign.Typography.pageTitle)
+        .imageScale(.large)
+        .foregroundStyle(.secondary)
+      VStack(spacing: 6) {
+        Text(OperationalCopy.AppStatus.appsUnavailable)
+          .font(TrawlDesign.Typography.itemTitle)
+          .foregroundStyle(.primary)
+        if let detail, !detail.isEmpty {
+          Text(detail)
+            .font(TrawlDesign.Typography.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+          Text(OperationalCopy.AppStatus.statusCheckFailed)
+            .font(TrawlDesign.Typography.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+          Text(OperationalCopy.AppStatus.statusCheckRecovery)
+            .font(TrawlDesign.Typography.meta)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+        }
       }
-    } actions: {
+      .frame(maxWidth: 440)
+
       HStack(spacing: 10) {
         if let onOpenConnection {
           Button(OperationalCopy.Connection.changeArchiveHost, action: onOpenConnection)
@@ -631,7 +653,9 @@ struct FailureView: View {
           .buttonStyle(.borderedProminent)
           .fixedSize()
       }
-      .fixedSize()
+      .padding(.top, 4)
     }
+    .padding(24)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
