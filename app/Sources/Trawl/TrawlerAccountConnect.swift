@@ -405,7 +405,7 @@ struct XWebSignInSheet: View {
               .foregroundStyle(.secondary)
           } else if let errorMessage {
             Image(systemName: "exclamationmark.triangle.fill")
-              .foregroundStyle(.orange)
+              .foregroundStyle(TrawlDesign.Colors.warningAmber)
             Text(errorMessage)
               .font(.callout)
               .fixedSize(horizontal: false, vertical: true)
@@ -451,7 +451,7 @@ struct XWebSignInSheet: View {
       if let errorMessage {
         HStack(spacing: 8) {
           Image(systemName: "exclamationmark.triangle.fill")
-            .foregroundStyle(.orange)
+            .foregroundStyle(TrawlDesign.Colors.warningAmber)
           Text(errorMessage)
             .font(.callout)
             .fixedSize(horizontal: false, vertical: true)
@@ -459,7 +459,7 @@ struct XWebSignInSheet: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-        .background(Color.orange.opacity(0.12))
+        .background(TrawlDesign.Colors.warningAmberSurface)
       }
 
       XLoginWebView(

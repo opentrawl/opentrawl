@@ -260,7 +260,7 @@ struct ArchiveOverviewView: View {
             .lineLimit(1)
           if needsAttention && inlineActionTitle == nil {
             Circle()
-              .fill(Color.orange)
+              .fill(TrawlDesign.Colors.warningAmber)
               .frame(width: 6, height: 6)
           }
         }
@@ -276,7 +276,8 @@ struct ArchiveOverviewView: View {
           onRunAttentionAction(trawler.id, action)
         }
         .buttonStyle(.bordered)
-        .controlSize(.mini)
+        .controlSize(.small)
+        .tint(TrawlDesign.Colors.warningAmber)
       }
 
       Spacer(minLength: 0)
@@ -292,7 +293,7 @@ struct ArchiveOverviewView: View {
         TrawlerIconView(registeredTrawler: trawler.id, size: 24)
         if op?.needsAttention == true {
           Circle()
-            .fill(Color.orange)
+            .fill(TrawlDesign.Colors.warningAmber)
             .frame(width: 7, height: 7)
             .offset(x: 3, y: -2)
         }
@@ -594,7 +595,7 @@ struct ArchiveOverviewView: View {
           if let hoveredWeek {
             Text(hoverSummary(for: hoveredWeek))
               .font(TrawlDesign.Typography.monoSmall)
-              .foregroundStyle(.secondary)
+              .foregroundStyle(TrawlDesign.Colors.matchRed)
               .lineLimit(1)
               .truncationMode(.tail)
           } else {
@@ -738,7 +739,7 @@ struct ArchiveOverviewView: View {
             let low = min(dragRange.startFraction, dragRange.currentFraction)
             let high = max(dragRange.startFraction, dragRange.currentFraction)
             Rectangle()
-              .fill(Color.accentColor.opacity(0.18))
+              .fill(TrawlDesign.Colors.matchRed.opacity(0.18))
               .frame(width: max(3, (high - low) * width), height: proxy.size.height)
               .offset(x: low * width)
           } else if let hoveredWeek, hoveredWeek.trawlerID == trawler.id {
@@ -815,7 +816,7 @@ struct ArchiveOverviewView: View {
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 6)
-    .background(isHoveredRow ? Color.accentColor.opacity(0.06) : Color.clear)
+    .background(isHoveredRow ? TrawlDesign.Colors.matchRed.opacity(0.05) : Color.clear)
   }
 
   private func utcWeekStart(for date: Date) -> Date {

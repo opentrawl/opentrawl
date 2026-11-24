@@ -22,7 +22,7 @@ enum TrawlStatus: Sendable, Equatable {
     case .neutral: .secondary
     case .working: .secondary
     case .success: .green
-    case .warning: .orange
+    case .warning: TrawlDesign.Colors.warningAmber
     case .failure: .red
     }
   }

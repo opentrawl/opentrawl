@@ -96,7 +96,7 @@ struct AppSidebarRailView: View {
         .lineLimit(1)
       if !isUndatedExcluded && operability?.needsAttention == true {
         Circle()
-          .fill(Color.orange)
+          .fill(TrawlDesign.Colors.warningAmber)
           .frame(width: 6, height: 6)
           .accessibilityLabel("\(trawler.registeredTrawlerDisplayName) needs attention")
       }

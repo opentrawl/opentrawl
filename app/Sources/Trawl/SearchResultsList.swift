@@ -158,7 +158,7 @@ struct SearchResultsList: View {
     if let loadMoreFailureMessage {
       HStack(spacing: 8) {
         Image(systemName: "exclamationmark.triangle.fill")
-          .foregroundStyle(.orange)
+          .foregroundStyle(TrawlDesign.Colors.warningAmber)
         Text(loadMoreFailureMessage)
           .font(TrawlDesign.Typography.meta)
           .foregroundStyle(.secondary)

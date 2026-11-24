@@ -353,6 +353,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
         systemImage: "calendar"
       )
       .labelStyle(.titleAndIcon)
+      .foregroundStyle(hasActiveDateRange ? TrawlDesign.Colors.matchRed : Color.primary)
     }
     .help("Choose dates")
     .popover(isPresented: $isShowingDatePicker, arrowEdge: .bottom) {
