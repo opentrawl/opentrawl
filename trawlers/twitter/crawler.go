@@ -80,7 +80,7 @@ func (c *Crawler) RegisteredTrawlerDeclaration() trawlkit.RegisteredTrawlerDecla
 		RegisteredTrawlerAliases:     []string{"x"},
 		RegisteredTrawlerDisplayName: "Twitter",
 		RegisteredTrawlerPrivacyBoundary: control.Privacy{
-			Reads:           "An X archive you import and, when connected, your posts, likes, bookmarks, mentions and direct messages from X (read-only via your web session or official X API credentials).",
+			Reads:           "An X archive you import and, when connected, your posts, likes, bookmarks, mentions and legacy direct messages from X (read-only via your web session or official X API credentials; encrypted XChat DMs are not supported yet).",
 			LeavesMachine:   "Nothing from your local archive is uploaded. Only explicit connect and update operations request your account data from X.",
 			NetworkRequests: "Web-session mode requests x.com (and abs.twimg.com bundles for query ID discovery); official API mode requests api.x.com. Import, search, browse and open are strictly local.",
 		},
@@ -143,7 +143,7 @@ func (c *Crawler) TrawlerCommands() []trawlkit.TrawlerCommand {
 		{
 			TrawlerCommandName:               "connect",
 			TrawlerCommandDiscoveryPlacement: trawlkit.TrawlerCommandShownOnlyInTrawlerNamespaceHelp,
-			TrawlerCommandHelpDescription:    "Connect an X web session (auth_token and ct0) for read-only syncing",
+			TrawlerCommandHelpDescription:    "Connect an X web session (auth_token and ct0) for read-only syncing (legacy DMs only; encrypted XChat not supported yet)",
 			RegisterTrawlerCommandFlags:      c.connectFlags,
 			TrawlerCommandChangesArchive:     true,
 			ExecuteTrawlerCommand: func(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
@@ -227,12 +227,12 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		counts = append(counts,
 			&status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 				ArchiveContentKindName:        "dm_messages",
-				ArchiveContentKindDisplayName: "DMs",
+				ArchiveContentKindDisplayName: "legacy DMs",
 				ArchiveContentCount:           uint64(max(archiveStatus.DMMessages, 0)),
 			},
 			&status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate{
 				ArchiveContentKindName:        "dm_conversations",
-				ArchiveContentKindDisplayName: "DM threads",
+				ArchiveContentKindDisplayName: "legacy DM threads",
 				ArchiveContentCount:           uint64(max(archiveStatus.DMConversations, 0)),
 			},
 		)
@@ -373,7 +373,7 @@ func (c *Crawler) connectFlags(fs *flag.FlagSet) {
 func (c *Crawler) updateFlags(fs *flag.FlagSet) {
 	c.updateOpts = updateFlags{}
 	fs.BoolVar(&c.updateOpts.force, "force", false, "Bypass the 15-minute web-session sync cooldown")
-	fs.BoolVar(&c.updateOpts.full, "full", false, "Sweep deeper bookmark, timeline and DM history instead of stopping at known records")
+	fs.BoolVar(&c.updateOpts.full, "full", false, "Sweep deeper bookmark, timeline and legacy DM history instead of stopping at known records")
 	fs.IntVar(&c.updateOpts.maxPages, "max-pages", 0, "Maximum pages to fetch per endpoint during this update")
 }
 

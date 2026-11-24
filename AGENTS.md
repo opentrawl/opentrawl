@@ -173,6 +173,16 @@ freezes an unproven design and makes the wrong implementation harder to remove.
 The same reasoning applies to guardrails, fallbacks, migration frameworks,
 compatibility layers and speculative performance work.
 
+## Branches and Cold QA
+
+Batch feature work on a branch and get Josh's design-direction sign-off before
+merging to `main`. Before cutting a release, and periodically on `main`, run a
+Cold QA pass with a fresh agent from another model family against a real local
+archive: exercise the CLI (`status`, `search`, `open`, `around`, `mcp`,
+`skill`, `--help`), the real `__app` wire protocol across every trawler, and a
+launch of the signed Mac app. Treat that real-archive end-to-end pass, rather
+than synthetic unit tests, as the release gate.
+
 ## Read raw inputs and outputs
 
 Whoever changes a step, command, model call or provider call reads its raw

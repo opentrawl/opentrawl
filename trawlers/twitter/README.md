@@ -12,10 +12,11 @@ It supports three explicit source paths:
 1. **Web session (`source = "web_session"`):** strictly read-only HTTP sync
    using your X browser session cookies (`auth_token` and `ct0`) stored at
    `~/.opentrawl/twitter/session.toml` (`0600`). Syncs bookmarks, authored
-   posts, mentions, likes and direct messages (both accepted and message
-   requests) with incremental stop-at-known-ID pagination, per-request pacing,
-   a 15-minute cooldown, per-endpoint rate-limit tracking and a session-expiry
-   circuit breaker.
+   posts, mentions, likes and legacy direct messages (accepted and message
+   requests; PIN-encrypted XChat DMs on `chat.x.com` are not supported yet) with
+   incremental stop-at-known-ID pagination, per-request pacing, a 15-minute
+   cooldown, per-endpoint rate-limit tracking and a session-expiry circuit
+   breaker.
 2. **Official X API v2 (`source = "official_api"`):** refreshes authored posts,
    mentions, likes, bookmarks and engagement counts with OAuth credentials in
    `~/.opentrawl/twitter/credentials.toml` (`0600`), metered locally against a
