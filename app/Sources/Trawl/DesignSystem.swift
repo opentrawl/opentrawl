@@ -53,6 +53,10 @@ enum TrawlDesign {
     static let selectBlue = Color.accentColor
     static let selectBlueSurface = Color.accentColor.opacity(0.14)
     static let warningAmber = Color.orange
+    static let warningAmberText = dynamicColor(
+      light: NSColor(srgbRed: 0.631, green: 0.361, blue: 0.027, alpha: 1.0),
+      dark: NSColor(srgbRed: 0.941, green: 0.694, blue: 0.267, alpha: 1.0)
+    )
     static let warningAmberSurface = Color.orange.opacity(0.12)
 
     static func dynamicColor(light: NSColor, dark: NSColor) -> Color {

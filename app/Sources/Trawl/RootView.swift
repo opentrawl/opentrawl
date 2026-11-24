@@ -306,6 +306,7 @@ struct RootView: View {
       }
       .padding(.horizontal, TrawlDesign.contentInset)
       .padding(.top, TrawlDesign.Space.md)
+      .padding(.bottom, TrawlDesign.Space.sm)
     }
     if let refreshFailure = model.statusRefreshFailure, !model.trawlerStatuses.isEmpty {
       StaleStatusBanner(
@@ -316,6 +317,7 @@ struct RootView: View {
       )
       .padding(.horizontal, TrawlDesign.contentInset)
       .padding(.top, TrawlDesign.Space.sm)
+      .padding(.bottom, TrawlDesign.Space.sm)
     }
   }
 
@@ -590,10 +592,10 @@ private struct StaleStatusBanner: View {
     .padding(.vertical, 8)
     .background(
       TrawlDesign.Colors.surface,
-      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface)
+      in: TrawlDesign.Shape.surface
     )
     .overlay {
-      RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface)
+      TrawlDesign.Shape.surface
         .stroke(TrawlDesign.Colors.warningAmber.opacity(0.45), lineWidth: 1)
     }
   }

@@ -52,10 +52,10 @@ struct RemoteArchiveConnectionView: View {
         .padding(10)
         .background(
           TrawlDesign.Colors.surface,
-          in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface)
+          in: TrawlDesign.Shape.surface
         )
         .overlay {
-          RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface)
+          TrawlDesign.Shape.surface
             .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
         }
       }
@@ -94,7 +94,7 @@ struct RemoteArchiveConnectionView: View {
       {
         Text(OperationalCopy.Connection.unencryptedHTTPWarning)
           .font(TrawlDesign.Typography.meta)
-          .foregroundStyle(TrawlDesign.Colors.warningAmber)
+          .foregroundStyle(TrawlDesign.Colors.warningAmberText)
           .fixedSize(horizontal: false, vertical: true)
       }
 

@@ -277,7 +277,7 @@ struct ArchiveOverviewView: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .tint(TrawlDesign.Colors.warningAmber)
+        .tint(TrawlDesign.Colors.warningAmberText)
       }
 
       Spacer(minLength: 0)

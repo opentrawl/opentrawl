@@ -225,10 +225,10 @@ struct OpenTrawlSettingsView: View {
       }
       .background(
         TrawlDesign.Colors.paper,
-        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+        in: TrawlDesign.Shape.surface
       )
       .overlay(
-        RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+        TrawlDesign.Shape.surface
           .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
       )
 
@@ -247,7 +247,7 @@ struct OpenTrawlSettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
           TrawlDesign.Colors.surface,
-          in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+          in: TrawlDesign.Shape.surface
         )
       }
     }
@@ -271,7 +271,7 @@ struct OpenTrawlSettingsView: View {
           .font(TrawlDesign.Typography.sectionHeader)
         Text(state.statusLine)
           .font(TrawlDesign.Typography.smallLabel)
-          .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmber : .secondary)
+          .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmberText : .secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
       Spacer(minLength: 10)
@@ -413,7 +413,7 @@ struct OpenTrawlSettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
               TrawlDesign.Colors.surface,
-              in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.control, style: .continuous)
+              in: TrawlDesign.Shape.control
             )
         }
         .padding(6)

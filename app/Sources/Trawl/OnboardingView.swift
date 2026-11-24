@@ -321,10 +321,10 @@ struct ChooseAppsStep: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
         selected ? TrawlDesign.Colors.selectBlueSurface : TrawlDesign.Colors.surface,
-        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+        in: TrawlDesign.Shape.surface
       )
       .overlay(
-        RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+        TrawlDesign.Shape.surface
           .stroke(
             selected ? TrawlDesign.Colors.selectBlue.opacity(0.5) : TrawlDesign.Colors.hairline,
             lineWidth: selected ? 1.5 : 1

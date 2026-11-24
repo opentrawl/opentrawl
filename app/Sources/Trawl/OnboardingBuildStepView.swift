@@ -208,10 +208,10 @@ private struct ArchiveTrawlerSummary: View {
       .frame(maxHeight: 310)
       .background(
         TrawlDesign.Colors.paper,
-        in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+        in: TrawlDesign.Shape.surface
       )
       .overlay(
-        RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+        TrawlDesign.Shape.surface
           .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
       )
     }
@@ -266,7 +266,7 @@ private struct ArchiveBuildRow: View {
       Spacer(minLength: TrawlDesign.Space.sm)
       Text(state.statusLine)
         .font(TrawlDesign.Typography.meta)
-        .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmber : TrawlDesign.Colors.mutedInk)
+        .foregroundStyle(state.needsAttention ? TrawlDesign.Colors.warningAmberText : TrawlDesign.Colors.mutedInk)
         .lineLimit(1)
         .truncationMode(.tail)
       if let actionTitle = state.actionTitle, let action = state.action {
@@ -328,7 +328,7 @@ private struct AIConnectionPanel: View {
     .padding(TrawlDesign.Space.md)
     .background(
       TrawlDesign.Colors.surface,
-      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+      in: TrawlDesign.Shape.surface
     )
   }
 }

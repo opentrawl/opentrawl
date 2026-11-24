@@ -411,10 +411,10 @@ struct PermissionRecoveryBanner: View {
     .padding(.vertical, TrawlDesign.Space.sm)
     .background(
       TrawlDesign.Colors.warningAmberSurface,
-      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+      in: TrawlDesign.Shape.surface
     )
     .overlay(
-      RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface, style: .continuous)
+      TrawlDesign.Shape.surface
         .stroke(TrawlDesign.Colors.warningAmber.opacity(0.35), lineWidth: 1)
     )
   }
