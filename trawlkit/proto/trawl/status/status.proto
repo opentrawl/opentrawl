@@ -28,6 +28,11 @@ enum ArchiveLiveSyncCredentialStatus {
   ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_CONNECTED = 4;
 }
 
+enum ArchiveCoverageLimitation {
+  ARCHIVE_COVERAGE_LIMITATION_UNSPECIFIED = 0;
+  ARCHIVE_COVERAGE_LIMITATION_TWITTER_LEGACY_DIRECT_MESSAGES_ONLY = 1;
+}
+
 message ArchiveWeeklyRecordCount {
   int64 utc_week_start_unix_seconds = 1;
   uint64 record_count = 2;
@@ -47,6 +52,7 @@ message TrawlerArchiveStatus {
   SourceAppSyncLiveness source_app_sync_liveness = 5;
   ArchiveLiveSyncCredentialStatus archive_live_sync_credential_status = 6;
   ArchiveWeeklyHistory archive_weekly_history = 7;
+  repeated ArchiveCoverageLimitation archive_coverage_limitations = 8;
 }
 
 message TrawlerStatusResponse {

@@ -279,6 +279,9 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.TrawlerCommandExecut
 		}
 	}
 	trawlerArchiveStatus.TrawlerArchiveCanAnswerCurrentCommands = works
+	trawlerArchiveStatus.ArchiveCoverageLimitations = []status.ArchiveCoverageLimitation{
+		status.ArchiveCoverageLimitation_ARCHIVE_COVERAGE_LIMITATION_TWITTER_LEGACY_DIRECT_MESSAGES_ONLY,
+	}
 	return response, nil
 }
 

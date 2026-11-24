@@ -108,6 +108,40 @@ public nonisolated enum Trawl_Status_ArchiveLiveSyncCredentialStatus: SwiftProto
 
 }
 
+public nonisolated enum Trawl_Status_ArchiveCoverageLimitation: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case twitterLegacyDirectMessagesOnly // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .twitterLegacyDirectMessagesOnly
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .twitterLegacyDirectMessagesOnly: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_Status_ArchiveCoverageLimitation] = [
+    .unspecified,
+    .twitterLegacyDirectMessagesOnly,
+  ]
+
+}
+
 public nonisolated struct Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -203,6 +237,8 @@ public nonisolated struct Trawl_Status_TrawlerArchiveStatus: Sendable {
   /// Clears the value of `archiveWeeklyHistory`. Subsequent reads from it will return its default value.
   public mutating func clearArchiveWeeklyHistory() {self._archiveWeeklyHistory = nil}
 
+  public var archiveCoverageLimitations: [Trawl_Status_ArchiveCoverageLimitation] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -253,6 +289,10 @@ nonisolated extension Trawl_Status_SourceAppSyncLiveness: SwiftProtobuf._ProtoNa
 
 nonisolated extension Trawl_Status_ArchiveLiveSyncCredentialStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_UNSPECIFIED\0\u{1}ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_APPLICABLE\0\u{1}ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_AVAILABLE\0\u{1}ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_REQUIRES_SIGNED_APP\0\u{1}ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_CONNECTED\0")
+}
+
+nonisolated extension Trawl_Status_ArchiveCoverageLimitation: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ARCHIVE_COVERAGE_LIMITATION_UNSPECIFIED\0\u{1}ARCHIVE_COVERAGE_LIMITATION_TWITTER_LEGACY_DIRECT_MESSAGES_ONLY\0")
 }
 
 nonisolated extension Trawl_Status_ArchiveContentCountAfterLastSuccessfullyCompletedUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -376,7 +416,7 @@ nonisolated extension Trawl_Status_ArchiveWeeklyHistory: SwiftProtobuf.Message, 
 
 nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TrawlerArchiveStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0\u{3}newest_archived_record_time\0\u{3}source_app_sync_liveness\0\u{3}archive_live_sync_credential_status\0\u{3}archive_weekly_history\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}archive_content_counts_after_last_successfully_completed_update\0\u{3}last_successfully_completed_archive_update_time\0\u{3}trawler_archive_can_answer_current_commands\0\u{3}newest_archived_record_time\0\u{3}source_app_sync_liveness\0\u{3}archive_live_sync_credential_status\0\u{3}archive_weekly_history\0\u{3}archive_coverage_limitations\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -391,6 +431,7 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
       case 5: try { try decoder.decodeSingularEnumField(value: &self.sourceAppSyncLiveness) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.archiveLiveSyncCredentialStatus) }()
       case 7: try { try decoder.decodeSingularMessageField(value: &self._archiveWeeklyHistory) }()
+      case 8: try { try decoder.decodeRepeatedEnumField(value: &self.archiveCoverageLimitations) }()
       default: break
       }
     }
@@ -422,6 +463,9 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     try { if let v = self._archiveWeeklyHistory {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     } }()
+    if !self.archiveCoverageLimitations.isEmpty {
+      try visitor.visitPackedEnumField(value: self.archiveCoverageLimitations, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -433,6 +477,7 @@ nonisolated extension Trawl_Status_TrawlerArchiveStatus: SwiftProtobuf.Message, 
     if lhs.sourceAppSyncLiveness != rhs.sourceAppSyncLiveness {return false}
     if lhs.archiveLiveSyncCredentialStatus != rhs.archiveLiveSyncCredentialStatus {return false}
     if lhs._archiveWeeklyHistory != rhs._archiveWeeklyHistory {return false}
+    if lhs.archiveCoverageLimitations != rhs.archiveCoverageLimitations {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

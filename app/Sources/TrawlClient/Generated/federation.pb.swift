@@ -549,39 +549,44 @@ public nonisolated struct Trawl_Federation_RegisteredTrawlerCatalogEntry: @unche
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Trawl_Federation_TrawlerStatusResult: Sendable {
+public nonisolated struct Trawl_Federation_TrawlerStatusResult: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   public var registeredTrawler: Trawl_Identity_RegisteredTrawlerIdentity {
-    get {_registeredTrawler ?? Trawl_Identity_RegisteredTrawlerIdentity()}
-    set {_registeredTrawler = newValue}
+    get {_storage._registeredTrawler ?? Trawl_Identity_RegisteredTrawlerIdentity()}
+    set {_uniqueStorage()._registeredTrawler = newValue}
   }
   /// Returns true if `registeredTrawler` has been explicitly set.
-  public var hasRegisteredTrawler: Bool {self._registeredTrawler != nil}
+  public var hasRegisteredTrawler: Bool {_storage._registeredTrawler != nil}
   /// Clears the value of `registeredTrawler`. Subsequent reads from it will return its default value.
-  public mutating func clearRegisteredTrawler() {self._registeredTrawler = nil}
+  public mutating func clearRegisteredTrawler() {_uniqueStorage()._registeredTrawler = nil}
 
-  public var registeredTrawlerCommandName: String = String()
+  public var registeredTrawlerCommandName: String {
+    get {_storage._registeredTrawlerCommandName}
+    set {_uniqueStorage()._registeredTrawlerCommandName = newValue}
+  }
 
-  public var registeredTrawlerDisplayName: String = String()
+  public var registeredTrawlerDisplayName: String {
+    get {_storage._registeredTrawlerDisplayName}
+    set {_uniqueStorage()._registeredTrawlerDisplayName = newValue}
+  }
 
   public var trawlerStatusResponse: Trawl_Status_TrawlerStatusResponse {
-    get {_trawlerStatusResponse ?? Trawl_Status_TrawlerStatusResponse()}
-    set {_trawlerStatusResponse = newValue}
+    get {_storage._trawlerStatusResponse ?? Trawl_Status_TrawlerStatusResponse()}
+    set {_uniqueStorage()._trawlerStatusResponse = newValue}
   }
   /// Returns true if `trawlerStatusResponse` has been explicitly set.
-  public var hasTrawlerStatusResponse: Bool {self._trawlerStatusResponse != nil}
+  public var hasTrawlerStatusResponse: Bool {_storage._trawlerStatusResponse != nil}
   /// Clears the value of `trawlerStatusResponse`. Subsequent reads from it will return its default value.
-  public mutating func clearTrawlerStatusResponse() {self._trawlerStatusResponse = nil}
+  public mutating func clearTrawlerStatusResponse() {_uniqueStorage()._trawlerStatusResponse = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _registeredTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
-  fileprivate var _trawlerStatusResponse: Trawl_Status_TrawlerStatusResponse? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Trawl_Federation_SearchPersonFilterResolution: Sendable {
@@ -1455,46 +1460,88 @@ nonisolated extension Trawl_Federation_TrawlerStatusResult: SwiftProtobuf.Messag
   public static let protoMessageName: String = _protobuf_package + ".TrawlerStatusResult"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registered_trawler\0\u{3}registered_trawler_command_name\0\u{3}registered_trawler_display_name\0\u{3}trawler_status_response\0")
 
+  fileprivate class _StorageClass {
+    var _registeredTrawler: Trawl_Identity_RegisteredTrawlerIdentity? = nil
+    var _registeredTrawlerCommandName: String = String()
+    var _registeredTrawlerDisplayName: String = String()
+    var _trawlerStatusResponse: Trawl_Status_TrawlerStatusResponse? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _registeredTrawler = source._registeredTrawler
+      _registeredTrawlerCommandName = source._registeredTrawlerCommandName
+      _registeredTrawlerDisplayName = source._registeredTrawlerDisplayName
+      _trawlerStatusResponse = source._trawlerStatusResponse
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._registeredTrawler) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerCommandName) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.registeredTrawlerDisplayName) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._trawlerStatusResponse) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._registeredTrawler) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._registeredTrawlerCommandName) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._registeredTrawlerDisplayName) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._trawlerStatusResponse) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._registeredTrawler {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if !self.registeredTrawlerCommandName.isEmpty {
-      try visitor.visitSingularStringField(value: self.registeredTrawlerCommandName, fieldNumber: 2)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._registeredTrawler {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if !_storage._registeredTrawlerCommandName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._registeredTrawlerCommandName, fieldNumber: 2)
+      }
+      if !_storage._registeredTrawlerDisplayName.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._registeredTrawlerDisplayName, fieldNumber: 3)
+      }
+      try { if let v = _storage._trawlerStatusResponse {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
     }
-    if !self.registeredTrawlerDisplayName.isEmpty {
-      try visitor.visitSingularStringField(value: self.registeredTrawlerDisplayName, fieldNumber: 3)
-    }
-    try { if let v = self._trawlerStatusResponse {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Federation_TrawlerStatusResult, rhs: Trawl_Federation_TrawlerStatusResult) -> Bool {
-    if lhs._registeredTrawler != rhs._registeredTrawler {return false}
-    if lhs.registeredTrawlerCommandName != rhs.registeredTrawlerCommandName {return false}
-    if lhs.registeredTrawlerDisplayName != rhs.registeredTrawlerDisplayName {return false}
-    if lhs._trawlerStatusResponse != rhs._trawlerStatusResponse {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._registeredTrawler != rhs_storage._registeredTrawler {return false}
+        if _storage._registeredTrawlerCommandName != rhs_storage._registeredTrawlerCommandName {return false}
+        if _storage._registeredTrawlerDisplayName != rhs_storage._registeredTrawlerDisplayName {return false}
+        if _storage._trawlerStatusResponse != rhs_storage._trawlerStatusResponse {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

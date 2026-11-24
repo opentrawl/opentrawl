@@ -68,6 +68,13 @@ func (output TrawlCommandOutput) WriteStatus(operation *federation.FederatedTraw
 		if err := writePhotosPipelineStatus(writer, result.GetTrawlerStatusResponse().GetPhotosPipelineStatus()); err != nil {
 			return err
 		}
+		for _, limitation := range result.GetTrawlerStatusResponse().GetTrawlerArchiveStatus().GetArchiveCoverageLimitations() {
+			if sentence := archiveCoverageLimitationSentence(limitation); sentence != "" {
+				if err := writeLines(writer, Wrap(sentence, OutputWidth(writer))); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	return output.WriteTrawlerOperationFailures(
 		operation.GetOperationFailures(),
@@ -132,4 +139,13 @@ func statusLastUpdate(archiveStatus *status.TrawlerArchiveStatus) string {
 
 func statusNewestArchivedRecord(archiveStatus *status.TrawlerArchiveStatus) string {
 	return formatExactTimeInThisComputerTimeZone(archiveStatus.GetNewestArchivedRecordTime(), localTimeWithUTCOffsetForListRow)
+}
+
+func archiveCoverageLimitationSentence(limitation status.ArchiveCoverageLimitation) string {
+	switch limitation {
+	case status.ArchiveCoverageLimitation_ARCHIVE_COVERAGE_LIMITATION_TWITTER_LEGACY_DIRECT_MESSAGES_ONLY:
+		return "Twitter archives legacy direct messages only, not encrypted X Chat messages."
+	default:
+		return ""
+	}
 }

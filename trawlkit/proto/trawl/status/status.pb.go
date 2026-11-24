@@ -130,6 +130,52 @@ func (ArchiveLiveSyncCredentialStatus) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_status_status_proto_rawDescGZIP(), []int{1}
 }
 
+type ArchiveCoverageLimitation int32
+
+const (
+	ArchiveCoverageLimitation_ARCHIVE_COVERAGE_LIMITATION_UNSPECIFIED                         ArchiveCoverageLimitation = 0
+	ArchiveCoverageLimitation_ARCHIVE_COVERAGE_LIMITATION_TWITTER_LEGACY_DIRECT_MESSAGES_ONLY ArchiveCoverageLimitation = 1
+)
+
+// Enum value maps for ArchiveCoverageLimitation.
+var (
+	ArchiveCoverageLimitation_name = map[int32]string{
+		0: "ARCHIVE_COVERAGE_LIMITATION_UNSPECIFIED",
+		1: "ARCHIVE_COVERAGE_LIMITATION_TWITTER_LEGACY_DIRECT_MESSAGES_ONLY",
+	}
+	ArchiveCoverageLimitation_value = map[string]int32{
+		"ARCHIVE_COVERAGE_LIMITATION_UNSPECIFIED":                         0,
+		"ARCHIVE_COVERAGE_LIMITATION_TWITTER_LEGACY_DIRECT_MESSAGES_ONLY": 1,
+	}
+)
+
+func (x ArchiveCoverageLimitation) Enum() *ArchiveCoverageLimitation {
+	p := new(ArchiveCoverageLimitation)
+	*p = x
+	return p
+}
+
+func (x ArchiveCoverageLimitation) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ArchiveCoverageLimitation) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_status_status_proto_enumTypes[2].Descriptor()
+}
+
+func (ArchiveCoverageLimitation) Type() protoreflect.EnumType {
+	return &file_trawl_status_status_proto_enumTypes[2]
+}
+
+func (x ArchiveCoverageLimitation) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ArchiveCoverageLimitation.Descriptor instead.
+func (ArchiveCoverageLimitation) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_status_status_proto_rawDescGZIP(), []int{2}
+}
+
 type ArchiveContentCountAfterLastSuccessfullyCompletedUpdate struct {
 	state                         protoimpl.MessageState `protogen:"open.v1"`
 	ArchiveContentKindName        string                 `protobuf:"bytes,1,opt,name=archive_content_kind_name,json=archiveContentKindName,proto3" json:"archive_content_kind_name,omitempty"`
@@ -311,6 +357,7 @@ type TrawlerArchiveStatus struct {
 	SourceAppSyncLiveness                                    SourceAppSyncLiveness                                      `protobuf:"varint,5,opt,name=source_app_sync_liveness,json=sourceAppSyncLiveness,proto3,enum=trawl.status.SourceAppSyncLiveness" json:"source_app_sync_liveness,omitempty"`
 	ArchiveLiveSyncCredentialStatus                          ArchiveLiveSyncCredentialStatus                            `protobuf:"varint,6,opt,name=archive_live_sync_credential_status,json=archiveLiveSyncCredentialStatus,proto3,enum=trawl.status.ArchiveLiveSyncCredentialStatus" json:"archive_live_sync_credential_status,omitempty"`
 	ArchiveWeeklyHistory                                     *ArchiveWeeklyHistory                                      `protobuf:"bytes,7,opt,name=archive_weekly_history,json=archiveWeeklyHistory,proto3" json:"archive_weekly_history,omitempty"`
+	ArchiveCoverageLimitations                               []ArchiveCoverageLimitation                                `protobuf:"varint,8,rep,packed,name=archive_coverage_limitations,json=archiveCoverageLimitations,proto3,enum=trawl.status.ArchiveCoverageLimitation" json:"archive_coverage_limitations,omitempty"`
 	unknownFields                                            protoimpl.UnknownFields
 	sizeCache                                                protoimpl.SizeCache
 }
@@ -394,6 +441,13 @@ func (x *TrawlerArchiveStatus) GetArchiveWeeklyHistory() *ArchiveWeeklyHistory {
 	return nil
 }
 
+func (x *TrawlerArchiveStatus) GetArchiveCoverageLimitations() []ArchiveCoverageLimitation {
+	if x != nil {
+		return x.ArchiveCoverageLimitations
+	}
+	return nil
+}
+
 type TrawlerStatusResponse struct {
 	state                protoimpl.MessageState     `protogen:"open.v1"`
 	TrawlerArchiveStatus *TrawlerArchiveStatus      `protobuf:"bytes,1,opt,name=trawler_archive_status,json=trawlerArchiveStatus,proto3" json:"trawler_archive_status,omitempty"`
@@ -461,7 +515,7 @@ const file_trawl_status_status_proto_rawDesc = "" +
 	"\x14ArchiveWeeklyHistory\x12Y\n" +
 	"\x1boldest_archived_record_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x18oldestArchivedRecordTime\x12\x83\x01\n" +
 	"+weekly_record_counts_in_chronological_order\x18\x02 \x03(\v2&.trawl.status.ArchiveWeeklyRecordCountR&weeklyRecordCountsInChronologicalOrder\x120\n" +
-	"\x14undated_record_count\x18\x03 \x01(\x04R\x12undatedRecordCount\"\xcf\x06\n" +
+	"\x14undated_record_count\x18\x03 \x01(\x04R\x12undatedRecordCount\"\xba\a\n" +
 	"\x14TrawlerArchiveStatus\x12\xc8\x01\n" +
 	"?archive_content_counts_after_last_successfully_completed_update\x18\x01 \x03(\v2E.trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdateR8archiveContentCountsAfterLastSuccessfullyCompletedUpdate\x12\x7f\n" +
 	"/last_successfully_completed_archive_update_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR*lastSuccessfullyCompletedArchiveUpdateTime\x12[\n" +
@@ -469,7 +523,8 @@ const file_trawl_status_status_proto_rawDesc = "" +
 	"\x1bnewest_archived_record_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x18newestArchivedRecordTime\x12\\\n" +
 	"\x18source_app_sync_liveness\x18\x05 \x01(\x0e2#.trawl.status.SourceAppSyncLivenessR\x15sourceAppSyncLiveness\x12{\n" +
 	"#archive_live_sync_credential_status\x18\x06 \x01(\x0e2-.trawl.status.ArchiveLiveSyncCredentialStatusR\x1farchiveLiveSyncCredentialStatus\x12X\n" +
-	"\x16archive_weekly_history\x18\a \x01(\v2\".trawl.status.ArchiveWeeklyHistoryR\x14archiveWeeklyHistory\"\xd0\x01\n" +
+	"\x16archive_weekly_history\x18\a \x01(\v2\".trawl.status.ArchiveWeeklyHistoryR\x14archiveWeeklyHistory\x12i\n" +
+	"\x1carchive_coverage_limitations\x18\b \x03(\x0e2'.trawl.status.ArchiveCoverageLimitationR\x1aarchiveCoverageLimitations\"\xd0\x01\n" +
 	"\x15TrawlerStatusResponse\x12X\n" +
 	"\x16trawler_archive_status\x18\x01 \x01(\v2\".trawl.status.TrawlerArchiveStatusR\x14trawlerArchiveStatus\x12]\n" +
 	"\x16photos_pipeline_status\x18\x02 \x01(\v2'.trawl.photos.step.PhotosPipelineStatusR\x14photosPipelineStatus*\xd4\x01\n" +
@@ -483,7 +538,10 @@ const file_trawl_status_status_proto_rawDesc = "" +
 	"2ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_APPLICABLE\x10\x01\x121\n" +
 	"-ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_AVAILABLE\x10\x02\x12;\n" +
 	"7ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_REQUIRES_SIGNED_APP\x10\x03\x125\n" +
-	"1ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_CONNECTED\x10\x04BCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;statusb\x06proto3"
+	"1ARCHIVE_LIVE_SYNC_CREDENTIAL_STATUS_NOT_CONNECTED\x10\x04*\x8d\x01\n" +
+	"\x19ArchiveCoverageLimitation\x12+\n" +
+	"'ARCHIVE_COVERAGE_LIMITATION_UNSPECIFIED\x10\x00\x12C\n" +
+	"?ARCHIVE_COVERAGE_LIMITATION_TWITTER_LEGACY_DIRECT_MESSAGES_ONLY\x10\x01BCZAgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/status;statusb\x06proto3"
 
 var (
 	file_trawl_status_status_proto_rawDescOnce sync.Once
@@ -497,35 +555,37 @@ func file_trawl_status_status_proto_rawDescGZIP() []byte {
 	return file_trawl_status_status_proto_rawDescData
 }
 
-var file_trawl_status_status_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_trawl_status_status_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_trawl_status_status_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_trawl_status_status_proto_goTypes = []any{
 	(SourceAppSyncLiveness)(0),                                      // 0: trawl.status.SourceAppSyncLiveness
 	(ArchiveLiveSyncCredentialStatus)(0),                            // 1: trawl.status.ArchiveLiveSyncCredentialStatus
-	(*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate)(nil), // 2: trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
-	(*ArchiveWeeklyRecordCount)(nil),                                // 3: trawl.status.ArchiveWeeklyRecordCount
-	(*ArchiveWeeklyHistory)(nil),                                    // 4: trawl.status.ArchiveWeeklyHistory
-	(*TrawlerArchiveStatus)(nil),                                    // 5: trawl.status.TrawlerArchiveStatus
-	(*TrawlerStatusResponse)(nil),                                   // 6: trawl.status.TrawlerStatusResponse
-	(*timestamppb.Timestamp)(nil),                                   // 7: google.protobuf.Timestamp
-	(*step.PhotosPipelineStatus)(nil),                               // 8: trawl.photos.step.PhotosPipelineStatus
+	(ArchiveCoverageLimitation)(0),                                  // 2: trawl.status.ArchiveCoverageLimitation
+	(*ArchiveContentCountAfterLastSuccessfullyCompletedUpdate)(nil), // 3: trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
+	(*ArchiveWeeklyRecordCount)(nil),                                // 4: trawl.status.ArchiveWeeklyRecordCount
+	(*ArchiveWeeklyHistory)(nil),                                    // 5: trawl.status.ArchiveWeeklyHistory
+	(*TrawlerArchiveStatus)(nil),                                    // 6: trawl.status.TrawlerArchiveStatus
+	(*TrawlerStatusResponse)(nil),                                   // 7: trawl.status.TrawlerStatusResponse
+	(*timestamppb.Timestamp)(nil),                                   // 8: google.protobuf.Timestamp
+	(*step.PhotosPipelineStatus)(nil),                               // 9: trawl.photos.step.PhotosPipelineStatus
 }
 var file_trawl_status_status_proto_depIdxs = []int32{
-	7,  // 0: trawl.status.ArchiveWeeklyHistory.oldest_archived_record_time:type_name -> google.protobuf.Timestamp
-	3,  // 1: trawl.status.ArchiveWeeklyHistory.weekly_record_counts_in_chronological_order:type_name -> trawl.status.ArchiveWeeklyRecordCount
-	2,  // 2: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_update:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
-	7,  // 3: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_update_time:type_name -> google.protobuf.Timestamp
-	7,  // 4: trawl.status.TrawlerArchiveStatus.newest_archived_record_time:type_name -> google.protobuf.Timestamp
+	8,  // 0: trawl.status.ArchiveWeeklyHistory.oldest_archived_record_time:type_name -> google.protobuf.Timestamp
+	4,  // 1: trawl.status.ArchiveWeeklyHistory.weekly_record_counts_in_chronological_order:type_name -> trawl.status.ArchiveWeeklyRecordCount
+	3,  // 2: trawl.status.TrawlerArchiveStatus.archive_content_counts_after_last_successfully_completed_update:type_name -> trawl.status.ArchiveContentCountAfterLastSuccessfullyCompletedUpdate
+	8,  // 3: trawl.status.TrawlerArchiveStatus.last_successfully_completed_archive_update_time:type_name -> google.protobuf.Timestamp
+	8,  // 4: trawl.status.TrawlerArchiveStatus.newest_archived_record_time:type_name -> google.protobuf.Timestamp
 	0,  // 5: trawl.status.TrawlerArchiveStatus.source_app_sync_liveness:type_name -> trawl.status.SourceAppSyncLiveness
 	1,  // 6: trawl.status.TrawlerArchiveStatus.archive_live_sync_credential_status:type_name -> trawl.status.ArchiveLiveSyncCredentialStatus
-	4,  // 7: trawl.status.TrawlerArchiveStatus.archive_weekly_history:type_name -> trawl.status.ArchiveWeeklyHistory
-	5,  // 8: trawl.status.TrawlerStatusResponse.trawler_archive_status:type_name -> trawl.status.TrawlerArchiveStatus
-	8,  // 9: trawl.status.TrawlerStatusResponse.photos_pipeline_status:type_name -> trawl.photos.step.PhotosPipelineStatus
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	5,  // 7: trawl.status.TrawlerArchiveStatus.archive_weekly_history:type_name -> trawl.status.ArchiveWeeklyHistory
+	2,  // 8: trawl.status.TrawlerArchiveStatus.archive_coverage_limitations:type_name -> trawl.status.ArchiveCoverageLimitation
+	6,  // 9: trawl.status.TrawlerStatusResponse.trawler_archive_status:type_name -> trawl.status.TrawlerArchiveStatus
+	9,  // 10: trawl.status.TrawlerStatusResponse.photos_pipeline_status:type_name -> trawl.photos.step.PhotosPipelineStatus
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_trawl_status_status_proto_init() }
@@ -538,7 +598,7 @@ func file_trawl_status_status_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_status_status_proto_rawDesc), len(file_trawl_status_status_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
