@@ -44,11 +44,11 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppStatus(
 	request *http.Request,
 	scope agentSourceScope,
 ) {
-	agentRequest := handler.service.newAgentRequestRuntime(request.Context(), scope)
+	agentRuntime := handler.service.newAgentRequestRuntime(request.Context(), scope)
 	scopedSnapshot := scope.registeredTrawlerManifestSnapshotAllowed(
 		handler.service.registeredTrawlerManifestSnapshotAtServerStart,
 	)
-	statusResponse := agentRequest.runtime.appStatusResponse(agentRequest.runtime.ctx, scopedSnapshot)
+	statusResponse := agentRuntime.appStatusResponse(agentRuntime.ctx, scopedSnapshot)
 	writeAppProtobufHTTPResponse(response, statusResponse)
 }
 
@@ -91,8 +91,8 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppSearch(
 		return
 	}
 
-	agentRequest := handler.service.newAgentRequestRuntime(request.Context(), scope)
-	trawlers := discoverInstalledTrawlers(agentRequest.runtime.ctx)
+	agentRuntime := handler.service.newAgentRequestRuntime(request.Context(), scope)
+	trawlers := discoverInstalledTrawlers(agentRuntime.ctx)
 	if requestedTrawlerID != "" {
 		if !scope.allowsSource(requestedTrawlerID) {
 			writeMCPHTTPError(response, http.StatusForbidden, "source is not allowed by this access token")
@@ -115,8 +115,8 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppSearch(
 		return
 	}
 	canonicalSearchQuery.SearchTotalIsLowerBoundWhenResultLimitIsReached = true
-	searchResponse := agentRequest.runtime.appSearchResponse(
-		agentRequest.runtime.ctx,
+	searchResponse := agentRuntime.appSearchResponse(
+		agentRuntime.ctx,
 		trawlers,
 		canonicalSearchQuery,
 		normalizedLimit,
@@ -148,8 +148,8 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppOpen(
 		return
 	}
 
-	agentRequest := handler.service.newAgentRequestRuntime(request.Context(), scope)
-	installedTrawlers := discoverInstalledTrawlers(agentRequest.runtime.ctx)
+	agentRuntime := handler.service.newAgentRequestRuntime(request.Context(), scope)
+	installedTrawlers := discoverInstalledTrawlers(agentRuntime.ctx)
 	if selectedTrawler, found := findInstalledTrawler(installedTrawlers, targetTrawlerIdentity); found {
 		if _, err := trawlersForSharedOperation(
 			[]InstalledTrawler{selectedTrawler},
@@ -160,8 +160,8 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppOpen(
 			return
 		}
 	}
-	openResponse := agentRequest.runtime.appOpenResponse(
-		agentRequest.runtime.ctx,
+	openResponse := agentRuntime.appOpenResponse(
+		agentRuntime.ctx,
 		route.RegisteredTrawler,
 		route.LocalShortReference,
 		trawlkit.NewRecordAnchorIdentifier(anchor),

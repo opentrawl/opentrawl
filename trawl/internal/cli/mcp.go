@@ -125,8 +125,9 @@ type mcpToolTextContent struct {
 }
 
 type mcpToolCallResult struct {
-	Content []mcpToolTextContent `json:"content"`
-	IsError bool                 `json:"isError"`
+	Content           []mcpToolTextContent `json:"content"`
+	StructuredContent json.RawMessage      `json:"structuredContent,omitempty"`
+	IsError           bool                 `json:"isError"`
 }
 
 type mcpHTTPErrorResponse struct {
@@ -299,10 +300,7 @@ func (service *agentArchiveService) handleMCPMessage(ctx context.Context, resolv
 	case "tools/call":
 		scope, err := resolveScope()
 		if err != nil {
-			encoded, marshalErr := json.Marshal(mcpToolCallResult{
-				Content: []mcpToolTextContent{{Type: "text", Text: err.Error()}},
-				IsError: true,
-			})
+			encoded, marshalErr := json.Marshal(mcpErrorToolCallResult(err.Error()))
 			if marshalErr != nil {
 				return mcpErrorResponse(request.ID, mcpErrorCodeInvalidRequest, "result could not be encoded: "+marshalErr.Error())
 			}
@@ -315,51 +313,17 @@ func (service *agentArchiveService) handleMCPMessage(ctx context.Context, resolv
 		if err := json.Unmarshal(request.Params, &parameters); err != nil {
 			return mcpErrorResponse(request.ID, mcpErrorCodeInvalidParameters, "tool arguments are not valid: "+err.Error())
 		}
-		run, known := service.mcpToolCommand(parameters.Name, parameters.Arguments)
+		toolResult, known := service.executeMCPToolCall(ctx, scope, parameters.Name, parameters.Arguments)
 		if !known {
 			return mcpErrorResponse(request.ID, mcpErrorCodeInvalidParameters, "unknown tool "+parameters.Name)
 		}
-		text, failed := service.runTrawlCommandForAgent(ctx, scope, run)
-		encoded, err := json.Marshal(mcpToolCallResult{
-			Content: []mcpToolTextContent{{Type: "text", Text: text}},
-			IsError: failed,
-		})
+		encoded, err := json.Marshal(toolResult)
 		if err != nil {
 			return mcpErrorResponse(request.ID, mcpErrorCodeInvalidRequest, "result could not be encoded: "+err.Error())
 		}
 		return mcpResultResponse(request.ID, encoded)
 	default:
 		return mcpErrorResponse(request.ID, mcpErrorCodeMethodNotFound, "method not found: "+request.Method)
-	}
-}
-
-// mcpToolCommand maps a read-only MCP tool call to the trawl command a person
-// would type.
-func (service *agentArchiveService) mcpToolCommand(toolName string, arguments mcpToolArguments) (func(*Runtime) error, bool) {
-	limitOrDefault := func(defaultLimit int) int {
-		if arguments.Limit > 0 {
-			return arguments.Limit
-		}
-		return defaultLimit
-	}
-	switch toolName {
-	case "trawl_search":
-		command := &SearchCmd{Query: strings.Fields(arguments.Query), Trawler: arguments.Trawler, Limit: limitOrDefault(20), After: arguments.After, Before: arguments.Before, Who: arguments.Who}
-		return command.Run, true
-	case "trawl_open":
-		command := &OpenCmd{Link: strings.TrimSpace(arguments.Link)}
-		return command.Run, true
-	case "trawl_around":
-		command := &AroundCmd{Target: strings.TrimSpace(arguments.Target), Trip: strings.TrimSpace(arguments.Trip), Window: arguments.Window, Trawler: arguments.Trawler, Limit: limitOrDefault(30)}
-		return command.Run, true
-	case "trawl_status":
-		command := &StatusCmd{Trawler: strings.TrimSpace(arguments.Trawler)}
-		return command.Run, true
-	case "trawl_who":
-		command := &WhoCmd{Name: strings.Fields(arguments.Name), Limit: limitOrDefault(20)}
-		return command.Run, true
-	default:
-		return nil, false
 	}
 }
 

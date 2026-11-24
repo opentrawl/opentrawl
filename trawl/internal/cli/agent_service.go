@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"os/exec"
 	"strings"
 	"time"
@@ -35,60 +34,20 @@ func newAgentArchiveService(ctx context.Context, stateRoot string) *agentArchive
 	}
 }
 
-// agentRequestRuntime is one agent request: a Runtime whose discovery is
-// scoped, and whose output library writes into buffers instead of a terminal.
-type agentRequestRuntime struct {
-	runtime        *Runtime
-	standardOutput *bytes.Buffer
-	standardError  *bytes.Buffer
-}
-
-func (service *agentArchiveService) newAgentRequestRuntime(ctx context.Context, scope agentSourceScope) agentRequestRuntime {
-	standardOutput, standardError := &bytes.Buffer{}, &bytes.Buffer{}
-	return agentRequestRuntime{
-		runtime: &Runtime{
-			ctx: withAgentServingContext(ctx, agentServingContext{
-				installedTrawlersDiscoveredAtServerStart: service.installedTrawlersDiscoveredAtServerStart,
-				agentSourceScope:                         scope,
-			}),
-			output:    render.NewTrawlCommandOutput(standardOutput, standardError, "trawl"),
-			root:      &CLI{},
-			now:       time.Now,
-			timeout:   registeredTrawlerCommandTimeout,
-			stateRoot: service.stateRoot,
-		},
-		standardOutput: standardOutput,
-		standardError:  standardError,
+// newAgentRequestRuntime builds a scoped Runtime for one MCP or remote archive
+// request.
+func (service *agentArchiveService) newAgentRequestRuntime(ctx context.Context, scope agentSourceScope) *Runtime {
+	return &Runtime{
+		ctx: withAgentServingContext(ctx, agentServingContext{
+			installedTrawlersDiscoveredAtServerStart: service.installedTrawlersDiscoveredAtServerStart,
+			agentSourceScope:                         scope,
+		}),
+		output:    render.NewTrawlCommandOutput(&bytes.Buffer{}, &bytes.Buffer{}, "trawl"),
+		root:      &CLI{},
+		now:       time.Now,
+		timeout:   registeredTrawlerCommandTimeout,
+		stateRoot: service.stateRoot,
 	}
-}
-
-// runTrawlCommandForAgent runs one trawl command and returns exactly what the
-// output library wrote, and whether the command failed.
-func (service *agentArchiveService) runTrawlCommandForAgent(ctx context.Context, scope agentSourceScope, run func(*Runtime) error) (string, bool) {
-	request := service.newAgentRequestRuntime(ctx, scope)
-	err := run(request.runtime)
-	failed := false
-	if err != nil {
-		var outcome commandOutcomeAlreadyShown
-		if errors.As(err, &outcome) {
-			failed = outcome.processExitCode != 0
-		} else {
-			failed = true
-			if failure, worded := render.AsCommandFailure(err); worded {
-				_ = request.runtime.output.WriteCommandFailure(failure)
-			} else {
-				_ = request.runtime.output.WriteCommandFailure(err)
-			}
-		}
-	}
-	text := strings.TrimRight(request.standardOutput.String(), "\n")
-	if errorText := strings.TrimSpace(request.standardError.String()); errorText != "" {
-		if text != "" {
-			text += "\n\n"
-		}
-		text += errorText
-	}
-	return text, failed
 }
 
 // detectTailscaleMagicDNSHostName returns this machine's MagicDNS name, such
