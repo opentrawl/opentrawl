@@ -20,6 +20,20 @@ public struct RemoteArchiveEndpointConfiguration: Sendable, Equatable {
     return host
   }
 
+  /// The first DNS label of a host name, which is how a person names a Mac
+  /// ("mac-mini" for "mac-mini.example.ts.net"). An IP address stays whole.
+  public static func shortDisplayHostName(for serverBaseURL: URL) -> String {
+    guard let host = serverBaseURL.host, !host.isEmpty else {
+      return serverBaseURL.absoluteString
+    }
+    let isIPAddress =
+      host.contains(":") || host.allSatisfy { $0.isNumber || $0 == "." }
+    guard !isIPAddress, let firstLabel = host.split(separator: ".").first else {
+      return host
+    }
+    return String(firstLabel)
+  }
+
   /// Stable origin identifier (`scheme://host[:port]`) used to bind saved
   /// Keychain tokens to one exact server so a token is never sent to another host.
   public static func originKey(for serverBaseURL: URL) -> String {

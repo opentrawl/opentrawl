@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import Security
 import TrawlClient
 
 public enum ArchiveConnectionMode: Sendable, Equatable {
@@ -13,10 +12,10 @@ public enum ArchiveConnectionMode: Sendable, Equatable {
 final class ArchiveConnectionStore {
   private static let modeKey = "OpenTrawlArchiveConnectionMode"
   private static let savedRemoteURLKey = "OpenTrawlRemoteArchiveURL"
-  private static let keychainService = "org.opentrawl.trawl.remote-archive"
 
   private let localClient: ProcessTrawlClient
   private let defaults: UserDefaults
+  private let accessTokenStorage: RemoteArchiveAccessTokenStorage
   let switchableClient: SwitchableTrawlClient
 
   private(set) var mode: ArchiveConnectionMode
@@ -40,6 +39,16 @@ final class ArchiveConnectionStore {
     }
   }
 
+  /// The host as a person names it: "mac-mini" for "mac-mini.example.ts.net".
+  var activeHostShortDisplayName: String {
+    switch mode {
+    case .localMac:
+      return OperationalCopy.Connection.thisMac
+    case .remoteArchive(let url):
+      return RemoteArchiveEndpointConfiguration.shortDisplayHostName(for: url)
+    }
+  }
+
   var activeRemoteURLString: String? {
     if case .remoteArchive(let url) = mode {
       return url.absoluteString
@@ -50,11 +59,13 @@ final class ArchiveConnectionStore {
   init(
     runtimeConfiguration: TrawlRuntimeConfiguration,
     defaults: UserDefaults = .standard,
-    environment: [String: String] = ProcessInfo.processInfo.environment
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    accessTokenStorage: RemoteArchiveAccessTokenStorage = .forRunningApp()
   ) {
     let local = ProcessTrawlClient(configuration: runtimeConfiguration)
     self.localClient = local
     self.defaults = defaults
+    self.accessTokenStorage = accessTokenStorage
 
     if let envConfig = RemoteArchiveEndpointConfiguration.fromEnvironment(environment) {
       self.mode = .remoteArchive(serverBaseURL: envConfig.serverBaseURL)
@@ -73,16 +84,19 @@ final class ArchiveConnectionStore {
     let parsedStoredURL = RemoteArchiveEndpointConfiguration.normalizedServerBaseURL(
       from: storedURLString)
     let storedOrigin = parsedStoredURL.map(RemoteArchiveEndpointConfiguration.originKey(for:))
-    let storedToken = storedOrigin.flatMap(Self.readBearerTokenFromKeychain(forOriginKey:))
 
     self.savedRemoteURLString = storedURLString
     self.savedRemoteOriginKey = storedOrigin
-    self.hasSavedBearerToken = storedToken != nil
+    self.hasSavedBearerToken =
+      storedOrigin.map(accessTokenStorage.hasAccessToken(forOriginKey:)) ?? false
     self.isEnvironmentOverride = false
 
+    // The token itself is read only to restore a remote connection, so a Mac
+    // that reads its own archive never opens secret storage at launch.
     if defaults.string(forKey: Self.modeKey) == "remote",
       let parsedStoredURL,
-      let storedToken,
+      let storedOrigin,
+      let storedToken = accessTokenStorage.readAccessToken(forOriginKey: storedOrigin),
       !storedToken.isEmpty
     {
       let config = RemoteArchiveEndpointConfiguration(
@@ -100,7 +114,7 @@ final class ArchiveConnectionStore {
   }
 
   /// True only when the entered server URL shares the exact origin of the
-  /// stored Keychain token so changing servers never reuses another host's token.
+  /// saved token so changing servers never reuses another host's token.
   func hasSavedBearerToken(for urlText: String) -> Bool {
     guard
       !isEnvironmentOverride,
@@ -135,7 +149,7 @@ final class ArchiveConnectionStore {
       effectiveToken = trimmedToken
     } else if !isEnvironmentOverride,
       candidateOrigin == savedRemoteOriginKey,
-      let savedToken = Self.readBearerTokenFromKeychain(forOriginKey: candidateOrigin),
+      let savedToken = accessTokenStorage.readAccessToken(forOriginKey: candidateOrigin),
       !savedToken.isEmpty
     {
       effectiveToken = savedToken
@@ -150,9 +164,9 @@ final class ArchiveConnectionStore {
     let candidateClient = HTTPTrawlClient(configuration: config)
     _ = try await candidateClient.status()
 
-    try Self.writeBearerTokenToKeychain(effectiveToken, forOriginKey: candidateOrigin)
+    try accessTokenStorage.writeAccessToken(effectiveToken, forOriginKey: candidateOrigin)
     if let previousOrigin = savedRemoteOriginKey, previousOrigin != candidateOrigin {
-      try? Self.deleteBearerTokenFromKeychain(forOriginKey: previousOrigin)
+      try? accessTokenStorage.deleteAccessToken(forOriginKey: previousOrigin)
     }
     defaults.set(normalizedURL.absoluteString, forKey: Self.savedRemoteURLKey)
     defaults.set("remote", forKey: Self.modeKey)
@@ -176,7 +190,7 @@ final class ArchiveConnectionStore {
 
   func forgetSavedRemoteArchive() throws {
     if let savedRemoteOriginKey {
-      try Self.deleteBearerTokenFromKeychain(forOriginKey: savedRemoteOriginKey)
+      try accessTokenStorage.deleteAccessToken(forOriginKey: savedRemoteOriginKey)
     }
     defaults.removeObject(forKey: Self.savedRemoteURLKey)
     defaults.set("local", forKey: Self.modeKey)
@@ -188,70 +202,6 @@ final class ArchiveConnectionStore {
       mode = .localMac
       switchableClient.replaceActiveClient(localClient)
       connectionRevision &+= 1
-    }
-  }
-
-  private static func readBearerTokenFromKeychain(forOriginKey originKey: String) -> String? {
-    let query: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: keychainService,
-      kSecAttrAccount as String: originKey,
-      kSecReturnData as String: true,
-      kSecMatchLimit as String: kSecMatchLimitOne,
-    ]
-    var item: CFTypeRef?
-    let status = SecItemCopyMatching(query as CFDictionary, &item)
-    guard status == errSecSuccess, let data = item as? Data else {
-      return nil
-    }
-    return String(data: data, encoding: .utf8)
-  }
-
-  private static func writeBearerTokenToKeychain(
-    _ token: String,
-    forOriginKey originKey: String
-  ) throws {
-    let tokenData = Data(token.utf8)
-    let baseQuery: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: keychainService,
-      kSecAttrAccount as String: originKey,
-    ]
-    let updateAttributes: [String: Any] = [
-      kSecValueData as String: tokenData,
-    ]
-    let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttributes as CFDictionary)
-    if updateStatus == errSecSuccess {
-      return
-    }
-    if updateStatus == errSecItemNotFound {
-      var addQuery = baseQuery
-      addQuery[kSecValueData as String] = tokenData
-      addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-      let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-      if addStatus == errSecSuccess {
-        return
-      }
-      throw TrawlClientError.remoteRequestRejected(
-        "Could not save the access token to Keychain (status \(addStatus))."
-      )
-    }
-    throw TrawlClientError.remoteRequestRejected(
-      "Could not update the access token in Keychain (status \(updateStatus))."
-    )
-  }
-
-  private static func deleteBearerTokenFromKeychain(forOriginKey originKey: String) throws {
-    let query: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: keychainService,
-      kSecAttrAccount as String: originKey,
-    ]
-    let status = SecItemDelete(query as CFDictionary)
-    guard status == errSecSuccess || status == errSecItemNotFound else {
-      throw TrawlClientError.remoteRequestRejected(
-        "Could not remove the saved access token from Keychain (status \(status))."
-      )
     }
   }
 }

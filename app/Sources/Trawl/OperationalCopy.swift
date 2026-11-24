@@ -83,7 +83,7 @@ enum OperationalCopy {
     static let serverAddressPlaceholder = "http://host.tailnet.ts.net:7391 or https://..."
     static let accessTokenLabel = "Access token"
     static let accessTokenPlaceholder = "otk_..."
-    static let savedAccessTokenPlaceholder = "Saved in Keychain for this host (leave blank to reuse)"
+    static let savedAccessTokenPlaceholder = "Saved for this host (leave blank to reuse)"
     static let unencryptedHTTPWarning =
       "Plain HTTP is blocked outside Tailscale and localhost. Use Tailscale or https://."
     static let hostSetupHint =

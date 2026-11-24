@@ -211,7 +211,7 @@ struct RootView: View {
       isShowingConnectionPopover.toggle()
     } label: {
       Label(
-        connectionStore.activeHostDisplayName,
+        connectionStore.activeHostShortDisplayName,
         systemImage: connectionStore.isRemote ? "network" : "desktopcomputer"
       )
       .labelStyle(.titleAndIcon)
@@ -345,7 +345,7 @@ struct RootView: View {
             featureFlags.includes($0.id)
           },
           operabilityByID: operabilityByID,
-          hostDisplayName: connectionStore.activeHostDisplayName,
+          hostDisplayName: connectionStore.activeHostShortDisplayName,
           freshnessLine: freshnessLine,
           isRemoteArchive: connectionStore.isRemote,
           hasCopiedAIPrompt: hasCopiedAIInstructions,

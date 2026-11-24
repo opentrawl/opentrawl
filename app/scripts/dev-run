@@ -201,7 +201,27 @@ mv "$candidate_staging_directory" "$candidate_directory"
 staged_app="$candidate_app"
 remove_old_development_candidates
 
+# The app stays in the menu bar after its window closes, so an earlier
+# candidate is usually still running. Two candidates at once look like one app
+# with two versions. Stop the earlier one and its trawl helpers first.
+stop_running_development_apps() {
+  local running_development_processes='/OpenTrawl Dev\.app/Contents/(MacOS/Trawl|Helpers/trawl)'
+  pgrep -f "$running_development_processes" >/dev/null || return 0
+  echo "Stopping the OpenTrawl Dev app that is already running"
+  pkill -f "$running_development_processes" || true
+  local waited_tenths=0
+  while pgrep -f "$running_development_processes" >/dev/null; do
+    if [[ "$waited_tenths" -ge 100 ]]; then
+      echo "dev-run: the running OpenTrawl Dev app did not stop within 10 seconds" >&2
+      exit 1
+    fi
+    sleep 0.1
+    waited_tenths=$((waited_tenths + 1))
+  done
+}
+
 echo "Built $candidate_app"
 if [[ "$launch_candidate" -eq 1 ]]; then
-  open -n "$candidate_app"
+  stop_running_development_apps
+  open "$candidate_app"
 fi
