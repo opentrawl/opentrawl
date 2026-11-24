@@ -79,7 +79,7 @@ struct ArchiveOverviewView: View {
 
   var body: some View {
     GeometryReader { outerProxy in
-      let isHorizontalFlow = outerProxy.size.width >= 780
+      let isHorizontalFlow = outerProxy.size.width >= Self.narrowestHorizontalFlowWidth
 
       ScrollView {
         VStack(alignment: .leading, spacing: TrawlDesign.Space.lg) {
@@ -94,60 +94,80 @@ struct ArchiveOverviewView: View {
 
   // MARK: - Top: Borderless Constellation Flow with Anchored Coloured Arrows
 
-  private func constellationSection(isHorizontalFlow: Bool) -> some View {
-    VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
-      Text("Your archive")
-        .font(TrawlDesign.Typography.pageTitle)
-        .foregroundStyle(.primary)
+  private static let narrowestHorizontalFlowWidth: CGFloat = 1_080
+  private static let sourceAppChipWidth: CGFloat = 178
+  private static let sourceAppChipHeight: CGFloat = 30
+  private static let sourceAppChipSpacing: CGFloat = 8
+  private static let archiveHubWidth: CGFloat = 216
+  private static let destinationCardWidth: CGFloat = 328
 
-      Group {
-        if isHorizontalFlow {
-          horizontalConstellation
-        } else {
-          verticalConstellation
+  private func constellationSection(isHorizontalFlow: Bool) -> some View {
+    GroupBox {
+      VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
+        Text("Your archive")
+          .font(TrawlDesign.Typography.itemTitle)
+          .foregroundStyle(.primary)
+
+        Group {
+          if isHorizontalFlow {
+            horizontalConstellation
+          } else {
+            verticalConstellation
+          }
         }
-      }
-      .padding(.vertical, TrawlDesign.Space.sm)
-      .backgroundPreferenceValue(ConstellationAnchorPreferenceKey.self) { anchors in
-        GeometryReader { proxy in
-          Canvas { context, _ in
-            drawConstellationArrows(
-              in: &context,
-              anchors: anchors,
-              proxy: proxy,
-              isHorizontalFlow: isHorizontalFlow
-            )
+        .backgroundPreferenceValue(ConstellationAnchorPreferenceKey.self) { anchors in
+          GeometryReader { proxy in
+            Canvas { context, _ in
+              drawConstellationArrows(
+                in: &context,
+                anchors: anchors,
+                proxy: proxy,
+                isHorizontalFlow: isHorizontalFlow
+              )
+            }
           }
         }
       }
+      .padding(.horizontal, 12)
+      .padding(.top, 10)
+      .padding(.bottom, 14)
+    }
+  }
+
+  /// Apps alternate between two columns, and the second column sits half a row
+  /// lower. Read top to bottom, the nodes are then in app order, and the curve
+  /// of a first-column app runs through the gap between two second-column apps.
+  private var sourceAppColumns: some View {
+    let firstColumn = trawlers.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
+    let secondColumn = trawlers.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
+    return HStack(alignment: .top, spacing: TrawlDesign.Space.md) {
+      VStack(spacing: Self.sourceAppChipSpacing) {
+        ForEach(firstColumn) { sourceAppChip(for: $0) }
+      }
+      VStack(spacing: Self.sourceAppChipSpacing) {
+        ForEach(secondColumn) { sourceAppChip(for: $0) }
+      }
+      .padding(.top, (Self.sourceAppChipHeight + Self.sourceAppChipSpacing) / 2)
     }
   }
 
   private var horizontalConstellation: some View {
     HStack(alignment: .center, spacing: 0) {
-      VStack(alignment: .leading, spacing: 2) {
-        ForEach(trawlers) { trawler in
-          sourceAppRow(for: trawler)
-            .anchorPreference(key: ConstellationAnchorPreferenceKey.self, value: .bounds) {
-              [.source(trawler.id): $0]
-            }
-        }
-      }
-      .frame(width: 176, alignment: .leading)
+      sourceAppColumns
 
-      Spacer(minLength: 56)
+      Spacer(minLength: 44)
 
       archiveHubNode
-        .frame(minWidth: 214, maxWidth: 236)
+        .frame(width: Self.archiveHubWidth)
         .anchorPreference(key: ConstellationAnchorPreferenceKey.self, value: .bounds) {
           [.hub: $0]
         }
 
-      Spacer(minLength: 56)
+      Spacer(minLength: 44)
 
-      VStack(alignment: .leading, spacing: TrawlDesign.Space.md) {
+      VStack(alignment: .leading, spacing: 10) {
         if !isRemoteArchive {
-          destinationRow(
+          destinationCard(
             kind: .localAI,
             symbol: "terminal",
             title: "AI apps on this Mac",
@@ -156,7 +176,7 @@ struct ArchiveOverviewView: View {
             isProminent: true,
             action: onCopyAIPrompt
           )
-          destinationRow(
+          destinationCard(
             kind: .cloudAI,
             symbol: "globe",
             title: "AI on web or phone",
@@ -166,7 +186,7 @@ struct ArchiveOverviewView: View {
             action: onOpenAIAppsSettings
           )
         }
-        destinationRow(
+        destinationCard(
           kind: .otherMacs,
           symbol: "laptopcomputer.and.iphone",
           title: "Other Macs",
@@ -178,7 +198,7 @@ struct ArchiveOverviewView: View {
           action: onOpenOtherMacsSettings
         )
       }
-      .frame(maxWidth: 320, alignment: .leading)
+      .frame(width: Self.destinationCardWidth)
     }
     .frame(maxWidth: .infinity)
   }
@@ -236,9 +256,10 @@ struct ArchiveOverviewView: View {
     .frame(maxWidth: .infinity)
   }
 
-  private func sourceAppRow(for trawler: RestingTrawler) -> some View {
+  private func sourceAppChip(for trawler: RestingTrawler) -> some View {
     let op = operabilityByID[trawler.id]
     let needsAttention = op?.needsAttention == true
+    let archivedItemCount = op?.archivedItemCount ?? 0
     let inlineActionTitle: String? = {
       guard needsAttention, let action = op?.action else { return nil }
       switch action {
@@ -248,14 +269,14 @@ struct ArchiveOverviewView: View {
       }
     }()
 
-    return HStack(spacing: TrawlDesign.Space.sm) {
+    return HStack(spacing: 6) {
       Button {
         onBrowseApp(trawler.id)
       } label: {
-        HStack(spacing: TrawlDesign.Space.sm) {
-          TrawlerIconView(registeredTrawler: trawler.id, size: 20)
+        HStack(spacing: 6) {
+          TrawlerIconView(registeredTrawler: trawler.id, size: 16)
           Text(trawler.registeredTrawlerDisplayName)
-            .font(TrawlDesign.Typography.body)
+            .font(TrawlDesign.Typography.meta.weight(.medium))
             .foregroundStyle(.primary)
             .lineLimit(1)
           if needsAttention && inlineActionTitle == nil {
@@ -263,13 +284,17 @@ struct ArchiveOverviewView: View {
               .fill(TrawlDesign.Colors.warningAmber)
               .frame(width: 6, height: 6)
           }
+          Spacer(minLength: 4)
+          if inlineActionTitle == nil, archivedItemCount > 0 {
+            Text(archivedItemCount.formatted())
+              .font(TrawlDesign.Typography.smallNumber)
+              .foregroundStyle(.secondary)
+          }
         }
-        .padding(.vertical, 5)
-        .padding(.horizontal, 6)
+        .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
-      .help(op?.statusLine ?? trawler.registeredTrawlerDisplayName)
 
       if let inlineActionTitle, let action = op?.action {
         Button(inlineActionTitle) {
@@ -279,8 +304,20 @@ struct ArchiveOverviewView: View {
         .controlSize(.small)
         .tint(TrawlDesign.Colors.warningAmberText)
       }
-
-      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 9)
+    .frame(width: Self.sourceAppChipWidth, height: Self.sourceAppChipHeight)
+    .background(TrawlDesign.Colors.surface, in: TrawlDesign.Shape.control)
+    .overlay(
+      TrawlDesign.Shape.control
+        .strokeBorder(
+          needsAttention
+            ? TrawlDesign.Colors.warningAmber.opacity(0.55) : TrawlDesign.Colors.hairline,
+          lineWidth: 1)
+    )
+    .help(op?.statusLine ?? trawler.registeredTrawlerDisplayName)
+    .anchorPreference(key: ConstellationAnchorPreferenceKey.self, value: .bounds) {
+      [.source(trawler.id): $0]
     }
   }
 
@@ -306,40 +343,49 @@ struct ArchiveOverviewView: View {
     .accessibilityLabel(trawler.registeredTrawlerDisplayName)
   }
 
+  private var archivedItemCountOfAllApps: UInt64 {
+    trawlers.reduce(UInt64(0)) { $0 + (operabilityByID[$1.id]?.archivedItemCount ?? 0) }
+  }
+
   private var archiveHubNode: some View {
     Button(action: onOpenHostSwitcher) {
-      HStack(spacing: 12) {
-        OpenTrawlMarkIcon(size: 36)
-        VStack(alignment: .leading, spacing: 2) {
-          HStack(spacing: 4) {
-            Text(hostDisplayName)
-              .font(TrawlDesign.Typography.itemTitle)
-              .foregroundStyle(.primary)
-              .lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down")
-              .font(TrawlDesign.Typography.smallLabel)
-              .foregroundStyle(.secondary)
-          }
-          Text(freshnessLine)
-            .font(TrawlDesign.Typography.meta)
-            .foregroundStyle(.secondary)
+      VStack(spacing: 5) {
+        OpenTrawlMarkIcon(size: 40)
+          .padding(.bottom, 3)
+        HStack(spacing: 4) {
+          Text(hostDisplayName)
+            .font(TrawlDesign.Typography.itemTitle)
+            .foregroundStyle(.primary)
             .lineLimit(1)
+          Image(systemName: "chevron.up.chevron.down")
+            .font(TrawlDesign.Typography.smallLabel)
+            .foregroundStyle(.secondary)
         }
-        Spacer(minLength: 0)
+        if archivedItemCountOfAllApps > 0 {
+          Text("\(archivedItemCountOfAllApps.formatted()) items")
+            .font(TrawlDesign.Typography.monoSmall.weight(.medium))
+            .foregroundStyle(.primary)
+        }
+        Text(freshnessLine)
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
       }
+      .frame(maxWidth: .infinity)
       .padding(.horizontal, 14)
-      .padding(.vertical, 12)
-      .background(.regularMaterial, in: TrawlDesign.Shape.surface)
+      .padding(.vertical, 16)
+      .background(TrawlDesign.Colors.surface, in: TrawlDesign.Shape.surface)
       .overlay(
         TrawlDesign.Shape.surface
-          .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+          .strokeBorder(TrawlDesign.Colors.hairline, lineWidth: 1)
       )
+      .shadow(color: .black.opacity(0.07), radius: 10, y: 3)
     }
     .buttonStyle(.plain)
     .help("Switch archive host")
   }
 
-  private func destinationRow(
+  private func destinationCard(
     kind: ConstellationDestinationKind,
     symbol: String,
     title: String,
@@ -377,8 +423,15 @@ struct ArchiveOverviewView: View {
           .controlSize(.small)
       }
     }
-    .padding(.vertical, 4)
-    .padding(.leading, 8)
+    .padding(12)
+    .background(TrawlDesign.Colors.surface, in: TrawlDesign.Shape.surface)
+    .overlay(
+      TrawlDesign.Shape.surface
+        .strokeBorder(
+          isProminent
+            ? TrawlDesign.Colors.selectBlue.opacity(0.40) : TrawlDesign.Colors.hairline,
+          lineWidth: 1)
+    )
     .anchorPreference(key: ConstellationAnchorPreferenceKey.self, value: .bounds) {
       [.destination(kind): $0]
     }
@@ -437,20 +490,35 @@ struct ArchiveOverviewView: View {
       isRemoteArchive ? [.otherMacs] : [.localAI, .cloudAI, .otherMacs]
 
     if isHorizontalFlow {
-      let sourceCount = max(1, trawlers.count)
-      for (index, trawler) in trawlers.enumerated() {
-        guard let sourceAnchor = anchors[.source(trawler.id)] else { continue }
-        let srcRect = proxy[sourceAnchor]
-        let start = CGPoint(x: srcRect.maxX + 4, y: srcRect.midY)
-        let hubYFraction = sourceCount == 1 ? 0.5 : (0.18 + 0.64 * Double(index) / Double(sourceCount - 1))
+      drawHubRings(in: &context, around: hubRect)
+
+      let sourceRects = trawlers.compactMap { trawler in
+        anchors[.source(trawler.id)].map { (trawler: trawler, rect: proxy[$0]) }
+      }
+      let secondColumnTrailingEdge = sourceRects.map(\.rect.maxX).max() ?? 0
+      let sourceCount = max(1, sourceRects.count)
+      for (index, source) in sourceRects.enumerated() {
+        let nodeEdge = CGPoint(x: source.rect.maxX, y: source.rect.midY)
+        let curveStart = CGPoint(x: secondColumnTrailingEdge + 4, y: source.rect.midY)
+        let hubYFraction =
+          sourceCount == 1 ? 0.5 : (0.12 + 0.76 * Double(index) / Double(sourceCount - 1))
         let end = CGPoint(
-          x: hubRect.minX - 6,
+          x: hubRect.minX - 5,
           y: hubRect.minY + hubRect.height * CGFloat(hubYFraction)
         )
-        let color = iconStore.laneAccentColor(for: trawler.id).opacity(0.60)
+        let color = iconStore.laneAccentColor(for: source.trawler.id).opacity(0.70)
+        if nodeEdge.x < curveStart.x - 4 {
+          var lineThroughSecondColumnGap = Path()
+          lineThroughSecondColumnGap.move(to: nodeEdge)
+          lineThroughSecondColumnGap.addLine(to: curveStart)
+          context.stroke(
+            lineThroughSecondColumnGap,
+            with: .color(color),
+            style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+        }
         drawCurvedArrow(
           in: &context,
-          from: start,
+          from: curveStart,
           to: end,
           horizontal: true,
           color: color,
@@ -467,11 +535,11 @@ struct ArchiveOverviewView: View {
           x: hubRect.maxX + 4,
           y: hubRect.minY + hubRect.height * CGFloat(hubYFraction)
         )
-        let end = CGPoint(x: dstRect.minX - 6, y: dstRect.midY)
+        let end = CGPoint(x: dstRect.minX - 5, y: dstRect.midY)
         let color: Color =
           kind == .localAI
-          ? Color.accentColor.opacity(0.70)
-          : Color(nsColor: .secondaryLabelColor).opacity(0.45)
+          ? Color.accentColor.opacity(0.75)
+          : Color(nsColor: .secondaryLabelColor).opacity(0.50)
         drawCurvedArrow(
           in: &context,
           from: start,
@@ -529,6 +597,20 @@ struct ArchiveOverviewView: View {
     }
   }
 
+  private func drawHubRings(in context: inout GraphicsContext, around hubRect: CGRect) {
+    let centre = CGPoint(x: hubRect.midX, y: hubRect.midY)
+    let ringColor = Color(nsColor: .separatorColor).opacity(0.75)
+    for (radius, dash) in [(hubRect.width / 2 + 22, [3.0, 4.0]), (hubRect.width / 2 + 66, [])] {
+      let ring = Path(
+        ellipseIn: CGRect(
+          x: centre.x - radius, y: centre.y - radius, width: radius * 2, height: radius * 2))
+      context.stroke(
+        ring,
+        with: .color(ringColor),
+        style: StrokeStyle(lineWidth: 1, dash: dash.map { CGFloat($0) }))
+    }
+  }
+
   private func drawCurvedArrow(
     in context: inout GraphicsContext,
     from start: CGPoint,
@@ -566,8 +648,8 @@ struct ArchiveOverviewView: View {
     let ux = length > 0.001 ? dx / length : (horizontal ? 1 : 0)
     let uy = length > 0.001 ? dy / length : (horizontal ? 0 : 1)
 
-    let arrowLength: CGFloat = 6.5
-    let arrowHalfWidth: CGFloat = 3.2
+    let arrowLength: CGFloat = 6
+    let arrowHalfWidth: CGFloat = 3
     let base = CGPoint(x: end.x - ux * arrowLength, y: end.y - uy * arrowLength)
     let left = CGPoint(x: base.x - uy * arrowHalfWidth, y: base.y + ux * arrowHalfWidth)
     let right = CGPoint(x: base.x + uy * arrowHalfWidth, y: base.y - ux * arrowHalfWidth)
