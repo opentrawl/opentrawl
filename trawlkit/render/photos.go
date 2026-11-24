@@ -29,6 +29,12 @@ func PhotosRecardNeedsCardStep() CommandFailure {
 func PhotosCardRunNeedsSelection() CommandFailure {
 	return commandIsWrong("Card runs need --photo or --limit.")
 }
+func ApplePhotosDoesNotAllowPictureFetching() CommandFailure {
+	return archiveOrOperationFailed("Apple Photos does not give OpenTrawl full access, so pictures cannot be fetched.")
+}
+func PhotosPictureMirrorFolderIsMissing(pictureMirrorFolderPath string) CommandFailure {
+	return archiveOrOperationFailed("The picture mirror folder " + pictureMirrorFolderPath + " is not there.")
+}
 func PhotosStepsNotBuilt(steps []photosstep.PhotosStepName) CommandFailure {
 	failure := archiveOrOperationFailed(photosStepsNotBuiltSentence(steps))
 	failure.photosStepsNotBuilt = append([]photosstep.PhotosStepName(nil), steps...)
@@ -58,8 +64,6 @@ func writePhotosStepRunResponse(writer io.Writer, response *photosstep.PhotosSte
 			input = typedInput.FetchPictureRequest
 		case *photosstep.PhotosStepRunItem_LookUpPlacesNearSpotRequest:
 			input = typedInput.LookUpPlacesNearSpotRequest
-		case *photosstep.PhotosStepRunItem_WriteCardModelInputRequest:
-			input = typedInput.WriteCardModelInputRequest
 		case *photosstep.PhotosStepRunItem_WritePhotoCardRequest:
 			input = typedInput.WritePhotoCardRequest
 		}
@@ -70,8 +74,6 @@ func writePhotosStepRunResponse(writer io.Writer, response *photosstep.PhotosSte
 			output = typedOutput.PictureFetchResult
 		case *photosstep.PhotosStepRunItem_NearbyPlacesLookupResult:
 			output = typedOutput.NearbyPlacesLookupResult
-		case *photosstep.PhotosStepRunItem_PhotoCardModelInput:
-			output = typedOutput.PhotoCardModelInput
 		case *photosstep.PhotosStepRunItem_PhotoCard:
 			output = typedOutput.PhotoCard
 		}

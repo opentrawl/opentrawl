@@ -163,6 +163,7 @@ select
   a.ZHIDDEN,
   a.ZADJUSTMENTSSTATE,
   cast(a.ZMODIFICATIONDATE as real),
+  cast(a.ZADJUSTMENTTIMESTAMP as real),
   trip.ZUUID
 from ZASSET a
 join ZADDITIONALASSETATTRIBUTES aa on aa.ZASSET = a.Z_PK
@@ -228,6 +229,7 @@ func readApplePhotoRows(
 			isFavourite, isHidden                 sql.NullBool
 			adjustmentsState                      sql.NullInt32
 			modificationSecondsSinceAppleEpoch    sql.NullFloat64
+			adjustmentSecondsSinceAppleEpoch      sql.NullFloat64
 			tripUUID                              sql.NullString
 		)
 		if err := rows.Scan(
@@ -240,7 +242,7 @@ func readApplePhotoRows(
 			&cameraMake, &cameraModel, &lensModel, &focalLengthMillimetres, &focalLength35mmEquivalentMillimetres,
 			&apertureFNumber, &exposureTimeSeconds, &isoSpeed,
 			&pixelWidth, &pixelHeight, &durationSeconds, &burstUUID, &caption, &title,
-			&isFavourite, &isHidden, &adjustmentsState, &modificationSecondsSinceAppleEpoch, &tripUUID,
+			&isFavourite, &isHidden, &adjustmentsState, &modificationSecondsSinceAppleEpoch, &adjustmentSecondsSinceAppleEpoch, &tripUUID,
 		); err != nil {
 			return nil, nil, fmt.Errorf("read Apple photo row: %w", err)
 		}
@@ -310,6 +312,9 @@ func readApplePhotoRows(
 		}
 		if modificationSecondsSinceAppleEpoch.Valid {
 			applePhotoFacts.AppleModificationTimeUtc = timestampFromAppleSeconds(modificationSecondsSinceAppleEpoch.Float64)
+		}
+		if adjustmentSecondsSinceAppleEpoch.Valid {
+			applePhotoFacts.AppleAdjustmentTimeUtc = timestampFromAppleSeconds(adjustmentSecondsSinceAppleEpoch.Float64)
 		}
 		if tripUUID.Valid {
 			applePhotoFacts.AppleTripUuids = []string{tripUUID.String}

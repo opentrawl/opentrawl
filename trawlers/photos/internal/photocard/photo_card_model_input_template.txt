@@ -1,0 +1,88 @@
+Write a searchable record of this photo from a person's library. Future readers and search will rely on this text instead of seeing the image.
+
+Use the photo as primary truth. The metadata and OpenStreetMap places below are clues: phone GPS indoors and phone compasses can be inaccurate, and the actual place shown may or may not appear in the list. Never invent text or guess a place that the photo itself does not support; state uncertainty plainly.
+
+# When
+Taken {{.CaptureLocalTime}}.
+{{- range .AppleTrips}}
+Part of a trip Apple Photos found: {{.}}.
+{{- end}}
+{{- with .AppleMomentTitle}}
+Apple Photos groups it with other photos as "{{.}}".
+{{- end}}
+
+# The picture
+{{.PictureDescription}}
+{{- with .CameraAndSettings}}
+Camera: {{.}}.
+{{- end}}
+
+# Where the camera stood
+{{- if not .CameraPositionIsKnown}}
+Apple Photos has no camera position for this photo.
+{{- else}}
+{{- with .AppleStoredPlace}}
+Apple Photos' place for this position, written when the photo was taken: {{.}}.
+{{- end}}
+{{- with .AppleStoredPlaceAreas}}
+Areas Apple Photos lists around it: {{.}}.
+{{- end}}
+Position {{.CameraPosition}}.
+{{.CameraDirection}}
+{{- with .KnownPlace}}
+{{.}}
+{{- end}}
+
+# Named places near the camera
+{{- if .NearbyPlaces}}
+From OpenStreetMap, nearest first (name, kind, distance and compass direction from the recorded GPS point; the map is today's map, so businesses may have changed):
+{{- range .NearbyPlaces}}
+- {{.}}
+{{- end}}
+{{- else}}
+{{.NearbyPlacesAbsenceReason}}
+{{- end}}
+{{- end}}
+
+# What Apple Photos already knows
+{{- with .AppleNamedPeople}}
+People Apple Photos has named in this photo: {{.}}.
+{{- end}}
+{{- with .AppleCaption}}
+Caption the person wrote: "{{.}}".
+{{- end}}
+{{- with .AppleTitle}}
+Title the person wrote: "{{.}}".
+{{- end}}
+{{- with .AppleAlbums}}
+Albums: {{.}}.
+{{- end}}
+{{- if .AppleIsFavourite}}
+The person marked it as a favourite.
+{{- end}}
+{{- with .AppleRecognisedTextLines}}
+On-device text Apple Photos read (often wrong on vertical, curved or styled writing; read the picture yourself):
+{{- range .}}
+  {{.}}
+{{- end}}
+{{- end}}
+{{- if .AppleKnowsNothingMore}}
+Nothing more.
+{{- end}}
+
+# What to write
+Answer in plain text with exactly these four headings, in this order, nothing before or after:
+
+## Summary
+One specific sentence describing what the photo shows.
+
+## Description
+Thorough, concrete prose so someone who cannot see the photo can picture the scene, people, actions, setting, lighting, weather and notable details. Describe what is in the picture; do not repeat coordinates or camera settings.
+
+## Visible text
+Readable text in the picture, grouped by location with "### <where>" headings, exact script and line breaks, and at most one "English: ..." line at the end of a non-English group. Use "[?]" for an unreadable character inside a readable line, and omit labels that cannot be read at all (mention them in Description instead). Write "None." if there is no readable text.
+
+## Place shown
+Two lines:
+Name: the most specific place the photo actually shows followed by its wider area, or "None" if it shows no place (such as a screenshot), or "Unknown" if the surroundings cannot be identified.
+Reasoning: one sentence explaining the evidence.

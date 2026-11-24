@@ -2,11 +2,14 @@ package photos
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photocard"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photosarchive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photospipeline"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/picturefetch"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
@@ -30,7 +33,7 @@ func (c *Crawler) registerPhotosStepRunCommandFlags(flagSet *flag.FlagSet) {
 	flagSet.IntVar(&c.runCommandFlags.limit, "limit", photosarchive.NoWorkListLimit, "Run the step on at most `N` pending items, newest first")
 	flagSet.BoolVar(&c.runCommandFlags.runWithoutStoringOutput, "no-write", false, "Run the step and store nothing")
 	flagSet.BoolVar(&c.runCommandFlags.retryPermanentlyFailedWork, "retry-failed", false, "Run again on items whose failure has no retry time")
-	flagSet.BoolVar(&c.runCommandFlags.remakeStaleCards, "recard", false, "Remake cards whose card model input has changed")
+	flagSet.BoolVar(&c.runCommandFlags.remakeStaleCards, "recard", false, "Remake written cards whose card model input or card model has changed")
 }
 
 func (c *Crawler) runPhotosStepCommand(ctx context.Context, req *trawlkit.TrawlerCommandExecutionRequest) (*command.TrawlerCommandResponse, error) {
@@ -84,8 +87,22 @@ func (c *Crawler) runPhotosStepCommand(ctx context.Context, req *trawlkit.Trawle
 	if err != nil {
 		return nil, err
 	}
+	var photoCardWriting photospipeline.PhotoCardWriting
+	if photosStepName == photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD {
+		if photoCardWriting, err = c.photoCardWriting(req.TrawlerArchivePaths.TrawlerArchivePath); err != nil {
+			return nil, err
+		}
+	}
 	stepResponse := &photosstep.PhotosStepRunResponse{PhotosStepName: photosStepName}
-	photosPipeline := photospipeline.NewPhotosPipeline(photosArchive, applePhotosLibraryPath)
+	photosPipeline := photospipeline.NewPhotosPipeline(
+		photosArchive,
+		applePhotosLibraryPath,
+		c.fetchPictureStep(req.TrawlerArchivePaths.TrawlerArchivePath, !runFlags.runWithoutStoringOutput),
+		c.photonBaseURL(),
+		c.hasConfiguredPhotonBaseURL(),
+		photoCardWriting,
+	)
+	const maximumObservedStepItemsWithRawProviderBody = 20
 	stepRunResult, err := photosPipeline.RunPhotosStep(ctx, photosStepName, photospipeline.PhotosStepRunOptions{
 		WorkSelection: photospipeline.PhotosStepWorkSelection{
 			OnlyApplePhotoUUID:          runFlags.onlyApplePhotoUUID,
@@ -97,11 +114,24 @@ func (c *Crawler) runPhotosStepCommand(ctx context.Context, req *trawlkit.Trawle
 		},
 		StoreStepOutputs: !runFlags.runWithoutStoringOutput,
 		ObservePhotosStepItem: func(stepInput, stepOutput proto.Message) {
-			stepResponse.StepItems = append(stepResponse.StepItems, photosStepRunItem(stepInput, stepOutput))
+			includeRawProviderBody := runFlags.onlyApplePhotoUUID != "" ||
+				(runFlags.limit != photosarchive.NoWorkListLimit && runFlags.limit <= maximumObservedStepItemsWithRawProviderBody)
+			stepResponse.StepItems = append(stepResponse.StepItems, photosStepRunItem(stepInput, stepOutput, includeRawProviderBody))
 		},
 		PhotosRunLog: req.TrawlerCommandLog,
 	})
-	if err != nil {
+	var pictureMirrorFolderIsMissing *picturefetch.PictureMirrorFolderIsMissingError
+	var cardModelRefusedAccess *photocard.CardModelRefusedAccessError
+	switch {
+	case errors.Is(err, photospipeline.ErrNoCardModelConfigured):
+		return nil, render.PhotosCardModelIsNotConfigured()
+	case errors.As(err, &cardModelRefusedAccess):
+		return nil, render.PhotosCardModelRefusedAccess(cardModelRefusedAccess.CardModelRefusalMessage)
+	case errors.Is(err, picturefetch.ErrApplePhotosAccessNotGranted):
+		return nil, render.ApplePhotosDoesNotAllowPictureFetching()
+	case errors.As(err, &pictureMirrorFolderIsMissing):
+		return nil, render.PhotosPictureMirrorFolderIsMissing(pictureMirrorFolderIsMissing.PictureMirrorFolderPath)
+	case err != nil:
 		return nil, err
 	}
 	stepResponse.CompletedItemCount = uint64(stepRunResult.ItemCount)
@@ -111,7 +141,7 @@ func (c *Crawler) runPhotosStepCommand(ctx context.Context, req *trawlkit.Trawle
 	}, nil
 }
 
-func photosStepRunItem(stepInput, stepOutput proto.Message) *photosstep.PhotosStepRunItem {
+func photosStepRunItem(stepInput, stepOutput proto.Message, includeRawProviderBody bool) *photosstep.PhotosStepRunItem {
 	item := &photosstep.PhotosStepRunItem{}
 	switch input := stepInput.(type) {
 	case *photosstep.ReadAppleLibraryRequest:
@@ -120,8 +150,6 @@ func photosStepRunItem(stepInput, stepOutput proto.Message) *photosstep.PhotosSt
 		item.StepInput = &photosstep.PhotosStepRunItem_FetchPictureRequest{FetchPictureRequest: input}
 	case *photosstep.LookUpPlacesNearSpotRequest:
 		item.StepInput = &photosstep.PhotosStepRunItem_LookUpPlacesNearSpotRequest{LookUpPlacesNearSpotRequest: input}
-	case *photosstep.WriteCardModelInputRequest:
-		item.StepInput = &photosstep.PhotosStepRunItem_WriteCardModelInputRequest{WriteCardModelInputRequest: input}
 	case *photosstep.WritePhotoCardRequest:
 		item.StepInput = &photosstep.PhotosStepRunItem_WritePhotoCardRequest{WritePhotoCardRequest: input}
 	}
@@ -134,9 +162,13 @@ func photosStepRunItem(stepInput, stepOutput proto.Message) *photosstep.PhotosSt
 	case *photo.PictureFetchResult:
 		item.StepOutput = &photosstep.PhotosStepRunItem_PictureFetchResult{PictureFetchResult: output}
 	case *photo.NearbyPlacesLookupResult:
-		item.StepOutput = &photosstep.PhotosStepRunItem_NearbyPlacesLookupResult{NearbyPlacesLookupResult: output}
-	case *photo.PhotoCardModelInput:
-		item.StepOutput = &photosstep.PhotosStepRunItem_PhotoCardModelInput{PhotoCardModelInput: output}
+		observedOutput := output
+		if !includeRawProviderBody && len(output.GetProviderResponseBody()) > 0 {
+			clonedOutput := proto.Clone(output).(*photo.NearbyPlacesLookupResult)
+			clonedOutput.ProviderResponseBody = nil
+			observedOutput = clonedOutput
+		}
+		item.StepOutput = &photosstep.PhotosStepRunItem_NearbyPlacesLookupResult{NearbyPlacesLookupResult: observedOutput}
 	case *photo.PhotoCard:
 		item.StepOutput = &photosstep.PhotosStepRunItem_PhotoCard{PhotoCard: output}
 	}

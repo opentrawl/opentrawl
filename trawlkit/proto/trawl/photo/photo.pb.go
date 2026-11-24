@@ -192,10 +192,9 @@ func (PhotoCaptureTimeZoneSource) EnumDescriptor() ([]byte, []int) {
 type PictureFetchOutcome int32
 
 const (
-	PictureFetchOutcome_PICTURE_FETCH_OUTCOME_UNSPECIFIED             PictureFetchOutcome = 0
-	PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FETCHED                 PictureFetchOutcome = 1
-	PictureFetchOutcome_PICTURE_FETCH_OUTCOME_NOT_AVAILABLE_IN_ICLOUD PictureFetchOutcome = 2
-	PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED                  PictureFetchOutcome = 3
+	PictureFetchOutcome_PICTURE_FETCH_OUTCOME_UNSPECIFIED PictureFetchOutcome = 0
+	PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FETCHED     PictureFetchOutcome = 1
+	PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED      PictureFetchOutcome = 2
 )
 
 // Enum value maps for PictureFetchOutcome.
@@ -203,14 +202,12 @@ var (
 	PictureFetchOutcome_name = map[int32]string{
 		0: "PICTURE_FETCH_OUTCOME_UNSPECIFIED",
 		1: "PICTURE_FETCH_OUTCOME_FETCHED",
-		2: "PICTURE_FETCH_OUTCOME_NOT_AVAILABLE_IN_ICLOUD",
-		3: "PICTURE_FETCH_OUTCOME_FAILED",
+		2: "PICTURE_FETCH_OUTCOME_FAILED",
 	}
 	PictureFetchOutcome_value = map[string]int32{
-		"PICTURE_FETCH_OUTCOME_UNSPECIFIED":             0,
-		"PICTURE_FETCH_OUTCOME_FETCHED":                 1,
-		"PICTURE_FETCH_OUTCOME_NOT_AVAILABLE_IN_ICLOUD": 2,
-		"PICTURE_FETCH_OUTCOME_FAILED":                  3,
+		"PICTURE_FETCH_OUTCOME_UNSPECIFIED": 0,
+		"PICTURE_FETCH_OUTCOME_FETCHED":     1,
+		"PICTURE_FETCH_OUTCOME_FAILED":      2,
 	}
 )
 
@@ -239,6 +236,57 @@ func (x PictureFetchOutcome) Number() protoreflect.EnumNumber {
 // Deprecated: Use PictureFetchOutcome.Descriptor instead.
 func (PictureFetchOutcome) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{3}
+}
+
+type PictureSource int32
+
+const (
+	PictureSource_PICTURE_SOURCE_UNSPECIFIED PictureSource = 0
+	// A local copy of the library that the person configured.
+	PictureSource_PICTURE_SOURCE_PICTURE_MIRROR_FOLDER PictureSource = 1
+	// Apple Photos, which downloads the picture from iCloud when needed.
+	PictureSource_PICTURE_SOURCE_APPLE_PHOTOS PictureSource = 2
+)
+
+// Enum value maps for PictureSource.
+var (
+	PictureSource_name = map[int32]string{
+		0: "PICTURE_SOURCE_UNSPECIFIED",
+		1: "PICTURE_SOURCE_PICTURE_MIRROR_FOLDER",
+		2: "PICTURE_SOURCE_APPLE_PHOTOS",
+	}
+	PictureSource_value = map[string]int32{
+		"PICTURE_SOURCE_UNSPECIFIED":           0,
+		"PICTURE_SOURCE_PICTURE_MIRROR_FOLDER": 1,
+		"PICTURE_SOURCE_APPLE_PHOTOS":          2,
+	}
+)
+
+func (x PictureSource) Enum() *PictureSource {
+	p := new(PictureSource)
+	*p = x
+	return p
+}
+
+func (x PictureSource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PictureSource) Descriptor() protoreflect.EnumDescriptor {
+	return file_trawl_photo_photo_proto_enumTypes[4].Descriptor()
+}
+
+func (PictureSource) Type() protoreflect.EnumType {
+	return &file_trawl_photo_photo_proto_enumTypes[4]
+}
+
+func (x PictureSource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PictureSource.Descriptor instead.
+func (PictureSource) EnumDescriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{4}
 }
 
 type CameraBearingReference int32
@@ -274,11 +322,11 @@ func (x CameraBearingReference) String() string {
 }
 
 func (CameraBearingReference) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_photo_photo_proto_enumTypes[4].Descriptor()
+	return file_trawl_photo_photo_proto_enumTypes[5].Descriptor()
 }
 
 func (CameraBearingReference) Type() protoreflect.EnumType {
-	return &file_trawl_photo_photo_proto_enumTypes[4]
+	return &file_trawl_photo_photo_proto_enumTypes[5]
 }
 
 func (x CameraBearingReference) Number() protoreflect.EnumNumber {
@@ -287,28 +335,25 @@ func (x CameraBearingReference) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CameraBearingReference.Descriptor instead.
 func (CameraBearingReference) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{4}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{5}
 }
 
 type PlaceProvider int32
 
 const (
-	PlaceProvider_PLACE_PROVIDER_UNSPECIFIED                  PlaceProvider = 0
-	PlaceProvider_PLACE_PROVIDER_APPLE_MAP_POINTS_OF_INTEREST PlaceProvider = 1
-	PlaceProvider_PLACE_PROVIDER_OPENSTREETMAP_OVERPASS       PlaceProvider = 2
+	PlaceProvider_PLACE_PROVIDER_UNSPECIFIED          PlaceProvider = 0
+	PlaceProvider_PLACE_PROVIDER_OPENSTREETMAP_PHOTON PlaceProvider = 1
 )
 
 // Enum value maps for PlaceProvider.
 var (
 	PlaceProvider_name = map[int32]string{
 		0: "PLACE_PROVIDER_UNSPECIFIED",
-		1: "PLACE_PROVIDER_APPLE_MAP_POINTS_OF_INTEREST",
-		2: "PLACE_PROVIDER_OPENSTREETMAP_OVERPASS",
+		1: "PLACE_PROVIDER_OPENSTREETMAP_PHOTON",
 	}
 	PlaceProvider_value = map[string]int32{
-		"PLACE_PROVIDER_UNSPECIFIED":                  0,
-		"PLACE_PROVIDER_APPLE_MAP_POINTS_OF_INTEREST": 1,
-		"PLACE_PROVIDER_OPENSTREETMAP_OVERPASS":       2,
+		"PLACE_PROVIDER_UNSPECIFIED":          0,
+		"PLACE_PROVIDER_OPENSTREETMAP_PHOTON": 1,
 	}
 )
 
@@ -323,11 +368,11 @@ func (x PlaceProvider) String() string {
 }
 
 func (PlaceProvider) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_photo_photo_proto_enumTypes[5].Descriptor()
+	return file_trawl_photo_photo_proto_enumTypes[6].Descriptor()
 }
 
 func (PlaceProvider) Type() protoreflect.EnumType {
-	return &file_trawl_photo_photo_proto_enumTypes[5]
+	return &file_trawl_photo_photo_proto_enumTypes[6]
 }
 
 func (x PlaceProvider) Number() protoreflect.EnumNumber {
@@ -336,7 +381,7 @@ func (x PlaceProvider) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PlaceProvider.Descriptor instead.
 func (PlaceProvider) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{5}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{6}
 }
 
 type PlaceLookupOutcome int32
@@ -375,11 +420,11 @@ func (x PlaceLookupOutcome) String() string {
 }
 
 func (PlaceLookupOutcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_photo_photo_proto_enumTypes[6].Descriptor()
+	return file_trawl_photo_photo_proto_enumTypes[7].Descriptor()
 }
 
 func (PlaceLookupOutcome) Type() protoreflect.EnumType {
-	return &file_trawl_photo_photo_proto_enumTypes[6]
+	return &file_trawl_photo_photo_proto_enumTypes[7]
 }
 
 func (x PlaceLookupOutcome) Number() protoreflect.EnumNumber {
@@ -388,70 +433,6 @@ func (x PlaceLookupOutcome) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PlaceLookupOutcome.Descriptor instead.
 func (PlaceLookupOutcome) EnumDescriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{6}
-}
-
-type PhotoCardModelInputSectionName int32
-
-const (
-	PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_UNSPECIFIED                   PhotoCardModelInputSectionName = 0
-	PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_TIME                          PhotoCardModelInputSectionName = 1
-	PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA_POSITION_AND_DIRECTION PhotoCardModelInputSectionName = 2
-	PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_STORED_PLACE            PhotoCardModelInputSectionName = 3
-	PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_NEARBY_PLACES                 PhotoCardModelInputSectionName = 4
-	PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_KNOWN_PLACE                   PhotoCardModelInputSectionName = 5
-	PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA                        PhotoCardModelInputSectionName = 6
-	PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_PEOPLE_AND_TEXT         PhotoCardModelInputSectionName = 7
-)
-
-// Enum value maps for PhotoCardModelInputSectionName.
-var (
-	PhotoCardModelInputSectionName_name = map[int32]string{
-		0: "PHOTO_CARD_MODEL_INPUT_SECTION_NAME_UNSPECIFIED",
-		1: "PHOTO_CARD_MODEL_INPUT_SECTION_NAME_TIME",
-		2: "PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA_POSITION_AND_DIRECTION",
-		3: "PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_STORED_PLACE",
-		4: "PHOTO_CARD_MODEL_INPUT_SECTION_NAME_NEARBY_PLACES",
-		5: "PHOTO_CARD_MODEL_INPUT_SECTION_NAME_KNOWN_PLACE",
-		6: "PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA",
-		7: "PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_PEOPLE_AND_TEXT",
-	}
-	PhotoCardModelInputSectionName_value = map[string]int32{
-		"PHOTO_CARD_MODEL_INPUT_SECTION_NAME_UNSPECIFIED":                   0,
-		"PHOTO_CARD_MODEL_INPUT_SECTION_NAME_TIME":                          1,
-		"PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA_POSITION_AND_DIRECTION": 2,
-		"PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_STORED_PLACE":            3,
-		"PHOTO_CARD_MODEL_INPUT_SECTION_NAME_NEARBY_PLACES":                 4,
-		"PHOTO_CARD_MODEL_INPUT_SECTION_NAME_KNOWN_PLACE":                   5,
-		"PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA":                        6,
-		"PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_PEOPLE_AND_TEXT":         7,
-	}
-)
-
-func (x PhotoCardModelInputSectionName) Enum() *PhotoCardModelInputSectionName {
-	p := new(PhotoCardModelInputSectionName)
-	*p = x
-	return p
-}
-
-func (x PhotoCardModelInputSectionName) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (PhotoCardModelInputSectionName) Descriptor() protoreflect.EnumDescriptor {
-	return file_trawl_photo_photo_proto_enumTypes[7].Descriptor()
-}
-
-func (PhotoCardModelInputSectionName) Type() protoreflect.EnumType {
-	return &file_trawl_photo_photo_proto_enumTypes[7]
-}
-
-func (x PhotoCardModelInputSectionName) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use PhotoCardModelInputSectionName.Descriptor instead.
-func (PhotoCardModelInputSectionName) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{7}
 }
 
@@ -507,58 +488,67 @@ func (PhotoCardOutcome) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{8}
 }
 
-type PlaceShownJudgement int32
+// Where the card model runs.
+type CardModelProvider int32
 
 const (
-	PlaceShownJudgement_PLACE_SHOWN_JUDGEMENT_UNSPECIFIED             PlaceShownJudgement = 0
-	PlaceShownJudgement_PLACE_SHOWN_JUDGEMENT_NEARBY_PLACE            PlaceShownJudgement = 1
-	PlaceShownJudgement_PLACE_SHOWN_JUDGEMENT_RECOGNISED_FROM_PICTURE PlaceShownJudgement = 2
-	PlaceShownJudgement_PLACE_SHOWN_JUDGEMENT_WHERE_CAMERA_STOOD      PlaceShownJudgement = 3
-	PlaceShownJudgement_PLACE_SHOWN_JUDGEMENT_UNKNOWN                 PlaceShownJudgement = 4
+	CardModelProvider_CARD_MODEL_PROVIDER_UNSPECIFIED CardModelProvider = 0
+	// https://ollama.com/api/chat with an API key.
+	CardModelProvider_CARD_MODEL_PROVIDER_OLLAMA_CLOUD CardModelProvider = 1
+	// The Codex command-line tool, signed in to a ChatGPT account.
+	CardModelProvider_CARD_MODEL_PROVIDER_CODEX_COMMAND_LINE CardModelProvider = 2
+	// The Antigravity ACP server (agy acp), signed in to a Google account.
+	CardModelProvider_CARD_MODEL_PROVIDER_ANTIGRAVITY_ACP CardModelProvider = 3
+	// https://api.anthropic.com/v1/messages with an API key.
+	CardModelProvider_CARD_MODEL_PROVIDER_ANTHROPIC_API CardModelProvider = 4
+	// The Claude Code command-line tool, signed in to a Claude account.
+	CardModelProvider_CARD_MODEL_PROVIDER_CLAUDE_COMMAND_LINE CardModelProvider = 5
 )
 
-// Enum value maps for PlaceShownJudgement.
+// Enum value maps for CardModelProvider.
 var (
-	PlaceShownJudgement_name = map[int32]string{
-		0: "PLACE_SHOWN_JUDGEMENT_UNSPECIFIED",
-		1: "PLACE_SHOWN_JUDGEMENT_NEARBY_PLACE",
-		2: "PLACE_SHOWN_JUDGEMENT_RECOGNISED_FROM_PICTURE",
-		3: "PLACE_SHOWN_JUDGEMENT_WHERE_CAMERA_STOOD",
-		4: "PLACE_SHOWN_JUDGEMENT_UNKNOWN",
+	CardModelProvider_name = map[int32]string{
+		0: "CARD_MODEL_PROVIDER_UNSPECIFIED",
+		1: "CARD_MODEL_PROVIDER_OLLAMA_CLOUD",
+		2: "CARD_MODEL_PROVIDER_CODEX_COMMAND_LINE",
+		3: "CARD_MODEL_PROVIDER_ANTIGRAVITY_ACP",
+		4: "CARD_MODEL_PROVIDER_ANTHROPIC_API",
+		5: "CARD_MODEL_PROVIDER_CLAUDE_COMMAND_LINE",
 	}
-	PlaceShownJudgement_value = map[string]int32{
-		"PLACE_SHOWN_JUDGEMENT_UNSPECIFIED":             0,
-		"PLACE_SHOWN_JUDGEMENT_NEARBY_PLACE":            1,
-		"PLACE_SHOWN_JUDGEMENT_RECOGNISED_FROM_PICTURE": 2,
-		"PLACE_SHOWN_JUDGEMENT_WHERE_CAMERA_STOOD":      3,
-		"PLACE_SHOWN_JUDGEMENT_UNKNOWN":                 4,
+	CardModelProvider_value = map[string]int32{
+		"CARD_MODEL_PROVIDER_UNSPECIFIED":         0,
+		"CARD_MODEL_PROVIDER_OLLAMA_CLOUD":        1,
+		"CARD_MODEL_PROVIDER_CODEX_COMMAND_LINE":  2,
+		"CARD_MODEL_PROVIDER_ANTIGRAVITY_ACP":     3,
+		"CARD_MODEL_PROVIDER_ANTHROPIC_API":       4,
+		"CARD_MODEL_PROVIDER_CLAUDE_COMMAND_LINE": 5,
 	}
 )
 
-func (x PlaceShownJudgement) Enum() *PlaceShownJudgement {
-	p := new(PlaceShownJudgement)
+func (x CardModelProvider) Enum() *CardModelProvider {
+	p := new(CardModelProvider)
 	*p = x
 	return p
 }
 
-func (x PlaceShownJudgement) String() string {
+func (x CardModelProvider) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (PlaceShownJudgement) Descriptor() protoreflect.EnumDescriptor {
+func (CardModelProvider) Descriptor() protoreflect.EnumDescriptor {
 	return file_trawl_photo_photo_proto_enumTypes[9].Descriptor()
 }
 
-func (PlaceShownJudgement) Type() protoreflect.EnumType {
+func (CardModelProvider) Type() protoreflect.EnumType {
 	return &file_trawl_photo_photo_proto_enumTypes[9]
 }
 
-func (x PlaceShownJudgement) Number() protoreflect.EnumNumber {
+func (x CardModelProvider) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use PlaceShownJudgement.Descriptor instead.
-func (PlaceShownJudgement) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use CardModelProvider.Descriptor instead.
+func (CardModelProvider) EnumDescriptor() ([]byte, []int) {
 	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{9}
 }
 
@@ -623,25 +613,29 @@ func (PhotoInspectionLayer) EnumDescriptor() ([]byte, []int) {
 type PhotoSearchSourceField int32
 
 const (
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED       PhotoSearchSourceField = 0
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CAPTION           PhotoSearchSourceField = 1
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TITLE             PhotoSearchSourceField = 2
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS      PhotoSearchSourceField = 3
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE  PhotoSearchSourceField = 4
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTRY           PhotoSearchSourceField = 5
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STATE             PhotoSearchSourceField = 6
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTY            PhotoSearchSourceField = 7
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TOWN              PhotoSearchSourceField = 8
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD     PhotoSearchSourceField = 9
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STREET            PhotoSearchSourceField = 10
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST PhotoSearchSourceField = 11
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_WATER             PhotoSearchSourceField = 12
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISLAND            PhotoSearchSourceField = 13
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA        PhotoSearchSourceField = 14
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PERSON            PhotoSearchSourceField = 15
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ALBUM             PhotoSearchSourceField = 16
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_MOMENT            PhotoSearchSourceField = 17
-	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT   PhotoSearchSourceField = 18
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED           PhotoSearchSourceField = 0
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CAPTION               PhotoSearchSourceField = 1
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TITLE                 PhotoSearchSourceField = 2
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS          PhotoSearchSourceField = 3
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE      PhotoSearchSourceField = 4
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTRY               PhotoSearchSourceField = 5
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STATE                 PhotoSearchSourceField = 6
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTY                PhotoSearchSourceField = 7
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TOWN                  PhotoSearchSourceField = 8
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD         PhotoSearchSourceField = 9
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STREET                PhotoSearchSourceField = 10
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST     PhotoSearchSourceField = 11
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_WATER                 PhotoSearchSourceField = 12
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISLAND                PhotoSearchSourceField = 13
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA            PhotoSearchSourceField = 14
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PERSON                PhotoSearchSourceField = 15
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ALBUM                 PhotoSearchSourceField = 16
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_MOMENT                PhotoSearchSourceField = 17
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT       PhotoSearchSourceField = 18
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_ONE_LINE_SUMMARY PhotoSearchSourceField = 19
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_DESCRIPTION      PhotoSearchSourceField = 20
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_VISIBLE_TEXT     PhotoSearchSourceField = 21
+	PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_PLACE_SHOWN      PhotoSearchSourceField = 22
 )
 
 // Enum value maps for PhotoSearchSourceField.
@@ -666,27 +660,35 @@ var (
 		16: "PHOTO_SEARCH_SOURCE_FIELD_ALBUM",
 		17: "PHOTO_SEARCH_SOURCE_FIELD_MOMENT",
 		18: "PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT",
+		19: "PHOTO_SEARCH_SOURCE_FIELD_CARD_ONE_LINE_SUMMARY",
+		20: "PHOTO_SEARCH_SOURCE_FIELD_CARD_DESCRIPTION",
+		21: "PHOTO_SEARCH_SOURCE_FIELD_CARD_VISIBLE_TEXT",
+		22: "PHOTO_SEARCH_SOURCE_FIELD_CARD_PLACE_SHOWN",
 	}
 	PhotoSearchSourceField_value = map[string]int32{
-		"PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED":       0,
-		"PHOTO_SEARCH_SOURCE_FIELD_CAPTION":           1,
-		"PHOTO_SEARCH_SOURCE_FIELD_TITLE":             2,
-		"PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS":      3,
-		"PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE":  4,
-		"PHOTO_SEARCH_SOURCE_FIELD_COUNTRY":           5,
-		"PHOTO_SEARCH_SOURCE_FIELD_STATE":             6,
-		"PHOTO_SEARCH_SOURCE_FIELD_COUNTY":            7,
-		"PHOTO_SEARCH_SOURCE_FIELD_TOWN":              8,
-		"PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD":     9,
-		"PHOTO_SEARCH_SOURCE_FIELD_STREET":            10,
-		"PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST": 11,
-		"PHOTO_SEARCH_SOURCE_FIELD_WATER":             12,
-		"PHOTO_SEARCH_SOURCE_FIELD_ISLAND":            13,
-		"PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA":        14,
-		"PHOTO_SEARCH_SOURCE_FIELD_PERSON":            15,
-		"PHOTO_SEARCH_SOURCE_FIELD_ALBUM":             16,
-		"PHOTO_SEARCH_SOURCE_FIELD_MOMENT":            17,
-		"PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT":   18,
+		"PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED":           0,
+		"PHOTO_SEARCH_SOURCE_FIELD_CAPTION":               1,
+		"PHOTO_SEARCH_SOURCE_FIELD_TITLE":                 2,
+		"PHOTO_SEARCH_SOURCE_FIELD_FULL_ADDRESS":          3,
+		"PHOTO_SEARCH_SOURCE_FIELD_ISO_COUNTRY_CODE":      4,
+		"PHOTO_SEARCH_SOURCE_FIELD_COUNTRY":               5,
+		"PHOTO_SEARCH_SOURCE_FIELD_STATE":                 6,
+		"PHOTO_SEARCH_SOURCE_FIELD_COUNTY":                7,
+		"PHOTO_SEARCH_SOURCE_FIELD_TOWN":                  8,
+		"PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD":         9,
+		"PHOTO_SEARCH_SOURCE_FIELD_STREET":                10,
+		"PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST":     11,
+		"PHOTO_SEARCH_SOURCE_FIELD_WATER":                 12,
+		"PHOTO_SEARCH_SOURCE_FIELD_ISLAND":                13,
+		"PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA":            14,
+		"PHOTO_SEARCH_SOURCE_FIELD_PERSON":                15,
+		"PHOTO_SEARCH_SOURCE_FIELD_ALBUM":                 16,
+		"PHOTO_SEARCH_SOURCE_FIELD_MOMENT":                17,
+		"PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT":       18,
+		"PHOTO_SEARCH_SOURCE_FIELD_CARD_ONE_LINE_SUMMARY": 19,
+		"PHOTO_SEARCH_SOURCE_FIELD_CARD_DESCRIPTION":      20,
+		"PHOTO_SEARCH_SOURCE_FIELD_CARD_VISIBLE_TEXT":     21,
+		"PHOTO_SEARCH_SOURCE_FIELD_CARD_PLACE_SHOWN":      22,
 	}
 )
 
@@ -1289,14 +1291,18 @@ type AppleLibraryPhotoFacts struct {
 	IsFavourite                           bool                       `protobuf:"varint,27,opt,name=is_favourite,json=isFavourite,proto3" json:"is_favourite,omitempty"`
 	IsHidden                              bool                       `protobuf:"varint,28,opt,name=is_hidden,json=isHidden,proto3" json:"is_hidden,omitempty"`
 	// Apple's own ZADJUSTMENTSSTATE code; 0 means never edited.
-	AppleAdjustmentsState    int32                           `protobuf:"varint,29,opt,name=apple_adjustments_state,json=appleAdjustmentsState,proto3" json:"apple_adjustments_state,omitempty"`
+	AppleAdjustmentsState int32 `protobuf:"varint,29,opt,name=apple_adjustments_state,json=appleAdjustmentsState,proto3" json:"apple_adjustments_state,omitempty"`
+	// Apple changes it for any change, even a favourite or an album.
 	AppleModificationTimeUtc *timestamppb.Timestamp          `protobuf:"bytes,30,opt,name=apple_modification_time_utc,json=appleModificationTimeUtc,proto3" json:"apple_modification_time_utc,omitempty"`
 	AppleNamedPeople         []*AppleLibraryPhotoNamedPerson `protobuf:"bytes,31,rep,name=apple_named_people,json=appleNamedPeople,proto3" json:"apple_named_people,omitempty"`
 	AppleAlbums              []*AppleLibraryPhotoAlbum       `protobuf:"bytes,32,rep,name=apple_albums,json=appleAlbums,proto3" json:"apple_albums,omitempty"`
 	AppleRecognisedTextLines []string                        `protobuf:"bytes,33,rep,name=apple_recognised_text_lines,json=appleRecognisedTextLines,proto3" json:"apple_recognised_text_lines,omitempty"`
 	AppleTripUuids           []string                        `protobuf:"bytes,34,rep,name=apple_trip_uuids,json=appleTripUuids,proto3" json:"apple_trip_uuids,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// Apple's ZADJUSTMENTTIMESTAMP: when the pixels were last edited. Unset
+	// when the photo was never edited.
+	AppleAdjustmentTimeUtc *timestamppb.Timestamp `protobuf:"bytes,35,opt,name=apple_adjustment_time_utc,json=appleAdjustmentTimeUtc,proto3" json:"apple_adjustment_time_utc,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *AppleLibraryPhotoFacts) Reset() {
@@ -1567,6 +1573,13 @@ func (x *AppleLibraryPhotoFacts) GetAppleTripUuids() []string {
 	return nil
 }
 
+func (x *AppleLibraryPhotoFacts) GetAppleAdjustmentTimeUtc() *timestamppb.Timestamp {
+	if x != nil {
+		return x.AppleAdjustmentTimeUtc
+	}
+	return nil
+}
+
 // A trip Apple Photos detected (ZPHOTOSHIGHLIGHT with ZKIND 3).
 type AppleLibraryTrip struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
@@ -1644,85 +1657,36 @@ func (x *AppleLibraryTrip) GetAppleTripEndTimeUtc() *timestamppb.Timestamp {
 	return nil
 }
 
-type PictureFileMetadataField struct {
-	state                  protoimpl.MessageState `protogen:"open.v1"`
-	MetadataGroup          string                 `protobuf:"bytes,1,opt,name=metadata_group,json=metadataGroup,proto3" json:"metadata_group,omitempty"`
-	MetadataFieldName      string                 `protobuf:"bytes,2,opt,name=metadata_field_name,json=metadataFieldName,proto3" json:"metadata_field_name,omitempty"`
-	MetadataFieldValueText string                 `protobuf:"bytes,3,opt,name=metadata_field_value_text,json=metadataFieldValueText,proto3" json:"metadata_field_value_text,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
-}
-
-func (x *PictureFileMetadataField) Reset() {
-	*x = PictureFileMetadataField{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PictureFileMetadataField) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PictureFileMetadataField) ProtoMessage() {}
-
-func (x *PictureFileMetadataField) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PictureFileMetadataField.ProtoReflect.Descriptor instead.
-func (*PictureFileMetadataField) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *PictureFileMetadataField) GetMetadataGroup() string {
-	if x != nil {
-		return x.MetadataGroup
-	}
-	return ""
-}
-
-func (x *PictureFileMetadataField) GetMetadataFieldName() string {
-	if x != nil {
-		return x.MetadataFieldName
-	}
-	return ""
-}
-
-func (x *PictureFileMetadataField) GetMetadataFieldValueText() string {
-	if x != nil {
-		return x.MetadataFieldValueText
-	}
-	return ""
-}
-
+// The picture is an upright JPEG, at most 2576 pixels on its long edge by
+// default, in sRGB, kept in the picture cache under its SHA-256. Videos give
+// one frame from their middle. The compass bearing is the one file fact Apple's
+// library does not hold.
 type PictureFetchResult struct {
-	state                              protoimpl.MessageState      `protogen:"open.v1"`
-	ApplePhotoUuid                     string                      `protobuf:"bytes,1,opt,name=apple_photo_uuid,json=applePhotoUuid,proto3" json:"apple_photo_uuid,omitempty"`
-	FetchedForAppleModificationTimeUtc *timestamppb.Timestamp      `protobuf:"bytes,2,opt,name=fetched_for_apple_modification_time_utc,json=fetchedForAppleModificationTimeUtc,proto3" json:"fetched_for_apple_modification_time_utc,omitempty"`
-	PictureFetchOutcome                PictureFetchOutcome         `protobuf:"varint,3,opt,name=picture_fetch_outcome,json=pictureFetchOutcome,proto3,enum=trawl.photo.PictureFetchOutcome" json:"picture_fetch_outcome,omitempty"`
-	PictureFetchFailureMessage         string                      `protobuf:"bytes,4,opt,name=picture_fetch_failure_message,json=pictureFetchFailureMessage,proto3" json:"picture_fetch_failure_message,omitempty"`
-	RetryNotBeforeTimeUtc              *timestamppb.Timestamp      `protobuf:"bytes,5,opt,name=retry_not_before_time_utc,json=retryNotBeforeTimeUtc,proto3" json:"retry_not_before_time_utc,omitempty"`
-	PictureSha256                      string                      `protobuf:"bytes,6,opt,name=picture_sha256,json=pictureSha256,proto3" json:"picture_sha256,omitempty"`
-	PictureByteCount                   *int64                      `protobuf:"varint,7,opt,name=picture_byte_count,json=pictureByteCount,proto3,oneof" json:"picture_byte_count,omitempty"`
-	CameraBearingDegrees               *float64                    `protobuf:"fixed64,8,opt,name=camera_bearing_degrees,json=cameraBearingDegrees,proto3,oneof" json:"camera_bearing_degrees,omitempty"`
-	CameraBearingReference             CameraBearingReference      `protobuf:"varint,9,opt,name=camera_bearing_reference,json=cameraBearingReference,proto3,enum=trawl.photo.CameraBearingReference" json:"camera_bearing_reference,omitempty"`
-	PictureFileMetadataFields          []*PictureFileMetadataField `protobuf:"bytes,10,rep,name=picture_file_metadata_fields,json=pictureFileMetadataFields,proto3" json:"picture_file_metadata_fields,omitempty"`
-	unknownFields                      protoimpl.UnknownFields
-	sizeCache                          protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ApplePhotoUuid string                 `protobuf:"bytes,1,opt,name=apple_photo_uuid,json=applePhotoUuid,proto3" json:"apple_photo_uuid,omitempty"`
+	// The Apple edit the picture shows. A new edit fetches it again.
+	FetchedForAppleAdjustmentsState  int32                  `protobuf:"varint,2,opt,name=fetched_for_apple_adjustments_state,json=fetchedForAppleAdjustmentsState,proto3" json:"fetched_for_apple_adjustments_state,omitempty"`
+	FetchedForAppleAdjustmentTimeUtc *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=fetched_for_apple_adjustment_time_utc,json=fetchedForAppleAdjustmentTimeUtc,proto3" json:"fetched_for_apple_adjustment_time_utc,omitempty"`
+	PictureFetchOutcome              PictureFetchOutcome    `protobuf:"varint,4,opt,name=picture_fetch_outcome,json=pictureFetchOutcome,proto3,enum=trawl.photo.PictureFetchOutcome" json:"picture_fetch_outcome,omitempty"`
+	PictureFetchFailureMessage       string                 `protobuf:"bytes,5,opt,name=picture_fetch_failure_message,json=pictureFetchFailureMessage,proto3" json:"picture_fetch_failure_message,omitempty"`
+	// Unset on a failure that will not succeed by trying again.
+	RetryNotBeforeTimeUtc *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=retry_not_before_time_utc,json=retryNotBeforeTimeUtc,proto3" json:"retry_not_before_time_utc,omitempty"`
+	PictureSource         PictureSource          `protobuf:"varint,7,opt,name=picture_source,json=pictureSource,proto3,enum=trawl.photo.PictureSource" json:"picture_source,omitempty"`
+	PictureSha256         string                 `protobuf:"bytes,8,opt,name=picture_sha256,json=pictureSha256,proto3" json:"picture_sha256,omitempty"`
+	PictureByteCount      *int64                 `protobuf:"varint,9,opt,name=picture_byte_count,json=pictureByteCount,proto3,oneof" json:"picture_byte_count,omitempty"`
+	// The picture file's GPS ImgDirection: where the camera pointed.
+	CameraBearingDegrees   *float64               `protobuf:"fixed64,10,opt,name=camera_bearing_degrees,json=cameraBearingDegrees,proto3,oneof" json:"camera_bearing_degrees,omitempty"`
+	CameraBearingReference CameraBearingReference `protobuf:"varint,11,opt,name=camera_bearing_reference,json=cameraBearingReference,proto3,enum=trawl.photo.CameraBearingReference" json:"camera_bearing_reference,omitempty"`
+	// Maximum pixel count on the picture's long edge used when fetching it.
+	// Changing the configured pixel limit fetches the picture again.
+	PictureLongEdgePixelLimitUsed *int32 `protobuf:"varint,12,opt,name=picture_long_edge_pixel_limit_used,json=pictureLongEdgePixelLimitUsed,proto3,oneof" json:"picture_long_edge_pixel_limit_used,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *PictureFetchResult) Reset() {
 	*x = PictureFetchResult{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[10]
+	mi := &file_trawl_photo_photo_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1734,7 +1698,7 @@ func (x *PictureFetchResult) String() string {
 func (*PictureFetchResult) ProtoMessage() {}
 
 func (x *PictureFetchResult) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[10]
+	mi := &file_trawl_photo_photo_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1747,7 +1711,7 @@ func (x *PictureFetchResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PictureFetchResult.ProtoReflect.Descriptor instead.
 func (*PictureFetchResult) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{10}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PictureFetchResult) GetApplePhotoUuid() string {
@@ -1757,9 +1721,16 @@ func (x *PictureFetchResult) GetApplePhotoUuid() string {
 	return ""
 }
 
-func (x *PictureFetchResult) GetFetchedForAppleModificationTimeUtc() *timestamppb.Timestamp {
+func (x *PictureFetchResult) GetFetchedForAppleAdjustmentsState() int32 {
 	if x != nil {
-		return x.FetchedForAppleModificationTimeUtc
+		return x.FetchedForAppleAdjustmentsState
+	}
+	return 0
+}
+
+func (x *PictureFetchResult) GetFetchedForAppleAdjustmentTimeUtc() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FetchedForAppleAdjustmentTimeUtc
 	}
 	return nil
 }
@@ -1783,6 +1754,13 @@ func (x *PictureFetchResult) GetRetryNotBeforeTimeUtc() *timestamppb.Timestamp {
 		return x.RetryNotBeforeTimeUtc
 	}
 	return nil
+}
+
+func (x *PictureFetchResult) GetPictureSource() PictureSource {
+	if x != nil {
+		return x.PictureSource
+	}
+	return PictureSource_PICTURE_SOURCE_UNSPECIFIED
 }
 
 func (x *PictureFetchResult) GetPictureSha256() string {
@@ -1813,11 +1791,11 @@ func (x *PictureFetchResult) GetCameraBearingReference() CameraBearingReference 
 	return CameraBearingReference_CAMERA_BEARING_REFERENCE_UNSPECIFIED
 }
 
-func (x *PictureFetchResult) GetPictureFileMetadataFields() []*PictureFileMetadataField {
-	if x != nil {
-		return x.PictureFileMetadataFields
+func (x *PictureFetchResult) GetPictureLongEdgePixelLimitUsed() int32 {
+	if x != nil && x.PictureLongEdgePixelLimitUsed != nil {
+		return *x.PictureLongEdgePixelLimitUsed
 	}
-	return nil
+	return 0
 }
 
 type NearbyPlace struct {
@@ -1832,7 +1810,7 @@ type NearbyPlace struct {
 
 func (x *NearbyPlace) Reset() {
 	*x = NearbyPlace{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[11]
+	mi := &file_trawl_photo_photo_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1844,7 +1822,7 @@ func (x *NearbyPlace) String() string {
 func (*NearbyPlace) ProtoMessage() {}
 
 func (x *NearbyPlace) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[11]
+	mi := &file_trawl_photo_photo_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1857,7 +1835,7 @@ func (x *NearbyPlace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NearbyPlace.ProtoReflect.Descriptor instead.
 func (*NearbyPlace) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{11}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *NearbyPlace) GetPlaceName() string {
@@ -1905,7 +1883,7 @@ type NearbyPlacesLookupResult struct {
 
 func (x *NearbyPlacesLookupResult) Reset() {
 	*x = NearbyPlacesLookupResult{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[12]
+	mi := &file_trawl_photo_photo_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1917,7 +1895,7 @@ func (x *NearbyPlacesLookupResult) String() string {
 func (*NearbyPlacesLookupResult) ProtoMessage() {}
 
 func (x *NearbyPlacesLookupResult) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[12]
+	mi := &file_trawl_photo_photo_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1930,7 +1908,7 @@ func (x *NearbyPlacesLookupResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NearbyPlacesLookupResult.ProtoReflect.Descriptor instead.
 func (*NearbyPlacesLookupResult) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{12}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *NearbyPlacesLookupResult) GetPlaceLookupRequestSha256() string {
@@ -1996,71 +1974,21 @@ func (x *NearbyPlacesLookupResult) GetNearbyPlacesNearestFirst() []*NearbyPlace 
 	return nil
 }
 
-type PhotoCardModelInputSection struct {
-	state         protoimpl.MessageState         `protogen:"open.v1"`
-	SectionName   PhotoCardModelInputSectionName `protobuf:"varint,1,opt,name=section_name,json=sectionName,proto3,enum=trawl.photo.PhotoCardModelInputSectionName" json:"section_name,omitempty"`
-	SectionSha256 string                         `protobuf:"bytes,2,opt,name=section_sha256,json=sectionSha256,proto3" json:"section_sha256,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PhotoCardModelInputSection) Reset() {
-	*x = PhotoCardModelInputSection{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PhotoCardModelInputSection) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PhotoCardModelInputSection) ProtoMessage() {}
-
-func (x *PhotoCardModelInputSection) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[13]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PhotoCardModelInputSection.ProtoReflect.Descriptor instead.
-func (*PhotoCardModelInputSection) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *PhotoCardModelInputSection) GetSectionName() PhotoCardModelInputSectionName {
-	if x != nil {
-		return x.SectionName
-	}
-	return PhotoCardModelInputSectionName_PHOTO_CARD_MODEL_INPUT_SECTION_NAME_UNSPECIFIED
-}
-
-func (x *PhotoCardModelInputSection) GetSectionSha256() string {
-	if x != nil {
-		return x.SectionSha256
-	}
-	return ""
-}
-
+// The plain text the card model reads beside the picture, rendered from the
+// stored facts when a card is written or inspected. It is never stored on its
+// own: each card keeps the exact text it was made from.
 type PhotoCardModelInput struct {
-	state                       protoimpl.MessageState        `protogen:"open.v1"`
-	ApplePhotoUuid              string                        `protobuf:"bytes,1,opt,name=apple_photo_uuid,json=applePhotoUuid,proto3" json:"apple_photo_uuid,omitempty"`
-	PhotoCardModelInputText     string                        `protobuf:"bytes,2,opt,name=photo_card_model_input_text,json=photoCardModelInputText,proto3" json:"photo_card_model_input_text,omitempty"`
-	PhotoCardModelInputSha256   string                        `protobuf:"bytes,3,opt,name=photo_card_model_input_sha256,json=photoCardModelInputSha256,proto3" json:"photo_card_model_input_sha256,omitempty"`
-	PhotoCardModelInputSections []*PhotoCardModelInputSection `protobuf:"bytes,4,rep,name=photo_card_model_input_sections,json=photoCardModelInputSections,proto3" json:"photo_card_model_input_sections,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	ApplePhotoUuid            string                 `protobuf:"bytes,1,opt,name=apple_photo_uuid,json=applePhotoUuid,proto3" json:"apple_photo_uuid,omitempty"`
+	PhotoCardModelInputText   string                 `protobuf:"bytes,2,opt,name=photo_card_model_input_text,json=photoCardModelInputText,proto3" json:"photo_card_model_input_text,omitempty"`
+	PhotoCardModelInputSha256 string                 `protobuf:"bytes,3,opt,name=photo_card_model_input_sha256,json=photoCardModelInputSha256,proto3" json:"photo_card_model_input_sha256,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *PhotoCardModelInput) Reset() {
 	*x = PhotoCardModelInput{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[14]
+	mi := &file_trawl_photo_photo_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2072,7 +2000,7 @@ func (x *PhotoCardModelInput) String() string {
 func (*PhotoCardModelInput) ProtoMessage() {}
 
 func (x *PhotoCardModelInput) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[14]
+	mi := &file_trawl_photo_photo_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2085,7 +2013,7 @@ func (x *PhotoCardModelInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoCardModelInput.ProtoReflect.Descriptor instead.
 func (*PhotoCardModelInput) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{14}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PhotoCardModelInput) GetApplePhotoUuid() string {
@@ -2109,13 +2037,6 @@ func (x *PhotoCardModelInput) GetPhotoCardModelInputSha256() string {
 	return ""
 }
 
-func (x *PhotoCardModelInput) GetPhotoCardModelInputSections() []*PhotoCardModelInputSection {
-	if x != nil {
-		return x.PhotoCardModelInputSections
-	}
-	return nil
-}
-
 type PhotoCardVisibleTextGroup struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	WhereTextAppears string                 `protobuf:"bytes,1,opt,name=where_text_appears,json=whereTextAppears,proto3" json:"where_text_appears,omitempty"`
@@ -2127,7 +2048,7 @@ type PhotoCardVisibleTextGroup struct {
 
 func (x *PhotoCardVisibleTextGroup) Reset() {
 	*x = PhotoCardVisibleTextGroup{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[15]
+	mi := &file_trawl_photo_photo_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2139,7 +2060,7 @@ func (x *PhotoCardVisibleTextGroup) String() string {
 func (*PhotoCardVisibleTextGroup) ProtoMessage() {}
 
 func (x *PhotoCardVisibleTextGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[15]
+	mi := &file_trawl_photo_photo_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2152,7 +2073,7 @@ func (x *PhotoCardVisibleTextGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoCardVisibleTextGroup.ProtoReflect.Descriptor instead.
 func (*PhotoCardVisibleTextGroup) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{15}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PhotoCardVisibleTextGroup) GetWhereTextAppears() string {
@@ -2187,21 +2108,33 @@ type PhotoCard struct {
 	OneLineSummary                string                       `protobuf:"bytes,7,opt,name=one_line_summary,json=oneLineSummary,proto3" json:"one_line_summary,omitempty"`
 	Description                   string                       `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`
 	VisibleTextGroups             []*PhotoCardVisibleTextGroup `protobuf:"bytes,9,rep,name=visible_text_groups,json=visibleTextGroups,proto3" json:"visible_text_groups,omitempty"`
-	PlaceShownJudgement           PlaceShownJudgement          `protobuf:"varint,10,opt,name=place_shown_judgement,json=placeShownJudgement,proto3,enum=trawl.photo.PlaceShownJudgement" json:"place_shown_judgement,omitempty"`
-	PlaceShownName                string                       `protobuf:"bytes,11,opt,name=place_shown_name,json=placeShownName,proto3" json:"place_shown_name,omitempty"`
-	PlaceShownReasoning           string                       `protobuf:"bytes,12,opt,name=place_shown_reasoning,json=placeShownReasoning,proto3" json:"place_shown_reasoning,omitempty"`
-	RawModelAnswer                string                       `protobuf:"bytes,13,opt,name=raw_model_answer,json=rawModelAnswer,proto3" json:"raw_model_answer,omitempty"`
-	InputTokens                   *int64                       `protobuf:"varint,14,opt,name=input_tokens,json=inputTokens,proto3,oneof" json:"input_tokens,omitempty"`
-	OutputTokens                  *int64                       `protobuf:"varint,15,opt,name=output_tokens,json=outputTokens,proto3,oneof" json:"output_tokens,omitempty"`
-	ReasoningTokens               *int64                       `protobuf:"varint,16,opt,name=reasoning_tokens,json=reasoningTokens,proto3,oneof" json:"reasoning_tokens,omitempty"`
-	RetryNotBeforeTimeUtc         *timestamppb.Timestamp       `protobuf:"bytes,17,opt,name=retry_not_before_time_utc,json=retryNotBeforeTimeUtc,proto3" json:"retry_not_before_time_utc,omitempty"`
+	// Empty when the photo shows no place (e.g. a screenshot) or the place
+	// cannot be identified.
+	PlaceShownName        string                 `protobuf:"bytes,10,opt,name=place_shown_name,json=placeShownName,proto3" json:"place_shown_name,omitempty"`
+	PlaceShownReasoning   string                 `protobuf:"bytes,11,opt,name=place_shown_reasoning,json=placeShownReasoning,proto3" json:"place_shown_reasoning,omitempty"`
+	RawModelAnswer        string                 `protobuf:"bytes,12,opt,name=raw_model_answer,json=rawModelAnswer,proto3" json:"raw_model_answer,omitempty"`
+	InputTokens           *int64                 `protobuf:"varint,13,opt,name=input_tokens,json=inputTokens,proto3,oneof" json:"input_tokens,omitempty"`
+	OutputTokens          *int64                 `protobuf:"varint,14,opt,name=output_tokens,json=outputTokens,proto3,oneof" json:"output_tokens,omitempty"`
+	ReasoningTokens       *int64                 `protobuf:"varint,15,opt,name=reasoning_tokens,json=reasoningTokens,proto3,oneof" json:"reasoning_tokens,omitempty"`
+	RetryNotBeforeTimeUtc *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=retry_not_before_time_utc,json=retryNotBeforeTimeUtc,proto3" json:"retry_not_before_time_utc,omitempty"`
+	CardModelProvider     CardModelProvider      `protobuf:"varint,17,opt,name=card_model_provider,json=cardModelProvider,proto3,enum=trawl.photo.CardModelProvider" json:"card_model_provider,omitempty"`
+	// Why a failed or invalid card has no text: the service's error, or what
+	// was wrong with the model's answer.
+	PhotoCardFailureMessage string                 `protobuf:"bytes,18,opt,name=photo_card_failure_message,json=photoCardFailureMessage,proto3" json:"photo_card_failure_message,omitempty"`
+	CardWrittenTimeUtc      *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=card_written_time_utc,json=cardWrittenTimeUtc,proto3" json:"card_written_time_utc,omitempty"`
+	// Reasoning effort requested from the card model (for example "low",
+	// "medium", or "high"), empty when the provider's default was used.
+	CardModelEffort string `protobuf:"bytes,20,opt,name=card_model_effort,json=cardModelEffort,proto3" json:"card_model_effort,omitempty"`
+	// Maximum pixel count on the picture's long edge used when fetching the
+	// picture this card was written from.
+	PictureLongEdgePixelLimitUsed *int32 `protobuf:"varint,21,opt,name=picture_long_edge_pixel_limit_used,json=pictureLongEdgePixelLimitUsed,proto3,oneof" json:"picture_long_edge_pixel_limit_used,omitempty"`
 	unknownFields                 protoimpl.UnknownFields
 	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *PhotoCard) Reset() {
 	*x = PhotoCard{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[16]
+	mi := &file_trawl_photo_photo_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2213,7 +2146,7 @@ func (x *PhotoCard) String() string {
 func (*PhotoCard) ProtoMessage() {}
 
 func (x *PhotoCard) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[16]
+	mi := &file_trawl_photo_photo_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2226,7 +2159,7 @@ func (x *PhotoCard) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoCard.ProtoReflect.Descriptor instead.
 func (*PhotoCard) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{16}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PhotoCard) GetApplePhotoUuid() string {
@@ -2292,13 +2225,6 @@ func (x *PhotoCard) GetVisibleTextGroups() []*PhotoCardVisibleTextGroup {
 	return nil
 }
 
-func (x *PhotoCard) GetPlaceShownJudgement() PlaceShownJudgement {
-	if x != nil {
-		return x.PlaceShownJudgement
-	}
-	return PlaceShownJudgement_PLACE_SHOWN_JUDGEMENT_UNSPECIFIED
-}
-
 func (x *PhotoCard) GetPlaceShownName() string {
 	if x != nil {
 		return x.PlaceShownName
@@ -2348,18 +2274,55 @@ func (x *PhotoCard) GetRetryNotBeforeTimeUtc() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *PhotoCard) GetCardModelProvider() CardModelProvider {
+	if x != nil {
+		return x.CardModelProvider
+	}
+	return CardModelProvider_CARD_MODEL_PROVIDER_UNSPECIFIED
+}
+
+func (x *PhotoCard) GetPhotoCardFailureMessage() string {
+	if x != nil {
+		return x.PhotoCardFailureMessage
+	}
+	return ""
+}
+
+func (x *PhotoCard) GetCardWrittenTimeUtc() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CardWrittenTimeUtc
+	}
+	return nil
+}
+
+func (x *PhotoCard) GetCardModelEffort() string {
+	if x != nil {
+		return x.CardModelEffort
+	}
+	return ""
+}
+
+func (x *PhotoCard) GetPictureLongEdgePixelLimitUsed() int32 {
+	if x != nil && x.PictureLongEdgePixelLimitUsed != nil {
+		return *x.PictureLongEdgePixelLimitUsed
+	}
+	return 0
+}
+
 // Human-facing records carry source facts without display strings.
 type PhotoRecord struct {
 	state                    protoimpl.MessageState                    `protogen:"open.v1"`
 	CanonicalRecordReference *identity.CanonicalArchiveRecordReference `protobuf:"bytes,1,opt,name=canonical_record_reference,json=canonicalRecordReference,proto3" json:"canonical_record_reference,omitempty"`
 	AppleLibraryPhotoFacts   *AppleLibraryPhotoFacts                   `protobuf:"bytes,2,opt,name=apple_library_photo_facts,json=appleLibraryPhotoFacts,proto3" json:"apple_library_photo_facts,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// Empty when the photo has no written card.
+	WrittenPhotoCardOneLineSummary string `protobuf:"bytes,3,opt,name=written_photo_card_one_line_summary,json=writtenPhotoCardOneLineSummary,proto3" json:"written_photo_card_one_line_summary,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
 func (x *PhotoRecord) Reset() {
 	*x = PhotoRecord{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[17]
+	mi := &file_trawl_photo_photo_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2371,7 +2334,7 @@ func (x *PhotoRecord) String() string {
 func (*PhotoRecord) ProtoMessage() {}
 
 func (x *PhotoRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[17]
+	mi := &file_trawl_photo_photo_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2384,7 +2347,7 @@ func (x *PhotoRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoRecord.ProtoReflect.Descriptor instead.
 func (*PhotoRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{17}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PhotoRecord) GetCanonicalRecordReference() *identity.CanonicalArchiveRecordReference {
@@ -2401,6 +2364,13 @@ func (x *PhotoRecord) GetAppleLibraryPhotoFacts() *AppleLibraryPhotoFacts {
 	return nil
 }
 
+func (x *PhotoRecord) GetWrittenPhotoCardOneLineSummary() string {
+	if x != nil {
+		return x.WrittenPhotoCardOneLineSummary
+	}
+	return ""
+}
+
 type PhotoListResponse struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	PhotoRecordsNewestFirst []*PhotoRecord         `protobuf:"bytes,1,rep,name=photo_records_newest_first,json=photoRecordsNewestFirst,proto3" json:"photo_records_newest_first,omitempty"`
@@ -2413,7 +2383,7 @@ type PhotoListResponse struct {
 
 func (x *PhotoListResponse) Reset() {
 	*x = PhotoListResponse{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[18]
+	mi := &file_trawl_photo_photo_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2425,7 +2395,7 @@ func (x *PhotoListResponse) String() string {
 func (*PhotoListResponse) ProtoMessage() {}
 
 func (x *PhotoListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[18]
+	mi := &file_trawl_photo_photo_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2438,7 +2408,7 @@ func (x *PhotoListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoListResponse.ProtoReflect.Descriptor instead.
 func (*PhotoListResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{18}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PhotoListResponse) GetPhotoRecordsNewestFirst() []*PhotoRecord {
@@ -2477,14 +2447,19 @@ type OpenedPhotoRecord struct {
 	PhotoCard                *PhotoCard                                `protobuf:"bytes,4,opt,name=photo_card,json=photoCard,proto3" json:"photo_card,omitempty"`
 	PhotoTrawlLink           *identity.GloballyRoutableTrawlLink       `protobuf:"bytes,5,opt,name=photo_trawl_link,json=photoTrawlLink,proto3" json:"photo_trawl_link,omitempty"`
 	PictureFetchResult       *PictureFetchResult                       `protobuf:"bytes,6,opt,name=picture_fetch_result,json=pictureFetchResult,proto3" json:"picture_fetch_result,omitempty"`
-	PictureFetchStepIsBuilt  bool                                      `protobuf:"varint,7,opt,name=picture_fetch_step_is_built,json=pictureFetchStepIsBuilt,proto3" json:"picture_fetch_step_is_built,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// Empty when the picture is not in the picture cache.
+	CachedPictureFilePath string `protobuf:"bytes,7,opt,name=cached_picture_file_path,json=cachedPictureFilePath,proto3" json:"cached_picture_file_path,omitempty"`
+	// True when the card model input rendered from today's facts differs from
+	// the one the card was written from. The card stays usable; it is remade
+	// only with --recard.
+	CardModelInputChangedSinceCardWasWritten bool `protobuf:"varint,8,opt,name=card_model_input_changed_since_card_was_written,json=cardModelInputChangedSinceCardWasWritten,proto3" json:"card_model_input_changed_since_card_was_written,omitempty"`
+	unknownFields                            protoimpl.UnknownFields
+	sizeCache                                protoimpl.SizeCache
 }
 
 func (x *OpenedPhotoRecord) Reset() {
 	*x = OpenedPhotoRecord{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[19]
+	mi := &file_trawl_photo_photo_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2496,7 +2471,7 @@ func (x *OpenedPhotoRecord) String() string {
 func (*OpenedPhotoRecord) ProtoMessage() {}
 
 func (x *OpenedPhotoRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[19]
+	mi := &file_trawl_photo_photo_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2509,7 +2484,7 @@ func (x *OpenedPhotoRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenedPhotoRecord.ProtoReflect.Descriptor instead.
 func (*OpenedPhotoRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{19}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *OpenedPhotoRecord) GetCanonicalRecordReference() *identity.CanonicalArchiveRecordReference {
@@ -2554,24 +2529,101 @@ func (x *OpenedPhotoRecord) GetPictureFetchResult() *PictureFetchResult {
 	return nil
 }
 
-func (x *OpenedPhotoRecord) GetPictureFetchStepIsBuilt() bool {
+func (x *OpenedPhotoRecord) GetCachedPictureFilePath() string {
 	if x != nil {
-		return x.PictureFetchStepIsBuilt
+		return x.CachedPictureFilePath
+	}
+	return ""
+}
+
+func (x *OpenedPhotoRecord) GetCardModelInputChangedSinceCardWasWritten() bool {
+	if x != nil {
+		return x.CardModelInputChangedSinceCardWasWritten
 	}
 	return false
+}
+
+// A stored nearby place measured from where one photo's camera stood, not
+// from the camera spot its lookup was made for.
+type NearbyPlaceFromCamera struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	NearbyPlace              *NearbyPlace           `protobuf:"bytes,1,opt,name=nearby_place,json=nearbyPlace,proto3" json:"nearby_place,omitempty"`
+	DistanceFromCameraMetres float64                `protobuf:"fixed64,2,opt,name=distance_from_camera_metres,json=distanceFromCameraMetres,proto3" json:"distance_from_camera_metres,omitempty"`
+	// Degrees clockwise from true north.
+	DirectionFromCameraDegrees float64 `protobuf:"fixed64,3,opt,name=direction_from_camera_degrees,json=directionFromCameraDegrees,proto3" json:"direction_from_camera_degrees,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
+}
+
+func (x *NearbyPlaceFromCamera) Reset() {
+	*x = NearbyPlaceFromCamera{}
+	mi := &file_trawl_photo_photo_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NearbyPlaceFromCamera) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NearbyPlaceFromCamera) ProtoMessage() {}
+
+func (x *NearbyPlaceFromCamera) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_photo_photo_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NearbyPlaceFromCamera.ProtoReflect.Descriptor instead.
+func (*NearbyPlaceFromCamera) Descriptor() ([]byte, []int) {
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *NearbyPlaceFromCamera) GetNearbyPlace() *NearbyPlace {
+	if x != nil {
+		return x.NearbyPlace
+	}
+	return nil
+}
+
+func (x *NearbyPlaceFromCamera) GetDistanceFromCameraMetres() float64 {
+	if x != nil {
+		return x.DistanceFromCameraMetres
+	}
+	return 0
+}
+
+func (x *NearbyPlaceFromCamera) GetDirectionFromCameraDegrees() float64 {
+	if x != nil {
+		return x.DirectionFromCameraDegrees
+	}
+	return 0
 }
 
 type PhotoInspectionResponse struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	PhotoRecord          *OpenedPhotoRecord     `protobuf:"bytes,1,opt,name=photo_record,json=photoRecord,proto3" json:"photo_record,omitempty"`
 	PhotoInspectionLayer PhotoInspectionLayer   `protobuf:"varint,2,opt,name=photo_inspection_layer,json=photoInspectionLayer,proto3,enum=trawl.photo.PhotoInspectionLayer" json:"photo_inspection_layer,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// The nearby-places layer only. Unspecified when no lookup is stored for
+	// the photo's camera spot.
+	NearbyPlacesLookupOutcome          PlaceLookupOutcome       `protobuf:"varint,3,opt,name=nearby_places_lookup_outcome,json=nearbyPlacesLookupOutcome,proto3,enum=trawl.photo.PlaceLookupOutcome" json:"nearby_places_lookup_outcome,omitempty"`
+	NearbyPlacesLookupFailureMessage   string                   `protobuf:"bytes,4,opt,name=nearby_places_lookup_failure_message,json=nearbyPlacesLookupFailureMessage,proto3" json:"nearby_places_lookup_failure_message,omitempty"`
+	NearbyPlacesFromCameraNearestFirst []*NearbyPlaceFromCamera `protobuf:"bytes,5,rep,name=nearby_places_from_camera_nearest_first,json=nearbyPlacesFromCameraNearestFirst,proto3" json:"nearby_places_from_camera_nearest_first,omitempty"`
+	// The card-model-input layer only: what the card model would read now.
+	CurrentPhotoCardModelInput *PhotoCardModelInput `protobuf:"bytes,6,opt,name=current_photo_card_model_input,json=currentPhotoCardModelInput,proto3" json:"current_photo_card_model_input,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *PhotoInspectionResponse) Reset() {
 	*x = PhotoInspectionResponse{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[20]
+	mi := &file_trawl_photo_photo_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2583,7 +2635,7 @@ func (x *PhotoInspectionResponse) String() string {
 func (*PhotoInspectionResponse) ProtoMessage() {}
 
 func (x *PhotoInspectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[20]
+	mi := &file_trawl_photo_photo_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2596,7 +2648,7 @@ func (x *PhotoInspectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoInspectionResponse.ProtoReflect.Descriptor instead.
 func (*PhotoInspectionResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{20}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PhotoInspectionResponse) GetPhotoRecord() *OpenedPhotoRecord {
@@ -2611,6 +2663,34 @@ func (x *PhotoInspectionResponse) GetPhotoInspectionLayer() PhotoInspectionLayer
 		return x.PhotoInspectionLayer
 	}
 	return PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_UNSPECIFIED
+}
+
+func (x *PhotoInspectionResponse) GetNearbyPlacesLookupOutcome() PlaceLookupOutcome {
+	if x != nil {
+		return x.NearbyPlacesLookupOutcome
+	}
+	return PlaceLookupOutcome_PLACE_LOOKUP_OUTCOME_UNSPECIFIED
+}
+
+func (x *PhotoInspectionResponse) GetNearbyPlacesLookupFailureMessage() string {
+	if x != nil {
+		return x.NearbyPlacesLookupFailureMessage
+	}
+	return ""
+}
+
+func (x *PhotoInspectionResponse) GetNearbyPlacesFromCameraNearestFirst() []*NearbyPlaceFromCamera {
+	if x != nil {
+		return x.NearbyPlacesFromCameraNearestFirst
+	}
+	return nil
+}
+
+func (x *PhotoInspectionResponse) GetCurrentPhotoCardModelInput() *PhotoCardModelInput {
+	if x != nil {
+		return x.CurrentPhotoCardModelInput
+	}
+	return nil
 }
 
 type PhotoDayStay struct {
@@ -2630,7 +2710,7 @@ type PhotoDayStay struct {
 
 func (x *PhotoDayStay) Reset() {
 	*x = PhotoDayStay{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[21]
+	mi := &file_trawl_photo_photo_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2642,7 +2722,7 @@ func (x *PhotoDayStay) String() string {
 func (*PhotoDayStay) ProtoMessage() {}
 
 func (x *PhotoDayStay) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[21]
+	mi := &file_trawl_photo_photo_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2655,7 +2735,7 @@ func (x *PhotoDayStay) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoDayStay.ProtoReflect.Descriptor instead.
 func (*PhotoDayStay) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{21}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PhotoDayStay) GetFirstPhotoCaptureLocalTime() *PhotoCaptureLocalTime {
@@ -2727,7 +2807,7 @@ type PhotoLocalDayRecord struct {
 
 func (x *PhotoLocalDayRecord) Reset() {
 	*x = PhotoLocalDayRecord{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[22]
+	mi := &file_trawl_photo_photo_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2739,7 +2819,7 @@ func (x *PhotoLocalDayRecord) String() string {
 func (*PhotoLocalDayRecord) ProtoMessage() {}
 
 func (x *PhotoLocalDayRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[22]
+	mi := &file_trawl_photo_photo_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2752,7 +2832,7 @@ func (x *PhotoLocalDayRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoLocalDayRecord.ProtoReflect.Descriptor instead.
 func (*PhotoLocalDayRecord) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{22}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *PhotoLocalDayRecord) GetPhotoLocalDate() *presentation.CalendarDate {
@@ -2804,7 +2884,7 @@ type PhotoLocalDayListResponse struct {
 
 func (x *PhotoLocalDayListResponse) Reset() {
 	*x = PhotoLocalDayListResponse{}
-	mi := &file_trawl_photo_photo_proto_msgTypes[23]
+	mi := &file_trawl_photo_photo_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2816,7 +2896,7 @@ func (x *PhotoLocalDayListResponse) String() string {
 func (*PhotoLocalDayListResponse) ProtoMessage() {}
 
 func (x *PhotoLocalDayListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_photo_photo_proto_msgTypes[23]
+	mi := &file_trawl_photo_photo_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2829,7 +2909,7 @@ func (x *PhotoLocalDayListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhotoLocalDayListResponse.ProtoReflect.Descriptor instead.
 func (*PhotoLocalDayListResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{23}
+	return file_trawl_photo_photo_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PhotoLocalDayListResponse) GetPhotoLocalDayRecordsNewestFirst() []*PhotoLocalDayRecord {
@@ -2925,7 +3005,7 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\x16AppleLibraryPhotoAlbum\x12(\n" +
 	"\x10apple_album_uuid\x18\x01 \x01(\tR\x0eappleAlbumUuid\x12\x1f\n" +
 	"\valbum_title\x18\x02 \x01(\tR\n" +
-	"albumTitle\"\xe0\x10\n" +
+	"albumTitle\"\xb7\x11\n" +
 	"\x16AppleLibraryPhotoFacts\x12(\n" +
 	"\x10apple_photo_uuid\x18\x01 \x01(\tR\x0eapplePhotoUuid\x12N\n" +
 	"\x13apple_library_scope\x18\x02 \x01(\x0e2\x1e.trawl.photo.AppleLibraryScopeR\x11appleLibraryScope\x12\\\n" +
@@ -2965,7 +3045,8 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\x12apple_named_people\x18\x1f \x03(\v2).trawl.photo.AppleLibraryPhotoNamedPersonR\x10appleNamedPeople\x12F\n" +
 	"\fapple_albums\x18  \x03(\v2#.trawl.photo.AppleLibraryPhotoAlbumR\vappleAlbums\x12=\n" +
 	"\x1bapple_recognised_text_lines\x18! \x03(\tR\x18appleRecognisedTextLines\x12(\n" +
-	"\x10apple_trip_uuids\x18\" \x03(\tR\x0eappleTripUuidsB,\n" +
+	"\x10apple_trip_uuids\x18\" \x03(\tR\x0eappleTripUuids\x12U\n" +
+	"\x19apple_adjustment_time_utc\x18# \x01(\v2\x1a.google.protobuf.TimestampR\x16appleAdjustmentTimeUtcB,\n" +
 	"*_apple_shared_library_contributor_is_ownerB\x1b\n" +
 	"\x19_focal_length_millimetresB+\n" +
 	")_focal_length_35mm_equivalent_millimetresB\x14\n" +
@@ -2979,25 +3060,24 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\x16apple_trip_place_title\x18\x02 \x01(\tR\x13appleTripPlaceTitle\x121\n" +
 	"\x15apple_trip_date_title\x18\x03 \x01(\tR\x12appleTripDateTitle\x12T\n" +
 	"\x19apple_trip_start_time_utc\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x15appleTripStartTimeUtc\x12P\n" +
-	"\x17apple_trip_end_time_utc\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x13appleTripEndTimeUtc\"\xac\x01\n" +
-	"\x18PictureFileMetadataField\x12%\n" +
-	"\x0emetadata_group\x18\x01 \x01(\tR\rmetadataGroup\x12.\n" +
-	"\x13metadata_field_name\x18\x02 \x01(\tR\x11metadataFieldName\x129\n" +
-	"\x19metadata_field_value_text\x18\x03 \x01(\tR\x16metadataFieldValueText\"\xac\x06\n" +
+	"\x17apple_trip_end_time_utc\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x13appleTripEndTimeUtc\"\xc8\a\n" +
 	"\x12PictureFetchResult\x12(\n" +
-	"\x10apple_photo_uuid\x18\x01 \x01(\tR\x0eapplePhotoUuid\x12o\n" +
-	"'fetched_for_apple_modification_time_utc\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\"fetchedForAppleModificationTimeUtc\x12T\n" +
-	"\x15picture_fetch_outcome\x18\x03 \x01(\x0e2 .trawl.photo.PictureFetchOutcomeR\x13pictureFetchOutcome\x12A\n" +
-	"\x1dpicture_fetch_failure_message\x18\x04 \x01(\tR\x1apictureFetchFailureMessage\x12T\n" +
-	"\x19retry_not_before_time_utc\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x15retryNotBeforeTimeUtc\x12%\n" +
-	"\x0epicture_sha256\x18\x06 \x01(\tR\rpictureSha256\x121\n" +
-	"\x12picture_byte_count\x18\a \x01(\x03H\x00R\x10pictureByteCount\x88\x01\x01\x129\n" +
-	"\x16camera_bearing_degrees\x18\b \x01(\x01H\x01R\x14cameraBearingDegrees\x88\x01\x01\x12]\n" +
-	"\x18camera_bearing_reference\x18\t \x01(\x0e2#.trawl.photo.CameraBearingReferenceR\x16cameraBearingReference\x12f\n" +
-	"\x1cpicture_file_metadata_fields\x18\n" +
-	" \x03(\v2%.trawl.photo.PictureFileMetadataFieldR\x19pictureFileMetadataFieldsB\x15\n" +
+	"\x10apple_photo_uuid\x18\x01 \x01(\tR\x0eapplePhotoUuid\x12L\n" +
+	"#fetched_for_apple_adjustments_state\x18\x02 \x01(\x05R\x1ffetchedForAppleAdjustmentsState\x12k\n" +
+	"%fetched_for_apple_adjustment_time_utc\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR fetchedForAppleAdjustmentTimeUtc\x12T\n" +
+	"\x15picture_fetch_outcome\x18\x04 \x01(\x0e2 .trawl.photo.PictureFetchOutcomeR\x13pictureFetchOutcome\x12A\n" +
+	"\x1dpicture_fetch_failure_message\x18\x05 \x01(\tR\x1apictureFetchFailureMessage\x12T\n" +
+	"\x19retry_not_before_time_utc\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x15retryNotBeforeTimeUtc\x12A\n" +
+	"\x0epicture_source\x18\a \x01(\x0e2\x1a.trawl.photo.PictureSourceR\rpictureSource\x12%\n" +
+	"\x0epicture_sha256\x18\b \x01(\tR\rpictureSha256\x121\n" +
+	"\x12picture_byte_count\x18\t \x01(\x03H\x00R\x10pictureByteCount\x88\x01\x01\x129\n" +
+	"\x16camera_bearing_degrees\x18\n" +
+	" \x01(\x01H\x01R\x14cameraBearingDegrees\x88\x01\x01\x12]\n" +
+	"\x18camera_bearing_reference\x18\v \x01(\x0e2#.trawl.photo.CameraBearingReferenceR\x16cameraBearingReference\x12N\n" +
+	"\"picture_long_edge_pixel_limit_used\x18\f \x01(\x05H\x02R\x1dpictureLongEdgePixelLimitUsed\x88\x01\x01B\x15\n" +
 	"\x13_picture_byte_countB\x19\n" +
-	"\x17_camera_bearing_degrees\"\x9b\x01\n" +
+	"\x17_camera_bearing_degreesB%\n" +
+	"#_picture_long_edge_pixel_limit_used\"\x9b\x01\n" +
 	"\vNearbyPlace\x12\x1d\n" +
 	"\n" +
 	"place_name\x18\x01 \x01(\tR\tplaceName\x12\x1d\n" +
@@ -3014,19 +3094,16 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\x1cplace_lookup_failure_message\x18\x06 \x01(\tR\x19placeLookupFailureMessage\x12T\n" +
 	"\x19retry_not_before_time_utc\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x15retryNotBeforeTimeUtc\x124\n" +
 	"\x16provider_response_body\x18\b \x01(\fR\x14providerResponseBody\x12W\n" +
-	"\x1bnearby_places_nearest_first\x18\t \x03(\v2\x18.trawl.photo.NearbyPlaceR\x18nearbyPlacesNearestFirst\"\x93\x01\n" +
-	"\x1aPhotoCardModelInputSection\x12N\n" +
-	"\fsection_name\x18\x01 \x01(\x0e2+.trawl.photo.PhotoCardModelInputSectionNameR\vsectionName\x12%\n" +
-	"\x0esection_sha256\x18\x02 \x01(\tR\rsectionSha256\"\xae\x02\n" +
+	"\x1bnearby_places_nearest_first\x18\t \x03(\v2\x18.trawl.photo.NearbyPlaceR\x18nearbyPlacesNearestFirst\"\xbf\x01\n" +
 	"\x13PhotoCardModelInput\x12(\n" +
 	"\x10apple_photo_uuid\x18\x01 \x01(\tR\x0eapplePhotoUuid\x12<\n" +
 	"\x1bphoto_card_model_input_text\x18\x02 \x01(\tR\x17photoCardModelInputText\x12@\n" +
-	"\x1dphoto_card_model_input_sha256\x18\x03 \x01(\tR\x19photoCardModelInputSha256\x12m\n" +
-	"\x1fphoto_card_model_input_sections\x18\x04 \x03(\v2'.trawl.photo.PhotoCardModelInputSectionR\x1bphotoCardModelInputSections\"\x9e\x01\n" +
+	"\x1dphoto_card_model_input_sha256\x18\x03 \x01(\tR\x19photoCardModelInputSha256\"\x9e\x01\n" +
 	"\x19PhotoCardVisibleTextGroup\x12,\n" +
 	"\x12where_text_appears\x18\x01 \x01(\tR\x10whereTextAppears\x12&\n" +
 	"\x0ftext_as_written\x18\x02 \x01(\tR\rtextAsWritten\x12+\n" +
-	"\x11english_rendering\x18\x03 \x01(\tR\x10englishRendering\"\xfe\a\n" +
+	"\x11english_rendering\x18\x03 \x01(\tR\x10englishRendering\"\xa7\n" +
+	"\n" +
 	"\tPhotoCard\x12(\n" +
 	"\x10apple_photo_uuid\x18\x01 \x01(\tR\x0eapplePhotoUuid\x12K\n" +
 	"\x12photo_card_outcome\x18\x02 \x01(\x0e2\x1d.trawl.photo.PhotoCardOutcomeR\x10photoCardOutcome\x12E\n" +
@@ -3036,27 +3113,33 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\x0fcard_model_name\x18\x06 \x01(\tR\rcardModelName\x12(\n" +
 	"\x10one_line_summary\x18\a \x01(\tR\x0eoneLineSummary\x12 \n" +
 	"\vdescription\x18\b \x01(\tR\vdescription\x12V\n" +
-	"\x13visible_text_groups\x18\t \x03(\v2&.trawl.photo.PhotoCardVisibleTextGroupR\x11visibleTextGroups\x12T\n" +
-	"\x15place_shown_judgement\x18\n" +
-	" \x01(\x0e2 .trawl.photo.PlaceShownJudgementR\x13placeShownJudgement\x12(\n" +
-	"\x10place_shown_name\x18\v \x01(\tR\x0eplaceShownName\x122\n" +
-	"\x15place_shown_reasoning\x18\f \x01(\tR\x13placeShownReasoning\x12(\n" +
-	"\x10raw_model_answer\x18\r \x01(\tR\x0erawModelAnswer\x12&\n" +
-	"\finput_tokens\x18\x0e \x01(\x03H\x00R\vinputTokens\x88\x01\x01\x12(\n" +
-	"\routput_tokens\x18\x0f \x01(\x03H\x01R\foutputTokens\x88\x01\x01\x12.\n" +
-	"\x10reasoning_tokens\x18\x10 \x01(\x03H\x02R\x0freasoningTokens\x88\x01\x01\x12T\n" +
-	"\x19retry_not_before_time_utc\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\x15retryNotBeforeTimeUtcB\x0f\n" +
+	"\x13visible_text_groups\x18\t \x03(\v2&.trawl.photo.PhotoCardVisibleTextGroupR\x11visibleTextGroups\x12(\n" +
+	"\x10place_shown_name\x18\n" +
+	" \x01(\tR\x0eplaceShownName\x122\n" +
+	"\x15place_shown_reasoning\x18\v \x01(\tR\x13placeShownReasoning\x12(\n" +
+	"\x10raw_model_answer\x18\f \x01(\tR\x0erawModelAnswer\x12&\n" +
+	"\finput_tokens\x18\r \x01(\x03H\x00R\vinputTokens\x88\x01\x01\x12(\n" +
+	"\routput_tokens\x18\x0e \x01(\x03H\x01R\foutputTokens\x88\x01\x01\x12.\n" +
+	"\x10reasoning_tokens\x18\x0f \x01(\x03H\x02R\x0freasoningTokens\x88\x01\x01\x12T\n" +
+	"\x19retry_not_before_time_utc\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\x15retryNotBeforeTimeUtc\x12N\n" +
+	"\x13card_model_provider\x18\x11 \x01(\x0e2\x1e.trawl.photo.CardModelProviderR\x11cardModelProvider\x12;\n" +
+	"\x1aphoto_card_failure_message\x18\x12 \x01(\tR\x17photoCardFailureMessage\x12M\n" +
+	"\x15card_written_time_utc\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\x12cardWrittenTimeUtc\x12*\n" +
+	"\x11card_model_effort\x18\x14 \x01(\tR\x0fcardModelEffort\x12N\n" +
+	"\"picture_long_edge_pixel_limit_used\x18\x15 \x01(\x05H\x03R\x1dpictureLongEdgePixelLimitUsed\x88\x01\x01B\x0f\n" +
 	"\r_input_tokensB\x10\n" +
 	"\x0e_output_tokensB\x13\n" +
-	"\x11_reasoning_tokens\"\xdc\x01\n" +
+	"\x11_reasoning_tokensB%\n" +
+	"#_picture_long_edge_pixel_limit_used\"\xa9\x02\n" +
 	"\vPhotoRecord\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12^\n" +
-	"\x19apple_library_photo_facts\x18\x02 \x01(\v2#.trawl.photo.AppleLibraryPhotoFactsR\x16appleLibraryPhotoFacts\"\x9d\x02\n" +
+	"\x19apple_library_photo_facts\x18\x02 \x01(\v2#.trawl.photo.AppleLibraryPhotoFactsR\x16appleLibraryPhotoFacts\x12K\n" +
+	"#written_photo_card_one_line_summary\x18\x03 \x01(\tR\x1ewrittenPhotoCardOneLineSummary\"\x9d\x02\n" +
 	"\x11PhotoListResponse\x12U\n" +
 	"\x1aphoto_records_newest_first\x18\x01 \x03(\v2\x18.trawl.photo.PhotoRecordR\x17photoRecordsNewestFirst\x12;\n" +
 	"\x1atotal_matching_photo_count\x18\x02 \x01(\x04R\x17totalMatchingPhotoCount\x12;\n" +
 	"\x1amore_matching_photos_exist\x18\x03 \x01(\bR\x17moreMatchingPhotosExist\x127\n" +
-	"\x18person_filter_is_applied\x18\x04 \x01(\bR\x15personFilterIsApplied\"\xbf\x04\n" +
+	"\x18person_filter_is_applied\x18\x04 \x01(\bR\x15personFilterIsApplied\"\x9d\x05\n" +
 	"\x11OpenedPhotoRecord\x12m\n" +
 	"\x1acanonical_record_reference\x18\x01 \x01(\v2/.trawl.identity.CanonicalArchiveRecordReferenceR\x18canonicalRecordReference\x12^\n" +
 	"\x19apple_library_photo_facts\x18\x02 \x01(\v2#.trawl.photo.AppleLibraryPhotoFactsR\x16appleLibraryPhotoFacts\x12>\n" +
@@ -3065,11 +3148,20 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"\n" +
 	"photo_card\x18\x04 \x01(\v2\x16.trawl.photo.PhotoCardR\tphotoCard\x12S\n" +
 	"\x10photo_trawl_link\x18\x05 \x01(\v2).trawl.identity.GloballyRoutableTrawlLinkR\x0ephotoTrawlLink\x12Q\n" +
-	"\x14picture_fetch_result\x18\x06 \x01(\v2\x1f.trawl.photo.PictureFetchResultR\x12pictureFetchResult\x12<\n" +
-	"\x1bpicture_fetch_step_is_built\x18\a \x01(\bR\x17pictureFetchStepIsBuilt\"\xb5\x01\n" +
+	"\x14picture_fetch_result\x18\x06 \x01(\v2\x1f.trawl.photo.PictureFetchResultR\x12pictureFetchResult\x127\n" +
+	"\x18cached_picture_file_path\x18\a \x01(\tR\x15cachedPictureFilePath\x12a\n" +
+	"/card_model_input_changed_since_card_was_written\x18\b \x01(\bR(cardModelInputChangedSinceCardWasWritten\"\xd6\x01\n" +
+	"\x15NearbyPlaceFromCamera\x12;\n" +
+	"\fnearby_place\x18\x01 \x01(\v2\x18.trawl.photo.NearbyPlaceR\vnearbyPlace\x12=\n" +
+	"\x1bdistance_from_camera_metres\x18\x02 \x01(\x01R\x18distanceFromCameraMetres\x12A\n" +
+	"\x1ddirection_from_camera_degrees\x18\x03 \x01(\x01R\x1adirectionFromCameraDegrees\"\xc6\x04\n" +
 	"\x17PhotoInspectionResponse\x12A\n" +
 	"\fphoto_record\x18\x01 \x01(\v2\x1e.trawl.photo.OpenedPhotoRecordR\vphotoRecord\x12W\n" +
-	"\x16photo_inspection_layer\x18\x02 \x01(\x0e2!.trawl.photo.PhotoInspectionLayerR\x14photoInspectionLayer\"\x89\x05\n" +
+	"\x16photo_inspection_layer\x18\x02 \x01(\x0e2!.trawl.photo.PhotoInspectionLayerR\x14photoInspectionLayer\x12`\n" +
+	"\x1cnearby_places_lookup_outcome\x18\x03 \x01(\x0e2\x1f.trawl.photo.PlaceLookupOutcomeR\x19nearbyPlacesLookupOutcome\x12N\n" +
+	"$nearby_places_lookup_failure_message\x18\x04 \x01(\tR nearbyPlacesLookupFailureMessage\x12w\n" +
+	"'nearby_places_from_camera_nearest_first\x18\x05 \x03(\v2\".trawl.photo.NearbyPlaceFromCameraR\"nearbyPlacesFromCameraNearestFirst\x12d\n" +
+	"\x1ecurrent_photo_card_model_input\x18\x06 \x01(\v2 .trawl.photo.PhotoCardModelInputR\x1acurrentPhotoCardModelInput\"\x89\x05\n" +
 	"\fPhotoDayStay\x12f\n" +
 	"\x1efirst_photo_capture_local_time\x18\x01 \x01(\v2\".trawl.photo.PhotoCaptureLocalTimeR\x1afirstPhotoCaptureLocalTime\x12h\n" +
 	"!representative_apple_stored_place\x18\x02 \x01(\v2\x1d.trawl.photo.AppleStoredPlaceR\x1erepresentativeAppleStoredPlace\x127\n" +
@@ -3109,52 +3201,46 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	"?PHOTO_CAPTURE_TIME_ZONE_SOURCE_TIME_ZONE_MAP_AT_CAMERA_LOCATION\x10\x01\x12:\n" +
 	"6PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_UTC_OFFSET\x10\x02\x12,\n" +
 	"(PHOTO_CAPTURE_TIME_ZONE_SOURCE_NOT_KNOWN\x10\x03\x12>\n" +
-	":PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_TIME_ZONE_NAME\x10\x04*\xb4\x01\n" +
+	":PHOTO_CAPTURE_TIME_ZONE_SOURCE_APPLE_DEVICE_TIME_ZONE_NAME\x10\x04*\x81\x01\n" +
 	"\x13PictureFetchOutcome\x12%\n" +
 	"!PICTURE_FETCH_OUTCOME_UNSPECIFIED\x10\x00\x12!\n" +
-	"\x1dPICTURE_FETCH_OUTCOME_FETCHED\x10\x01\x121\n" +
-	"-PICTURE_FETCH_OUTCOME_NOT_AVAILABLE_IN_ICLOUD\x10\x02\x12 \n" +
-	"\x1cPICTURE_FETCH_OUTCOME_FAILED\x10\x03*\x98\x01\n" +
+	"\x1dPICTURE_FETCH_OUTCOME_FETCHED\x10\x01\x12 \n" +
+	"\x1cPICTURE_FETCH_OUTCOME_FAILED\x10\x02*z\n" +
+	"\rPictureSource\x12\x1e\n" +
+	"\x1aPICTURE_SOURCE_UNSPECIFIED\x10\x00\x12(\n" +
+	"$PICTURE_SOURCE_PICTURE_MIRROR_FOLDER\x10\x01\x12\x1f\n" +
+	"\x1bPICTURE_SOURCE_APPLE_PHOTOS\x10\x02*\x98\x01\n" +
 	"\x16CameraBearingReference\x12(\n" +
 	"$CAMERA_BEARING_REFERENCE_UNSPECIFIED\x10\x00\x12'\n" +
 	"#CAMERA_BEARING_REFERENCE_TRUE_NORTH\x10\x01\x12+\n" +
-	"'CAMERA_BEARING_REFERENCE_MAGNETIC_NORTH\x10\x02*\x8b\x01\n" +
+	"'CAMERA_BEARING_REFERENCE_MAGNETIC_NORTH\x10\x02*X\n" +
 	"\rPlaceProvider\x12\x1e\n" +
-	"\x1aPLACE_PROVIDER_UNSPECIFIED\x10\x00\x12/\n" +
-	"+PLACE_PROVIDER_APPLE_MAP_POINTS_OF_INTEREST\x10\x01\x12)\n" +
-	"%PLACE_PROVIDER_OPENSTREETMAP_OVERPASS\x10\x02*\xa6\x01\n" +
+	"\x1aPLACE_PROVIDER_UNSPECIFIED\x10\x00\x12'\n" +
+	"#PLACE_PROVIDER_OPENSTREETMAP_PHOTON\x10\x01*\xa6\x01\n" +
 	"\x12PlaceLookupOutcome\x12$\n" +
 	" PLACE_LOOKUP_OUTCOME_UNSPECIFIED\x10\x00\x12%\n" +
 	"!PLACE_LOOKUP_OUTCOME_PLACES_FOUND\x10\x01\x12\"\n" +
 	"\x1ePLACE_LOOKUP_OUTCOME_NO_PLACES\x10\x02\x12\x1f\n" +
-	"\x1bPLACE_LOOKUP_OUTCOME_FAILED\x10\x03*\xe1\x03\n" +
-	"\x1ePhotoCardModelInputSectionName\x123\n" +
-	"/PHOTO_CARD_MODEL_INPUT_SECTION_NAME_UNSPECIFIED\x10\x00\x12,\n" +
-	"(PHOTO_CARD_MODEL_INPUT_SECTION_NAME_TIME\x10\x01\x12E\n" +
-	"APHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA_POSITION_AND_DIRECTION\x10\x02\x12:\n" +
-	"6PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_STORED_PLACE\x10\x03\x125\n" +
-	"1PHOTO_CARD_MODEL_INPUT_SECTION_NAME_NEARBY_PLACES\x10\x04\x123\n" +
-	"/PHOTO_CARD_MODEL_INPUT_SECTION_NAME_KNOWN_PLACE\x10\x05\x12.\n" +
-	"*PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA\x10\x06\x12=\n" +
-	"9PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_PEOPLE_AND_TEXT\x10\a*\x9c\x01\n" +
+	"\x1bPLACE_LOOKUP_OUTCOME_FAILED\x10\x03*\x9c\x01\n" +
 	"\x10PhotoCardOutcome\x12\"\n" +
 	"\x1ePHOTO_CARD_OUTCOME_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aPHOTO_CARD_OUTCOME_WRITTEN\x10\x01\x12%\n" +
 	"!PHOTO_CARD_OUTCOME_ANSWER_INVALID\x10\x02\x12\x1d\n" +
-	"\x19PHOTO_CARD_OUTCOME_FAILED\x10\x03*\xe8\x01\n" +
-	"\x13PlaceShownJudgement\x12%\n" +
-	"!PLACE_SHOWN_JUDGEMENT_UNSPECIFIED\x10\x00\x12&\n" +
-	"\"PLACE_SHOWN_JUDGEMENT_NEARBY_PLACE\x10\x01\x121\n" +
-	"-PLACE_SHOWN_JUDGEMENT_RECOGNISED_FROM_PICTURE\x10\x02\x12,\n" +
-	"(PLACE_SHOWN_JUDGEMENT_WHERE_CAMERA_STOOD\x10\x03\x12!\n" +
-	"\x1dPLACE_SHOWN_JUDGEMENT_UNKNOWN\x10\x04*\x8b\x02\n" +
+	"\x19PHOTO_CARD_OUTCOME_FAILED\x10\x03*\x87\x02\n" +
+	"\x11CardModelProvider\x12#\n" +
+	"\x1fCARD_MODEL_PROVIDER_UNSPECIFIED\x10\x00\x12$\n" +
+	" CARD_MODEL_PROVIDER_OLLAMA_CLOUD\x10\x01\x12*\n" +
+	"&CARD_MODEL_PROVIDER_CODEX_COMMAND_LINE\x10\x02\x12'\n" +
+	"#CARD_MODEL_PROVIDER_ANTIGRAVITY_ACP\x10\x03\x12%\n" +
+	"!CARD_MODEL_PROVIDER_ANTHROPIC_API\x10\x04\x12+\n" +
+	"'CARD_MODEL_PROVIDER_CLAUDE_COMMAND_LINE\x10\x05*\x8b\x02\n" +
 	"\x14PhotoInspectionLayer\x12&\n" +
 	"\"PHOTO_INSPECTION_LAYER_UNSPECIFIED\x10\x00\x12&\n" +
 	"\"PHOTO_INSPECTION_LAYER_APPLE_FACTS\x10\x01\x12+\n" +
 	"'PHOTO_INSPECTION_LAYER_PICTURE_METADATA\x10\x02\x12(\n" +
 	"$PHOTO_INSPECTION_LAYER_NEARBY_PLACES\x10\x03\x12+\n" +
 	"'PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT\x10\x04\x12\x1f\n" +
-	"\x1bPHOTO_INSPECTION_LAYER_CARD\x10\x05*\x9a\x06\n" +
+	"\x1bPHOTO_INSPECTION_LAYER_CARD\x10\x05*\xe0\a\n" +
 	"\x16PhotoSearchSourceField\x12)\n" +
 	"%PHOTO_SEARCH_SOURCE_FIELD_UNSPECIFIED\x10\x00\x12%\n" +
 	"!PHOTO_SEARCH_SOURCE_FIELD_CAPTION\x10\x01\x12#\n" +
@@ -3175,7 +3261,11 @@ const file_trawl_photo_photo_proto_rawDesc = "" +
 	" PHOTO_SEARCH_SOURCE_FIELD_PERSON\x10\x0f\x12#\n" +
 	"\x1fPHOTO_SEARCH_SOURCE_FIELD_ALBUM\x10\x10\x12$\n" +
 	" PHOTO_SEARCH_SOURCE_FIELD_MOMENT\x10\x11\x12-\n" +
-	")PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT\x10\x12BAZ?github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo;photob\x06proto3"
+	")PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT\x10\x12\x123\n" +
+	"/PHOTO_SEARCH_SOURCE_FIELD_CARD_ONE_LINE_SUMMARY\x10\x13\x12.\n" +
+	"*PHOTO_SEARCH_SOURCE_FIELD_CARD_DESCRIPTION\x10\x14\x12/\n" +
+	"+PHOTO_SEARCH_SOURCE_FIELD_CARD_VISIBLE_TEXT\x10\x15\x12.\n" +
+	"*PHOTO_SEARCH_SOURCE_FIELD_CARD_PLACE_SHOWN\x10\x16BAZ?github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo;photob\x06proto3"
 
 var (
 	file_trawl_photo_photo_proto_rawDescOnce sync.Once
@@ -3190,18 +3280,18 @@ func file_trawl_photo_photo_proto_rawDescGZIP() []byte {
 }
 
 var file_trawl_photo_photo_proto_enumTypes = make([]protoimpl.EnumInfo, 12)
-var file_trawl_photo_photo_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_trawl_photo_photo_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_trawl_photo_photo_proto_goTypes = []any{
 	(AppleLibraryScope)(0),                           // 0: trawl.photo.AppleLibraryScope
 	(AppleDeviceUtcOffsetSource)(0),                  // 1: trawl.photo.AppleDeviceUtcOffsetSource
 	(PhotoCaptureTimeZoneSource)(0),                  // 2: trawl.photo.PhotoCaptureTimeZoneSource
 	(PictureFetchOutcome)(0),                         // 3: trawl.photo.PictureFetchOutcome
-	(CameraBearingReference)(0),                      // 4: trawl.photo.CameraBearingReference
-	(PlaceProvider)(0),                               // 5: trawl.photo.PlaceProvider
-	(PlaceLookupOutcome)(0),                          // 6: trawl.photo.PlaceLookupOutcome
-	(PhotoCardModelInputSectionName)(0),              // 7: trawl.photo.PhotoCardModelInputSectionName
+	(PictureSource)(0),                               // 4: trawl.photo.PictureSource
+	(CameraBearingReference)(0),                      // 5: trawl.photo.CameraBearingReference
+	(PlaceProvider)(0),                               // 6: trawl.photo.PlaceProvider
+	(PlaceLookupOutcome)(0),                          // 7: trawl.photo.PlaceLookupOutcome
 	(PhotoCardOutcome)(0),                            // 8: trawl.photo.PhotoCardOutcome
-	(PlaceShownJudgement)(0),                         // 9: trawl.photo.PlaceShownJudgement
+	(CardModelProvider)(0),                           // 9: trawl.photo.CardModelProvider
 	(PhotoInspectionLayer)(0),                        // 10: trawl.photo.PhotoInspectionLayer
 	(PhotoSearchSourceField)(0),                      // 11: trawl.photo.PhotoSearchSourceField
 	(*PhotoCaptureLocalTime)(nil),                    // 12: trawl.photo.PhotoCaptureLocalTime
@@ -3213,28 +3303,27 @@ var file_trawl_photo_photo_proto_goTypes = []any{
 	(*AppleLibraryPhotoAlbum)(nil),                   // 18: trawl.photo.AppleLibraryPhotoAlbum
 	(*AppleLibraryPhotoFacts)(nil),                   // 19: trawl.photo.AppleLibraryPhotoFacts
 	(*AppleLibraryTrip)(nil),                         // 20: trawl.photo.AppleLibraryTrip
-	(*PictureFileMetadataField)(nil),                 // 21: trawl.photo.PictureFileMetadataField
-	(*PictureFetchResult)(nil),                       // 22: trawl.photo.PictureFetchResult
-	(*NearbyPlace)(nil),                              // 23: trawl.photo.NearbyPlace
-	(*NearbyPlacesLookupResult)(nil),                 // 24: trawl.photo.NearbyPlacesLookupResult
-	(*PhotoCardModelInputSection)(nil),               // 25: trawl.photo.PhotoCardModelInputSection
-	(*PhotoCardModelInput)(nil),                      // 26: trawl.photo.PhotoCardModelInput
-	(*PhotoCardVisibleTextGroup)(nil),                // 27: trawl.photo.PhotoCardVisibleTextGroup
-	(*PhotoCard)(nil),                                // 28: trawl.photo.PhotoCard
-	(*PhotoRecord)(nil),                              // 29: trawl.photo.PhotoRecord
-	(*PhotoListResponse)(nil),                        // 30: trawl.photo.PhotoListResponse
-	(*OpenedPhotoRecord)(nil),                        // 31: trawl.photo.OpenedPhotoRecord
-	(*PhotoInspectionResponse)(nil),                  // 32: trawl.photo.PhotoInspectionResponse
-	(*PhotoDayStay)(nil),                             // 33: trawl.photo.PhotoDayStay
-	(*PhotoLocalDayRecord)(nil),                      // 34: trawl.photo.PhotoLocalDayRecord
-	(*PhotoLocalDayListResponse)(nil),                // 35: trawl.photo.PhotoLocalDayListResponse
-	(*timestamppb.Timestamp)(nil),                    // 36: google.protobuf.Timestamp
-	(*identity.CanonicalArchiveRecordReference)(nil), // 37: trawl.identity.CanonicalArchiveRecordReference
-	(*identity.GloballyRoutableTrawlLink)(nil),       // 38: trawl.identity.GloballyRoutableTrawlLink
-	(*presentation.CalendarDate)(nil),                // 39: trawl.presentation.CalendarDate
+	(*PictureFetchResult)(nil),                       // 21: trawl.photo.PictureFetchResult
+	(*NearbyPlace)(nil),                              // 22: trawl.photo.NearbyPlace
+	(*NearbyPlacesLookupResult)(nil),                 // 23: trawl.photo.NearbyPlacesLookupResult
+	(*PhotoCardModelInput)(nil),                      // 24: trawl.photo.PhotoCardModelInput
+	(*PhotoCardVisibleTextGroup)(nil),                // 25: trawl.photo.PhotoCardVisibleTextGroup
+	(*PhotoCard)(nil),                                // 26: trawl.photo.PhotoCard
+	(*PhotoRecord)(nil),                              // 27: trawl.photo.PhotoRecord
+	(*PhotoListResponse)(nil),                        // 28: trawl.photo.PhotoListResponse
+	(*OpenedPhotoRecord)(nil),                        // 29: trawl.photo.OpenedPhotoRecord
+	(*NearbyPlaceFromCamera)(nil),                    // 30: trawl.photo.NearbyPlaceFromCamera
+	(*PhotoInspectionResponse)(nil),                  // 31: trawl.photo.PhotoInspectionResponse
+	(*PhotoDayStay)(nil),                             // 32: trawl.photo.PhotoDayStay
+	(*PhotoLocalDayRecord)(nil),                      // 33: trawl.photo.PhotoLocalDayRecord
+	(*PhotoLocalDayListResponse)(nil),                // 34: trawl.photo.PhotoLocalDayListResponse
+	(*timestamppb.Timestamp)(nil),                    // 35: google.protobuf.Timestamp
+	(*identity.CanonicalArchiveRecordReference)(nil), // 36: trawl.identity.CanonicalArchiveRecordReference
+	(*identity.GloballyRoutableTrawlLink)(nil),       // 37: trawl.identity.GloballyRoutableTrawlLink
+	(*presentation.CalendarDate)(nil),                // 38: trawl.presentation.CalendarDate
 }
 var file_trawl_photo_photo_proto_depIdxs = []int32{
-	36, // 0: trawl.photo.PhotoCaptureLocalTime.capture_time_utc:type_name -> google.protobuf.Timestamp
+	35, // 0: trawl.photo.PhotoCaptureLocalTime.capture_time_utc:type_name -> google.protobuf.Timestamp
 	2,  // 1: trawl.photo.PhotoCaptureLocalTime.capture_time_zone_source:type_name -> trawl.photo.PhotoCaptureTimeZoneSource
 	1,  // 2: trawl.photo.PhotoCaptureLocalTime.apple_device_utc_offset_source:type_name -> trawl.photo.AppleDeviceUtcOffsetSource
 	15, // 3: trawl.photo.AppleStoredPlace.apple_stored_place_areas_in_source_order:type_name -> trawl.photo.AppleStoredPlaceArea
@@ -3243,51 +3332,55 @@ var file_trawl_photo_photo_proto_depIdxs = []int32{
 	13, // 6: trawl.photo.AppleLibraryPhotoFacts.camera_location:type_name -> trawl.photo.PhotoCameraLocation
 	14, // 7: trawl.photo.AppleLibraryPhotoFacts.apple_china_shifted_location:type_name -> trawl.photo.AppleChinaShiftedLocation
 	16, // 8: trawl.photo.AppleLibraryPhotoFacts.apple_stored_place:type_name -> trawl.photo.AppleStoredPlace
-	36, // 9: trawl.photo.AppleLibraryPhotoFacts.apple_modification_time_utc:type_name -> google.protobuf.Timestamp
+	35, // 9: trawl.photo.AppleLibraryPhotoFacts.apple_modification_time_utc:type_name -> google.protobuf.Timestamp
 	17, // 10: trawl.photo.AppleLibraryPhotoFacts.apple_named_people:type_name -> trawl.photo.AppleLibraryPhotoNamedPerson
 	18, // 11: trawl.photo.AppleLibraryPhotoFacts.apple_albums:type_name -> trawl.photo.AppleLibraryPhotoAlbum
-	36, // 12: trawl.photo.AppleLibraryTrip.apple_trip_start_time_utc:type_name -> google.protobuf.Timestamp
-	36, // 13: trawl.photo.AppleLibraryTrip.apple_trip_end_time_utc:type_name -> google.protobuf.Timestamp
-	36, // 14: trawl.photo.PictureFetchResult.fetched_for_apple_modification_time_utc:type_name -> google.protobuf.Timestamp
-	3,  // 15: trawl.photo.PictureFetchResult.picture_fetch_outcome:type_name -> trawl.photo.PictureFetchOutcome
-	36, // 16: trawl.photo.PictureFetchResult.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
-	4,  // 17: trawl.photo.PictureFetchResult.camera_bearing_reference:type_name -> trawl.photo.CameraBearingReference
-	21, // 18: trawl.photo.PictureFetchResult.picture_file_metadata_fields:type_name -> trawl.photo.PictureFileMetadataField
-	5,  // 19: trawl.photo.NearbyPlacesLookupResult.place_provider:type_name -> trawl.photo.PlaceProvider
-	6,  // 20: trawl.photo.NearbyPlacesLookupResult.place_lookup_outcome:type_name -> trawl.photo.PlaceLookupOutcome
-	36, // 21: trawl.photo.NearbyPlacesLookupResult.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
-	23, // 22: trawl.photo.NearbyPlacesLookupResult.nearby_places_nearest_first:type_name -> trawl.photo.NearbyPlace
-	7,  // 23: trawl.photo.PhotoCardModelInputSection.section_name:type_name -> trawl.photo.PhotoCardModelInputSectionName
-	25, // 24: trawl.photo.PhotoCardModelInput.photo_card_model_input_sections:type_name -> trawl.photo.PhotoCardModelInputSection
-	8,  // 25: trawl.photo.PhotoCard.photo_card_outcome:type_name -> trawl.photo.PhotoCardOutcome
-	27, // 26: trawl.photo.PhotoCard.visible_text_groups:type_name -> trawl.photo.PhotoCardVisibleTextGroup
-	9,  // 27: trawl.photo.PhotoCard.place_shown_judgement:type_name -> trawl.photo.PlaceShownJudgement
-	36, // 28: trawl.photo.PhotoCard.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
-	37, // 29: trawl.photo.PhotoRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	35, // 12: trawl.photo.AppleLibraryPhotoFacts.apple_adjustment_time_utc:type_name -> google.protobuf.Timestamp
+	35, // 13: trawl.photo.AppleLibraryTrip.apple_trip_start_time_utc:type_name -> google.protobuf.Timestamp
+	35, // 14: trawl.photo.AppleLibraryTrip.apple_trip_end_time_utc:type_name -> google.protobuf.Timestamp
+	35, // 15: trawl.photo.PictureFetchResult.fetched_for_apple_adjustment_time_utc:type_name -> google.protobuf.Timestamp
+	3,  // 16: trawl.photo.PictureFetchResult.picture_fetch_outcome:type_name -> trawl.photo.PictureFetchOutcome
+	35, // 17: trawl.photo.PictureFetchResult.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
+	4,  // 18: trawl.photo.PictureFetchResult.picture_source:type_name -> trawl.photo.PictureSource
+	5,  // 19: trawl.photo.PictureFetchResult.camera_bearing_reference:type_name -> trawl.photo.CameraBearingReference
+	6,  // 20: trawl.photo.NearbyPlacesLookupResult.place_provider:type_name -> trawl.photo.PlaceProvider
+	7,  // 21: trawl.photo.NearbyPlacesLookupResult.place_lookup_outcome:type_name -> trawl.photo.PlaceLookupOutcome
+	35, // 22: trawl.photo.NearbyPlacesLookupResult.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
+	22, // 23: trawl.photo.NearbyPlacesLookupResult.nearby_places_nearest_first:type_name -> trawl.photo.NearbyPlace
+	8,  // 24: trawl.photo.PhotoCard.photo_card_outcome:type_name -> trawl.photo.PhotoCardOutcome
+	25, // 25: trawl.photo.PhotoCard.visible_text_groups:type_name -> trawl.photo.PhotoCardVisibleTextGroup
+	35, // 26: trawl.photo.PhotoCard.retry_not_before_time_utc:type_name -> google.protobuf.Timestamp
+	9,  // 27: trawl.photo.PhotoCard.card_model_provider:type_name -> trawl.photo.CardModelProvider
+	35, // 28: trawl.photo.PhotoCard.card_written_time_utc:type_name -> google.protobuf.Timestamp
+	36, // 29: trawl.photo.PhotoRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	19, // 30: trawl.photo.PhotoRecord.apple_library_photo_facts:type_name -> trawl.photo.AppleLibraryPhotoFacts
-	29, // 31: trawl.photo.PhotoListResponse.photo_records_newest_first:type_name -> trawl.photo.PhotoRecord
-	37, // 32: trawl.photo.OpenedPhotoRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
+	27, // 31: trawl.photo.PhotoListResponse.photo_records_newest_first:type_name -> trawl.photo.PhotoRecord
+	36, // 32: trawl.photo.OpenedPhotoRecord.canonical_record_reference:type_name -> trawl.identity.CanonicalArchiveRecordReference
 	19, // 33: trawl.photo.OpenedPhotoRecord.apple_library_photo_facts:type_name -> trawl.photo.AppleLibraryPhotoFacts
 	20, // 34: trawl.photo.OpenedPhotoRecord.apple_trips:type_name -> trawl.photo.AppleLibraryTrip
-	28, // 35: trawl.photo.OpenedPhotoRecord.photo_card:type_name -> trawl.photo.PhotoCard
-	38, // 36: trawl.photo.OpenedPhotoRecord.photo_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
-	22, // 37: trawl.photo.OpenedPhotoRecord.picture_fetch_result:type_name -> trawl.photo.PictureFetchResult
-	31, // 38: trawl.photo.PhotoInspectionResponse.photo_record:type_name -> trawl.photo.OpenedPhotoRecord
-	10, // 39: trawl.photo.PhotoInspectionResponse.photo_inspection_layer:type_name -> trawl.photo.PhotoInspectionLayer
-	12, // 40: trawl.photo.PhotoDayStay.first_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
-	16, // 41: trawl.photo.PhotoDayStay.representative_apple_stored_place:type_name -> trawl.photo.AppleStoredPlace
-	13, // 42: trawl.photo.PhotoDayStay.camera_location:type_name -> trawl.photo.PhotoCameraLocation
-	12, // 43: trawl.photo.PhotoDayStay.last_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
-	39, // 44: trawl.photo.PhotoLocalDayRecord.photo_local_date:type_name -> trawl.presentation.CalendarDate
-	12, // 45: trawl.photo.PhotoLocalDayRecord.first_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
-	12, // 46: trawl.photo.PhotoLocalDayRecord.last_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
-	33, // 47: trawl.photo.PhotoLocalDayRecord.photo_day_stays_in_capture_order:type_name -> trawl.photo.PhotoDayStay
-	34, // 48: trawl.photo.PhotoLocalDayListResponse.photo_local_day_records_newest_first:type_name -> trawl.photo.PhotoLocalDayRecord
-	49, // [49:49] is the sub-list for method output_type
-	49, // [49:49] is the sub-list for method input_type
-	49, // [49:49] is the sub-list for extension type_name
-	49, // [49:49] is the sub-list for extension extendee
-	0,  // [0:49] is the sub-list for field type_name
+	26, // 35: trawl.photo.OpenedPhotoRecord.photo_card:type_name -> trawl.photo.PhotoCard
+	37, // 36: trawl.photo.OpenedPhotoRecord.photo_trawl_link:type_name -> trawl.identity.GloballyRoutableTrawlLink
+	21, // 37: trawl.photo.OpenedPhotoRecord.picture_fetch_result:type_name -> trawl.photo.PictureFetchResult
+	22, // 38: trawl.photo.NearbyPlaceFromCamera.nearby_place:type_name -> trawl.photo.NearbyPlace
+	29, // 39: trawl.photo.PhotoInspectionResponse.photo_record:type_name -> trawl.photo.OpenedPhotoRecord
+	10, // 40: trawl.photo.PhotoInspectionResponse.photo_inspection_layer:type_name -> trawl.photo.PhotoInspectionLayer
+	7,  // 41: trawl.photo.PhotoInspectionResponse.nearby_places_lookup_outcome:type_name -> trawl.photo.PlaceLookupOutcome
+	30, // 42: trawl.photo.PhotoInspectionResponse.nearby_places_from_camera_nearest_first:type_name -> trawl.photo.NearbyPlaceFromCamera
+	24, // 43: trawl.photo.PhotoInspectionResponse.current_photo_card_model_input:type_name -> trawl.photo.PhotoCardModelInput
+	12, // 44: trawl.photo.PhotoDayStay.first_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	16, // 45: trawl.photo.PhotoDayStay.representative_apple_stored_place:type_name -> trawl.photo.AppleStoredPlace
+	13, // 46: trawl.photo.PhotoDayStay.camera_location:type_name -> trawl.photo.PhotoCameraLocation
+	12, // 47: trawl.photo.PhotoDayStay.last_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	38, // 48: trawl.photo.PhotoLocalDayRecord.photo_local_date:type_name -> trawl.presentation.CalendarDate
+	12, // 49: trawl.photo.PhotoLocalDayRecord.first_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	12, // 50: trawl.photo.PhotoLocalDayRecord.last_photo_capture_local_time:type_name -> trawl.photo.PhotoCaptureLocalTime
+	32, // 51: trawl.photo.PhotoLocalDayRecord.photo_day_stays_in_capture_order:type_name -> trawl.photo.PhotoDayStay
+	33, // 52: trawl.photo.PhotoLocalDayListResponse.photo_local_day_records_newest_first:type_name -> trawl.photo.PhotoLocalDayRecord
+	53, // [53:53] is the sub-list for method output_type
+	53, // [53:53] is the sub-list for method input_type
+	53, // [53:53] is the sub-list for extension type_name
+	53, // [53:53] is the sub-list for extension extendee
+	0,  // [0:53] is the sub-list for field type_name
 }
 
 func init() { file_trawl_photo_photo_proto_init() }
@@ -3299,16 +3392,16 @@ func file_trawl_photo_photo_proto_init() {
 	file_trawl_photo_photo_proto_msgTypes[1].OneofWrappers = []any{}
 	file_trawl_photo_photo_proto_msgTypes[3].OneofWrappers = []any{}
 	file_trawl_photo_photo_proto_msgTypes[7].OneofWrappers = []any{}
-	file_trawl_photo_photo_proto_msgTypes[10].OneofWrappers = []any{}
-	file_trawl_photo_photo_proto_msgTypes[16].OneofWrappers = []any{}
-	file_trawl_photo_photo_proto_msgTypes[21].OneofWrappers = []any{}
+	file_trawl_photo_photo_proto_msgTypes[9].OneofWrappers = []any{}
+	file_trawl_photo_photo_proto_msgTypes[14].OneofWrappers = []any{}
+	file_trawl_photo_photo_proto_msgTypes[20].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_photo_photo_proto_rawDesc), len(file_trawl_photo_photo_proto_rawDesc)),
 			NumEnums:      12,
-			NumMessages:   24,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

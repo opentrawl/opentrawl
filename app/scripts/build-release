@@ -153,11 +153,16 @@ key_bytes="$(printf '%s' "$sparkle_public_key" | openssl base64 -d -A 2>/dev/nul
 
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
 
-app_entitlements=()
+entitlements="$work/OpenTrawl.entitlements"
+plutil -create xml1 "$entitlements"
+# The hardened runtime refuses Photos library access without this entitlement.
+/usr/libexec/PlistBuddy \
+  -c "Add :com.apple.security.personal-information.photos-library bool true" \
+  "$entitlements"
+app_entitlements=(--entitlements "$entitlements")
 if [[ -n "$provisioning_profile" ]]; then
   embedded_profile="$contents/embedded.provisionprofile"
   decoded_profile="$work/provisioning-profile.plist"
-  entitlements="$work/OpenTrawl.entitlements"
   cp "$provisioning_profile" "$embedded_profile"
   security cms -D -i "$embedded_profile" -o "$decoded_profile"
   application_identifier_key='com\.apple\.application-identifier'
@@ -173,7 +178,6 @@ if [[ -n "$provisioning_profile" ]]; then
     echo "build-release: provisioning profile has no keychain access groups" >&2
     exit 1
   }
-  plutil -create xml1 "$entitlements"
   plutil -insert "$application_identifier_key" -string "$application_identifier" "$entitlements"
   plutil -insert "$team_identifier_key" -string "$team_identifier" "$entitlements"
   plutil -insert keychain-access-groups -array "$entitlements"
@@ -189,7 +193,6 @@ if [[ -n "$provisioning_profile" ]]; then
     fi
     plutil -insert keychain-access-groups -string "$keychain_group" -append "$entitlements"
   done
-  app_entitlements=(--entitlements "$entitlements")
 fi
 
 mkdir -p "$output"
@@ -288,6 +291,7 @@ plutil -insert GitCommit -string "$commit" "$info"
 plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info"
 plutil -insert LSMinimumSystemVersion -string "$deployment_target" "$info"
 plutil -insert NSHighResolutionCapable -bool true "$info"
+plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads your photos so you and your assistants can search what they show." "$info"
 plutil -insert SUFeedURL -string "$feed_url" "$info"
 plutil -insert SUPublicEDKey -string "$sparkle_public_key" "$info"
 plutil -insert SUEnableAutomaticChecks -bool true "$info"
@@ -311,12 +315,9 @@ xattr -cr "$app"
 if [[ "$identity" == "-" ]]; then
   sign_args=(--force --sign - --options runtime --timestamp=none)
   dmg_sign_args=(--force --sign - --timestamp=none)
-  ad_hoc_entitlements="$work/ad-hoc.entitlements"
-  plutil -create xml1 "$ad_hoc_entitlements"
   /usr/libexec/PlistBuddy \
     -c "Add :com.apple.security.cs.disable-library-validation bool true" \
-    "$ad_hoc_entitlements"
-  app_entitlements=(--entitlements "$ad_hoc_entitlements")
+    "$entitlements"
 else
   sign_args=(--force --sign "$identity" --options runtime --timestamp)
   dmg_sign_args=(--force --sign "$identity" --timestamp)

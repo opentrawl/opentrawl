@@ -39,7 +39,8 @@ func (photosArchive *PhotosArchive) matchingPhotoUUIDs(ctx context.Context, filt
 coalesce(apple_stored_country_name,'') || char(10) || coalesce(apple_stored_state_name,'') || char(10) || coalesce(apple_stored_county_name,'') || char(10) ||
 coalesce(apple_stored_town_name,'') || char(10) || coalesce(apple_stored_neighbourhood_name,'') || char(10) || coalesce(apple_stored_street,'') || char(10) ||
 coalesce(apple_stored_point_of_interest_name,'') || char(10) || coalesce(apple_stored_water_name,'') || char(10) || coalesce(apple_stored_island_name,'') || char(10) ||
-coalesce((select group_concat(area_name,char(10)) from apple_library_photo_place_area a where a.apple_photo_uuid=p.apple_photo_uuid),'')`)
+coalesce((select group_concat(area_name,char(10)) from apple_library_photo_place_area a where a.apple_photo_uuid=p.apple_photo_uuid),'') || char(10) ||
+coalesce((select c.place_shown_name from photo_card c where c.apple_photo_uuid=p.apple_photo_uuid and c.photo_card_outcome='`+photo.PhotoCardOutcome_PHOTO_CARD_OUTCOME_WRITTEN.String()+`'),'')`)
 	}
 	if filters.Person != "" {
 		selectedColumns = append(selectedColumns, `coalesce((select group_concat(person_full_name,char(10)) from apple_library_photo_named_person n where n.apple_photo_uuid=p.apple_photo_uuid),'')`)

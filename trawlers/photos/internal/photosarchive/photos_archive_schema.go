@@ -57,6 +57,7 @@ create table if not exists apple_library_photo (
   is_hidden                                 integer not null,
   apple_adjustments_state                   integer not null,
   apple_modification_time_utc               text,
+  apple_adjustment_time_utc                 text,
   apple_library_photo_fingerprint           text not null,
   first_seen_time_utc                       text not null,
   absent_from_apple_library_since_time_utc  text
@@ -108,23 +109,19 @@ create table if not exists apple_library_photo_trip (
 );
 
 create table if not exists picture_fetch (
-  apple_photo_uuid                         text primary key,
-  fetched_for_apple_modification_time_utc  text not null,
-  picture_fetch_outcome                    text not null,
-  picture_fetch_failure_message            text,
-  retry_not_before_time_utc                text,
-  picture_sha256                           text,
-  picture_byte_count                       integer,
-  camera_bearing_degrees                   real,
-  camera_bearing_reference                 text,
-  fetched_time_utc                         text not null
-);
-
-create table if not exists picture_file_metadata_field (
-  apple_photo_uuid           text not null,
-  metadata_group             text not null,
-  metadata_field_name        text not null,
-  metadata_field_value_text  text not null
+  apple_photo_uuid                       text primary key,
+  fetched_for_apple_adjustments_state    integer not null,
+  fetched_for_apple_adjustment_time_utc  text,
+  picture_fetch_outcome                  text not null,
+  picture_fetch_failure_message          text,
+  retry_not_before_time_utc              text,
+  picture_source                         text,
+  picture_sha256                         text,
+  picture_byte_count                     integer,
+  picture_long_edge_pixel_limit_used     integer,
+  camera_bearing_degrees                 real,
+  camera_bearing_reference               text,
+  fetched_time_utc                       text not null
 );
 
 create table if not exists place_lookup (
@@ -135,7 +132,7 @@ create table if not exists place_lookup (
   place_lookup_outcome          text not null,
   place_lookup_failure_message  text,
   retry_not_before_time_utc     text,
-  provider_response_body        blob,
+  provider_response_body_gzip   blob,
   looked_up_time_utc            text not null
 );
 create index if not exists place_lookup_by_camera_spot on place_lookup(camera_spot_key, place_provider);
@@ -148,21 +145,7 @@ create table if not exists nearby_place (
   place_latitude               real not null,
   place_longitude              real not null,
   primary key (place_lookup_request_sha256, place_rank)
-);
-
-create table if not exists photo_card_model_input (
-  apple_photo_uuid               text primary key,
-  photo_card_model_input_text    text not null,
-  photo_card_model_input_sha256  text not null,
-  written_time_utc               text not null
-);
-
-create table if not exists photo_card_model_input_section_used (
-  apple_photo_uuid  text not null,
-  section_name      text not null,
-  section_sha256    text not null,
-  primary key (apple_photo_uuid, section_name)
-);
+) without rowid;
 
 create table if not exists photo_card (
   apple_photo_uuid                    text primary key,
@@ -170,13 +153,16 @@ create table if not exists photo_card (
   photo_card_model_input_text_used    text not null,
   photo_card_model_input_sha256_used  text not null,
   picture_sha256_used                 text not null,
+  picture_long_edge_pixel_limit_used  integer,
+  card_model_provider                 text not null,
   card_model_name                     text not null,
+  card_model_effort                   text not null,
   one_line_summary                    text,
   description                         text,
-  place_shown_judgement               text,
   place_shown_name                    text,
   place_shown_reasoning               text,
   raw_model_answer                    text,
+  photo_card_failure_message          text,
   input_tokens                        integer,
   output_tokens                       integer,
   reasoning_tokens                    integer,
@@ -203,15 +189,21 @@ create table if not exists photos_step_last_run (
   last_run_stop_reason               text not null
 );
 
--- Search rows for Apple's facts. Runs of Chinese, Japanese and Korean
--- characters are indexed as overlapping two-character pieces.
-create virtual table if not exists apple_library_photo_search using fts5(
+-- One search row per photo: Apple's facts and the photo's written card, so
+-- one query matches words from both. Each Chinese, Japanese and Korean
+-- character is indexed as its own token. The row is rebuilt whenever the
+-- photo's facts or its card are written.
+create virtual table if not exists photo_search using fts5(
   apple_photo_uuid unindexed,
   apple_caption_and_title,
   apple_place_names,
   apple_named_people,
   apple_album_titles,
   apple_moment_title,
-  apple_recognised_text
+  apple_recognised_text,
+  card_one_line_summary,
+  card_description,
+  card_visible_text,
+  card_place_shown_name
 );
 `

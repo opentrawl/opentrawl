@@ -132,7 +132,6 @@ var appleLibraryPhotoChildTables = []string{
 	"apple_library_photo_album",
 	"apple_library_photo_recognised_text_line",
 	"apple_library_photo_trip",
-	"apple_library_photo_search",
 }
 
 func replaceAppleLibraryPhotoRows(
@@ -159,12 +158,8 @@ func replaceAppleLibraryPhotoRows(
 	}
 	chinaShiftedLocation := applePhotoFacts.GetAppleChinaShiftedLocation()
 	storedPlace := applePhotoFacts.GetAppleStoredPlace()
-	var appleModificationTimeUTC any
-	if applePhotoFacts.GetAppleModificationTimeUtc() != nil {
-		appleModificationTimeUTC = formatArchiveTime(applePhotoFacts.GetAppleModificationTimeUtc().AsTime())
-	}
 	if _, err := transaction.ExecContext(ctx, `
-insert or replace into apple_library_photo (
+insert into apple_library_photo (
   apple_photo_uuid, apple_library_scope, apple_shared_library_contributor_is_owner,
   apple_media_kind, apple_media_subtype, is_apple_detected_screenshot,
   capture_time_utc, capture_utc_offset_seconds, capture_time_zone_name, capture_time_zone_source,
@@ -178,9 +173,64 @@ insert or replace into apple_library_photo (
   camera_make, camera_model, lens_model, focal_length_millimetres, focal_length_35mm_equivalent_millimetres,
   aperture_f_number, exposure_time_seconds, iso_speed, pixel_width, pixel_height,
   apple_duration_seconds, apple_burst_uuid, apple_caption, apple_title,
-  is_favourite, is_hidden, apple_adjustments_state, apple_modification_time_utc,
+  is_favourite, is_hidden, apple_adjustments_state, apple_modification_time_utc, apple_adjustment_time_utc,
   apple_library_photo_fingerprint, first_seen_time_utc, absent_from_apple_library_since_time_utc
-) values (?,?,?, ?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?, ?,?, ?,?,?,?,?,?,?,?,?,?,?,?, ?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,null)`,
+) values (?,?,?, ?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?, ?,?, ?,?,?,?,?,?,?,?,?,?,?,?, ?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,null)
+on conflict(apple_photo_uuid) do update set
+  apple_library_scope = excluded.apple_library_scope,
+  apple_shared_library_contributor_is_owner = excluded.apple_shared_library_contributor_is_owner,
+  apple_media_kind = excluded.apple_media_kind,
+  apple_media_subtype = excluded.apple_media_subtype,
+  is_apple_detected_screenshot = excluded.is_apple_detected_screenshot,
+  capture_time_utc = excluded.capture_time_utc,
+  capture_utc_offset_seconds = excluded.capture_utc_offset_seconds,
+  capture_time_zone_name = excluded.capture_time_zone_name,
+  capture_time_zone_source = excluded.capture_time_zone_source,
+  apple_device_utc_offset_seconds = excluded.apple_device_utc_offset_seconds,
+  apple_device_time_zone_name = excluded.apple_device_time_zone_name,
+  apple_device_utc_offset_source = excluded.apple_device_utc_offset_source,
+  camera_latitude = excluded.camera_latitude,
+  camera_longitude = excluded.camera_longitude,
+  camera_altitude_metres = excluded.camera_altitude_metres,
+  camera_horizontal_accuracy_metres = excluded.camera_horizontal_accuracy_metres,
+  apple_china_shifted_latitude = excluded.apple_china_shifted_latitude,
+  apple_china_shifted_longitude = excluded.apple_china_shifted_longitude,
+  apple_stored_full_address = excluded.apple_stored_full_address,
+  apple_stored_iso_country_code = excluded.apple_stored_iso_country_code,
+  apple_stored_country_name = excluded.apple_stored_country_name,
+  apple_stored_state_name = excluded.apple_stored_state_name,
+  apple_stored_county_name = excluded.apple_stored_county_name,
+  apple_stored_town_name = excluded.apple_stored_town_name,
+  apple_stored_neighbourhood_name = excluded.apple_stored_neighbourhood_name,
+  apple_stored_street = excluded.apple_stored_street,
+  apple_stored_point_of_interest_name = excluded.apple_stored_point_of_interest_name,
+  apple_stored_water_name = excluded.apple_stored_water_name,
+  apple_stored_island_name = excluded.apple_stored_island_name,
+  apple_says_home = excluded.apple_says_home,
+  apple_moment_uuid = excluded.apple_moment_uuid,
+  apple_moment_title = excluded.apple_moment_title,
+  camera_make = excluded.camera_make,
+  camera_model = excluded.camera_model,
+  lens_model = excluded.lens_model,
+  focal_length_millimetres = excluded.focal_length_millimetres,
+  focal_length_35mm_equivalent_millimetres = excluded.focal_length_35mm_equivalent_millimetres,
+  aperture_f_number = excluded.aperture_f_number,
+  exposure_time_seconds = excluded.exposure_time_seconds,
+  iso_speed = excluded.iso_speed,
+  pixel_width = excluded.pixel_width,
+  pixel_height = excluded.pixel_height,
+  apple_duration_seconds = excluded.apple_duration_seconds,
+  apple_burst_uuid = excluded.apple_burst_uuid,
+  apple_caption = excluded.apple_caption,
+  apple_title = excluded.apple_title,
+  is_favourite = excluded.is_favourite,
+  is_hidden = excluded.is_hidden,
+  apple_adjustments_state = excluded.apple_adjustments_state,
+  apple_modification_time_utc = excluded.apple_modification_time_utc,
+  apple_adjustment_time_utc = excluded.apple_adjustment_time_utc,
+  apple_library_photo_fingerprint = excluded.apple_library_photo_fingerprint,
+  first_seen_time_utc = excluded.first_seen_time_utc,
+  absent_from_apple_library_since_time_utc = null`,
 		applePhotoUUID,
 		applePhotoFacts.GetAppleLibraryScope().String(),
 		optionalBoolColumn(applePhotoFacts.AppleSharedLibraryContributorIsOwner),
@@ -231,7 +281,8 @@ insert or replace into apple_library_photo (
 		applePhotoFacts.GetIsFavourite(),
 		applePhotoFacts.GetIsHidden(),
 		applePhotoFacts.GetAppleAdjustmentsState(),
-		appleModificationTimeUTC,
+		optionalArchiveTimeColumn(applePhotoFacts.GetAppleModificationTimeUtc()),
+		optionalArchiveTimeColumn(applePhotoFacts.GetAppleAdjustmentTimeUtc()),
 		fingerprint,
 		firstSeenTimeUTC,
 	); err != nil {
@@ -278,52 +329,11 @@ values (?, ?, ?, ?, ?)`,
 			return fmt.Errorf("write trip of Apple photo: %w", err)
 		}
 	}
-	return insertAppleLibraryPhotoSearchRow(ctx, transaction, applePhotoFacts)
-}
-
-func insertAppleLibraryPhotoSearchRow(ctx context.Context, transaction *sql.Tx, applePhotoFacts *photo.AppleLibraryPhotoFacts) error {
-	storedPlace := applePhotoFacts.GetAppleStoredPlace()
-	placeNames := []string{
-		storedPlace.GetAppleStoredFullAddress(),
-		storedPlace.GetAppleStoredIsoCountryCode(),
-		storedPlace.GetAppleStoredNeighbourhoodName(),
-		storedPlace.GetAppleStoredTownName(),
-		storedPlace.GetAppleStoredCountyName(),
-		storedPlace.GetAppleStoredStateName(),
-		storedPlace.GetAppleStoredCountryName(),
-		storedPlace.GetAppleStoredStreet(),
-		storedPlace.GetAppleStoredPointOfInterestName(),
-		storedPlace.GetAppleStoredWaterName(),
-		storedPlace.GetAppleStoredIslandName(),
+	storedPhotoCard, err := readStoredPhotoCard(ctx, transaction, applePhotoUUID)
+	if err != nil {
+		return err
 	}
-	for _, placeArea := range storedPlace.GetAppleStoredPlaceAreasInSourceOrder() {
-		placeNames = append(placeNames, placeArea.GetAreaName())
-	}
-	var namedPeople []string
-	for _, namedPerson := range applePhotoFacts.GetAppleNamedPeople() {
-		namedPeople = append(namedPeople, namedPerson.GetPersonFullName())
-	}
-	var albumTitles []string
-	for _, album := range applePhotoFacts.GetAppleAlbums() {
-		albumTitles = append(albumTitles, album.GetAlbumTitle())
-	}
-	captionAndTitleSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(applePhotoFacts.GetAppleCaption(), applePhotoFacts.GetAppleTitle()))
-	placeNamesSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(placeNames...))
-	namedPeopleSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(namedPeople...))
-	albumTitlesSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(albumTitles...))
-	momentTitleSearchText := SearchTextWithEastAsianCharacterPairs(applePhotoFacts.GetAppleMomentTitle())
-	recognisedTextSearchText := SearchTextWithEastAsianCharacterPairs(joinNonEmptyLines(applePhotoFacts.GetAppleRecognisedTextLines()...))
-	if _, err := transaction.ExecContext(ctx, `
-insert into apple_library_photo_search (
-  apple_photo_uuid, apple_caption_and_title, apple_place_names, apple_named_people,
-  apple_album_titles, apple_moment_title, apple_recognised_text
-) values (?, ?, ?, ?, ?, ?, ?)`,
-		applePhotoFacts.GetApplePhotoUuid(), captionAndTitleSearchText, placeNamesSearchText,
-		namedPeopleSearchText, albumTitlesSearchText, momentTitleSearchText, recognisedTextSearchText,
-	); err != nil {
-		return fmt.Errorf("write search row of Apple photo: %w", err)
-	}
-	return nil
+	return replacePhotoSearchRow(ctx, transaction, applePhotoFacts, storedPhotoCard)
 }
 
 func joinNonEmptyLines(texts ...string) string {

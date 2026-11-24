@@ -142,11 +142,17 @@ arbitrary document language. Provider-native meaning stays with the provider.
 The contract contains no `Any`, JSON, generic map, type URL, byte payload,
 compatibility alias or second transport path.
 
-## Photos on Apple facts
+## Photos on Apple facts and cards
 
 `trawl search` includes Apple's recognised text, titles, captions, place
-levels, named people, albums and moment titles. Each matching fragment names
-its original source field and preserves its text and script. A search without
+levels, named people, albums and moment titles, and each written card's
+summary, description, visible text with its English rendering, and place
+shown. Each photo has one search row holding all of these, so one query can
+match words from Apple's facts and from the card together. Each Chinese,
+Japanese and Korean character is indexed as its own token: one character
+matches alone, and several match only as a phrase. Each matching fragment
+names its original source field and preserves its text and script. A photo
+with a written card is named by the card's summary. A search without
 words still applies its date and person filters. Photos matches a resolved
 Contacts display name against Apple's named people. Links use the shared short-reference
 algorithm over present photos; browsing never creates an index or writes the
@@ -157,7 +163,8 @@ archive.
 accept `YYYY-MM-DD` in the capture zone; both range endpoints are included.
 `--on` cannot be combined with a range. Name filters match Unicode text without
 case distinctions. `--place` matches every stored Apple place level, including
-the address, areas and country code. Apple's area array retains its source
+the address, areas and country code, and the place a written card says the
+photo shows. Apple's area array retains its source
 order, including repeated entries; that order does not imply size. Open and
 inspection label this list explicitly as Apple source order. The separate
 postal and administrative fields form the camera-place hierarchy. `--limit`
@@ -173,16 +180,52 @@ known place or distance from the nearest home valid on that date. Without
 configuration, that column is absent. Photos with no known capture zone are
 excluded from local-day grouping and reported explicitly.
 
-`trawl open PHOTO` shows an existing card first, then Apple facts, where the
-original picture is held and the inspection command. Camera coordinates,
+`trawl open PHOTO` shows a written card first (summary, place shown,
+description, each piece of visible text with its English rendering), then
+Apple facts, the cached picture file and the inspection command. When the
+photo's facts have changed since the card was written, open says so; the card
+is remade only with `--recard`. Camera coordinates,
 altitude and Apple's horizontal accuracy accompany the camera place. No empty card fields
 are shown. `trawl photos inspect PHOTO [LAYER]` defaults to `apple-facts` and
 shows labelled human rows for the facts and associated Apple trips, without
 internal identifiers or raw enum names. `trawl photos run` retains the exact
-protobuf input and output. The remaining
-layers (`picture-metadata`, `nearby-places`, `card-model-input`, `card`) name
-the step that produces them and state when it has not run. Picture fetching
-and those enrichment steps are not built yet.
+protobuf input and output. `picture-metadata` shows where the picture came
+from, the Apple edit it shows, its SHA-256 and size, the cached file and the
+camera bearing. `nearby-places` lists the OpenStreetMap places stored for the
+photo's camera spot, nearest first, with each one's distance and compass
+direction from the photo's own camera position. `card-model-input` prints,
+line for line, the plain text the card model would read now, rendered from
+the stored facts; it is never stored apart from a card. `card` shows the
+stored card, the place shown and its reasoning, the model, the token
+counts, any failure, and the command to write, retry or remake it.
+
+`trawl photos run write_photo_card` needs `--photo` or `--limit`, and is not
+part of `trawl update`. It cards present photos whose picture of their current
+edit is fetched and whose camera spot has a place lookup of any outcome (or no
+camera position): photos with no card, a failed card whose retry time has
+passed, a permanently failed or invalid card with `--retry-failed`, a card
+written from other pixels, and, with `--recard`, a written card whose card
+model input, model, effort or picture resolution has changed. A picture the
+cache has deleted is fetched again first. The model is configured with
+`card_model_provider` (`antigravity_acp`, `anthropic_api`, `claude_command_line`,
+`ollama_cloud` or `codex_command_line`), `card_model_name`, optional
+`card_model_effort` and, for API-key providers, `card_model_api_key_file` or
+`OLLAMA_API_KEY` / `ANTHROPIC_API_KEY`. It answers in four
+labelled plain-text sections; an answer that breaks the format is asked once
+more, then stored as invalid. A refused key or used quota stops the run.
+Photos absent from Apple's library are never carded and keep their cards.
+
+`trawl photos run fetch_picture` makes each photo's picture into an upright
+sRGB JPEG, at most 2576 pixels on the long edge by default (configurable with
+`picture_long_edge_pixel_limit`), and reads the compass bearing
+from the picture file. A video gives the frame from its middle. The picture
+comes from the configured `picture_mirror_folder_path` when that folder holds
+the photo's current edit, and from Apple Photos otherwise. A missing mirror
+folder or missing Photos access stops the run and stores nothing. A favourite,
+album or caption change does not fetch the picture again; a new Apple edit or
+a changed `picture_long_edge_pixel_limit` does. Pictures are kept in a 2 GB cache
+beside the archive, oldest deleted first. `trawl update` does not fetch pictures
+yet.
 
 Capture times use the zone at the standard GPS camera position when known.
 Without that position, Apple's recorded device offset is used. When Apple
@@ -206,9 +249,8 @@ trip rows and search-index content unchanged; only last-run bookkeeping advances
 - whether the archive can answer its current commands.
 
 The CLI presents these as `app`, `archive`, `last updated` and `works`.
-Photos reports the successful Apple-library read independently of later steps
-that are not built. Updating Photos refreshes Apple's facts and reports those
-unbuilt steps without treating the successful refresh as a failure. Running
+Photos reports the successful Apple-library read independently of later
+steps. Updating Photos refreshes Apple's facts and does not write cards. Running
 an unbuilt step directly exits non-zero and explains that it is not built.
 Failures are separate typed operation failures, not extra status text.
 

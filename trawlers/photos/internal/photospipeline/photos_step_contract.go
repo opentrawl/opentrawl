@@ -1,4 +1,4 @@
-// Package photospipeline connects the five Photos steps to the archive and
+// Package photospipeline connects the four Photos steps to the archive and
 // runs them. A step is a typed function with no archive access; a binding
 // selects the step's pending work from the archive and stores its output.
 package photospipeline
@@ -69,11 +69,18 @@ func AllPhotosStepNamesInOrder() []photosstep.PhotosStepName {
 		photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY,
 		photosstep.PhotosStepName_PHOTOS_STEP_NAME_FETCH_PICTURE,
 		photosstep.PhotosStepName_PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT,
-		photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_CARD_MODEL_INPUT,
 		photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD,
 	}
 }
 
 func PhotosStepIsBuilt(photosStepName photosstep.PhotosStepName) bool {
-	return photosStepName == photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY
+	switch photosStepName {
+	case photosstep.PhotosStepName_PHOTOS_STEP_NAME_READ_APPLE_LIBRARY,
+		photosstep.PhotosStepName_PHOTOS_STEP_NAME_FETCH_PICTURE,
+		photosstep.PhotosStepName_PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT,
+		photosstep.PhotosStepName_PHOTOS_STEP_NAME_WRITE_PHOTO_CARD:
+		return true
+	default:
+		return false
+	}
 }

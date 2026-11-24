@@ -465,8 +465,17 @@ func searchResultWhatNotDuplicatedInPrimaryMatchedContent(searchResultRow search
 		return what
 	}
 	matchedTextWithoutHighlights := strings.NewReplacer("‹", "", "›", "").Replace(searchResultPrimaryMatchedContent(searchResultRow))
-	if what == "" || strings.Contains(strings.ToLower(matchedTextWithoutHighlights), strings.ToLower(what)) {
+	lowerWhat := strings.ToLower(what)
+	lowerMatched := strings.ToLower(matchedTextWithoutHighlights)
+	if what == "" || strings.Contains(lowerMatched, lowerWhat) {
 		return ""
+	}
+	if summaryExcerpt, isSummaryMatch := strings.CutPrefix(lowerMatched, "summary: "); isSummaryMatch {
+		firstField, _, _ := strings.Cut(summaryExcerpt, "; ")
+		trimmedExcerpt := strings.Trim(firstField, "… ")
+		if trimmedExcerpt != "" && strings.Contains(lowerWhat, trimmedExcerpt) {
+			return ""
+		}
 	}
 	return what
 }

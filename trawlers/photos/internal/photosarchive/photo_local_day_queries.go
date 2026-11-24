@@ -221,8 +221,33 @@ func knownPlaceAtPhoto(fact *photo.AppleLibraryPhotoFacts, localDate *presentati
 	if location == nil {
 		return "", nil
 	}
-	var matchedPlaceName string
 	var nearestHomeDistance *float64
+	for _, knownPlace := range knownPlaces.GetKnownPlaces() {
+		if !photoLocalDateMatches(localDate, nil, knownPlace.GetKnownPlaceValidFromDate(), knownPlace.GetKnownPlaceValidUntilDate()) {
+			continue
+		}
+		distance := photoCameraDistanceMetres(location.GetCameraLatitude(), location.GetCameraLongitude(), knownPlace.GetKnownPlaceLatitude(), knownPlace.GetKnownPlaceLongitude())
+		if knownPlace.GetKnownPlaceKind() == knownplaces.KnownPlaceKind_KNOWN_PLACE_KIND_HOME && (nearestHomeDistance == nil || distance < *nearestHomeDistance) {
+			nearestHomeDistance = new(distance)
+		}
+	}
+	matchedKnownPlace, _ := nearestKnownPlaceContainingCamera(location, localDate, knownPlaces)
+	return matchedKnownPlace.GetKnownPlaceName(), nearestHomeDistance
+}
+
+// KnownPlaceContainingPhotoCamera returns the nearest known place whose
+// radius holds the camera on the photo's local date, and the camera's
+// distance from it. It returns nil when there is none, or when the photo has
+// no camera position or no known local date.
+func KnownPlaceContainingPhotoCamera(fact *photo.AppleLibraryPhotoFacts, knownPlaces *knownplaces.KnownPlacesFile) (*knownplaces.KnownPlace, float64) {
+	if fact.GetCameraLocation() == nil || fact.GetCaptureLocalTime().CaptureUtcOffsetSeconds == nil {
+		return nil, 0
+	}
+	return nearestKnownPlaceContainingCamera(fact.GetCameraLocation(), photoLocalCalendarDate(fact.GetCaptureLocalTime()), knownPlaces)
+}
+
+func nearestKnownPlaceContainingCamera(location *photo.PhotoCameraLocation, localDate *presentation.CalendarDate, knownPlaces *knownplaces.KnownPlacesFile) (*knownplaces.KnownPlace, float64) {
+	var matchedKnownPlace *knownplaces.KnownPlace
 	nearestMatchedDistance := math.Inf(1)
 	for _, knownPlace := range knownPlaces.GetKnownPlaces() {
 		if !photoLocalDateMatches(localDate, nil, knownPlace.GetKnownPlaceValidFromDate(), knownPlace.GetKnownPlaceValidUntilDate()) {
@@ -230,14 +255,11 @@ func knownPlaceAtPhoto(fact *photo.AppleLibraryPhotoFacts, localDate *presentati
 		}
 		distance := photoCameraDistanceMetres(location.GetCameraLatitude(), location.GetCameraLongitude(), knownPlace.GetKnownPlaceLatitude(), knownPlace.GetKnownPlaceLongitude())
 		if distance <= knownPlace.GetKnownPlaceRadiusMetres() && distance < nearestMatchedDistance {
-			matchedPlaceName = knownPlace.GetKnownPlaceName()
+			matchedKnownPlace = knownPlace
 			nearestMatchedDistance = distance
 		}
-		if knownPlace.GetKnownPlaceKind() == knownplaces.KnownPlaceKind_KNOWN_PLACE_KIND_HOME && (nearestHomeDistance == nil || distance < *nearestHomeDistance) {
-			nearestHomeDistance = new(distance)
-		}
 	}
-	return matchedPlaceName, nearestHomeDistance
+	return matchedKnownPlace, nearestMatchedDistance
 }
 
 func photoCameraDistanceMetres(latitude, longitude, otherLatitude, otherLongitude float64) float64 {

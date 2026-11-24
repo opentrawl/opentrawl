@@ -64,6 +64,7 @@ func withoutFactsAppleRecomputes(applePhotoFacts *photo.AppleLibraryPhotoFacts) 
 	stableFacts := proto.Clone(applePhotoFacts).(*photo.AppleLibraryPhotoFacts)
 	stableFacts.AppleModificationTimeUtc = nil
 	stableFacts.AppleAdjustmentsState = 0
+	stableFacts.AppleAdjustmentTimeUtc = nil
 	stableFacts.AppleAlbums = nil
 	stableFacts.AppleNamedPeople = nil
 	stableFacts.AppleMomentUuid = ""

@@ -36,7 +36,7 @@ select
   camera_make, camera_model, lens_model, focal_length_millimetres, focal_length_35mm_equivalent_millimetres,
   aperture_f_number, exposure_time_seconds, iso_speed, pixel_width, pixel_height,
   apple_duration_seconds, apple_burst_uuid, apple_caption, apple_title,
-  is_favourite, is_hidden, apple_adjustments_state, apple_modification_time_utc
+  is_favourite, is_hidden, apple_adjustments_state, apple_modification_time_utc, apple_adjustment_time_utc
 from apple_library_photo where apple_photo_uuid in (`+placeholders+`)`, uuidArguments...)
 	if err != nil {
 		return nil, fmt.Errorf("read stored Apple photos: %w", err)
@@ -66,6 +66,7 @@ from apple_library_photo where apple_photo_uuid in (`+placeholders+`)`, uuidArgu
 			cameraMake, cameraModel, lensModel              sql.NullString
 			focalLength, aperture, exposureTime, duration   sql.NullFloat64
 			burstUUID, caption, title, modificationTimeUTC  sql.NullString
+			adjustmentTimeUTC                               sql.NullString
 		)
 		if err := rows.Scan(
 			&applePhotoFacts.ApplePhotoUuid, &appleLibraryScope, &contributorIsOwner,
@@ -81,7 +82,7 @@ from apple_library_photo where apple_photo_uuid in (`+placeholders+`)`, uuidArgu
 			&cameraMake, &cameraModel, &lensModel, &focalLength, &focalLength35mm,
 			&aperture, &exposureTime, &isoSpeed, &applePhotoFacts.PixelWidth, &applePhotoFacts.PixelHeight,
 			&duration, &burstUUID, &caption, &title,
-			&applePhotoFacts.IsFavourite, &applePhotoFacts.IsHidden, &applePhotoFacts.AppleAdjustmentsState, &modificationTimeUTC,
+			&applePhotoFacts.IsFavourite, &applePhotoFacts.IsHidden, &applePhotoFacts.AppleAdjustmentsState, &modificationTimeUTC, &adjustmentTimeUTC,
 		); err != nil {
 			return nil, fmt.Errorf("read stored Apple photo: %w", err)
 		}
@@ -144,12 +145,11 @@ from apple_library_photo where apple_photo_uuid in (`+placeholders+`)`, uuidArgu
 		applePhotoFacts.AppleBurstUuid = burstUUID.String
 		applePhotoFacts.AppleCaption = caption.String
 		applePhotoFacts.AppleTitle = title.String
-		if modificationTimeUTC.Valid {
-			modificationTime, err := parseArchiveTime(modificationTimeUTC.String)
-			if err != nil {
-				return nil, err
-			}
-			applePhotoFacts.AppleModificationTimeUtc = timestamppb.New(modificationTime)
+		if applePhotoFacts.AppleModificationTimeUtc, err = optionalArchiveTimeFromColumn(modificationTimeUTC); err != nil {
+			return nil, err
+		}
+		if applePhotoFacts.AppleAdjustmentTimeUtc, err = optionalArchiveTimeFromColumn(adjustmentTimeUTC); err != nil {
+			return nil, err
 		}
 		storedFactsByUUID[applePhotoFacts.ApplePhotoUuid] = &applePhotoFacts
 	}

@@ -13,33 +13,38 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-type PhotoFactsSearchMatch struct {
-	AppleLibraryPhotoFacts              *photo.AppleLibraryPhotoFacts
+type PhotoSearchMatch struct {
+	AppleLibraryPhotoFacts *photo.AppleLibraryPhotoFacts
+	// Nil when the photo has no written card.
+	WrittenPhotoCard                    *photo.PhotoCard
 	SearchMatchTextFieldsInDisplayOrder []*search.SearchMatchTextField
 }
 
+const photoSearchIndexedColumnCount = 10
+
 type indexedPhotoSearchMatch struct {
 	applePhotoUUID string
-	markedFields   [6]string
+	markedFields   [photoSearchIndexedColumnCount]string
 }
 
-func (photosArchive *PhotosArchive) SearchPhotoFacts(ctx context.Context, query trawlkit.Query) ([]PhotoFactsSearchMatch, uint64, error) {
+// SearchPhotos matches words against each photo's one search row, which holds
+// its Apple facts and its written card together.
+func (photosArchive *PhotosArchive) SearchPhotos(ctx context.Context, query trawlkit.Query) ([]PhotoSearchMatch, uint64, error) {
 	ftsQuery := photoSearchTokenQuery(query.Text)
+	if strings.TrimSpace(query.Text) != "" && ftsQuery == "" {
+		return nil, 0, nil
+	}
 	where := " where p.absent_from_apple_library_since_time_utc is null"
 	var arguments []any
 	photoSearchTables := ` from apple_library_photo p`
 	selectedColumns := `select p.apple_photo_uuid`
 	if ftsQuery != "" {
-		where += " and apple_library_photo_search match ?"
+		where += " and photo_search match ?"
 		arguments = append(arguments, ftsQuery)
-		photoSearchTables += ` join apple_library_photo_search on p.apple_photo_uuid=apple_library_photo_search.apple_photo_uuid`
-		selectedColumns += `,
-highlight(apple_library_photo_search,1,char(57344),char(57345)),
-highlight(apple_library_photo_search,2,char(57344),char(57345)),
-highlight(apple_library_photo_search,3,char(57344),char(57345)),
-highlight(apple_library_photo_search,4,char(57344),char(57345)),
-highlight(apple_library_photo_search,5,char(57344),char(57345)),
-highlight(apple_library_photo_search,6,char(57344),char(57345))`
+		photoSearchTables += ` join photo_search on p.rowid=photo_search.rowid`
+		for indexColumn := range photoSearchIndexedColumnCount {
+			selectedColumns += fmt.Sprintf(",\nhighlight(photo_search,%d,char(57344),char(57345))", indexColumn+1)
+		}
 	}
 	var timeClauses []string
 	archivetime.NewInclusiveTimeRange(query.After, query.Before).AppendRFC3339UTCSQLClauses(
@@ -84,7 +89,7 @@ highlight(apple_library_photo_search,6,char(57344),char(57345))`
 	if rowError != nil {
 		return nil, 0, fmt.Errorf("read photo search matches: %w", rowError)
 	}
-	var matches []PhotoFactsSearchMatch
+	var matches []PhotoSearchMatch
 	if !personFilterIsSet && query.Limit <= 0 {
 		total = uint64(len(indexedMatches))
 	}
@@ -108,18 +113,25 @@ highlight(apple_library_photo_search,6,char(57344),char(57345))`
 			if query.Limit > 0 && len(matches) >= query.Limit {
 				continue
 			}
-			textFields := photoSearchFieldsForFacts(fact, indexedMatches[first+index].markedFields)
+			writtenPhotoCard, err := photosArchive.ReadStoredPhotoCard(ctx, fact.GetApplePhotoUuid())
+			if err != nil {
+				return nil, 0, err
+			}
+			if writtenPhotoCard.GetPhotoCardOutcome() != photo.PhotoCardOutcome_PHOTO_CARD_OUTCOME_WRITTEN {
+				writtenPhotoCard = nil
+			}
+			textFields := photoSearchFieldsForMatchedText(fact, writtenPhotoCard, indexedMatches[first+index].markedFields)
 			if ftsQuery == "" {
 				textFields = photoSearchFieldsWithoutText(fact, query.PersonFilter)
 			}
-			matches = append(matches, PhotoFactsSearchMatch{AppleLibraryPhotoFacts: fact, SearchMatchTextFieldsInDisplayOrder: textFields})
+			matches = append(matches, PhotoSearchMatch{AppleLibraryPhotoFacts: fact, WrittenPhotoCard: writtenPhotoCard, SearchMatchTextFieldsInDisplayOrder: textFields})
 		}
 	}
 	return matches, total, nil
 }
 
 func photoSearchTokenQuery(queryText string) string {
-	return store.FTS5QueryFromWordTokens(queryText, SearchTextWithEastAsianCharacterPairs)
+	return store.FTS5QueryFromWordTokens(queryText, SearchTextWithEastAsianCharactersSeparated)
 }
 
 func photoSearchPersonMatches(fact *photo.AppleLibraryPhotoFacts, filter trawlkit.SearchPersonFilter) bool {
@@ -155,21 +167,36 @@ type photoSearchSourceText struct {
 	sourceText  string
 }
 
-func originalPhotoSearchSourceFields(fact *photo.AppleLibraryPhotoFacts) []photoSearchSourceText {
-	place := fact.GetAppleStoredPlace()
-	fields := []photoSearchSourceText{
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CAPTION, 0, fact.GetAppleCaption()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TITLE, 0, fact.GetAppleTitle()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST, 1, place.GetAppleStoredPointOfInterestName()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STREET, 1, place.GetAppleStoredStreet()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD, 1, place.GetAppleStoredNeighbourhoodName()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TOWN, 1, place.GetAppleStoredTownName()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTY, 1, place.GetAppleStoredCountyName()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STATE, 1, place.GetAppleStoredStateName()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTRY, 1, place.GetAppleStoredCountryName()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_WATER, 1, place.GetAppleStoredWaterName()},
-		{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISLAND, 1, place.GetAppleStoredIslandName()},
+// photoSearchSourceTexts lists each searchable text in display order, with
+// the search column it is indexed in. A card adds its text only when it was
+// written.
+func photoSearchSourceTexts(fact *photo.AppleLibraryPhotoFacts, writtenPhotoCard *photo.PhotoCard) []photoSearchSourceText {
+	var fields []photoSearchSourceText
+	if writtenPhotoCard.GetPhotoCardOutcome() == photo.PhotoCardOutcome_PHOTO_CARD_OUTCOME_WRITTEN {
+		fields = append(fields,
+			photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_ONE_LINE_SUMMARY, 6, writtenPhotoCard.GetOneLineSummary()},
+			photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_PLACE_SHOWN, 9, writtenPhotoCard.GetPlaceShownName()},
+			photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_DESCRIPTION, 7, writtenPhotoCard.GetDescription()},
+		)
+		for _, visibleTextGroup := range writtenPhotoCard.GetVisibleTextGroups() {
+			fields = append(fields, photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_VISIBLE_TEXT, 8,
+				joinNonEmptyLines(visibleTextGroup.GetTextAsWritten(), visibleTextGroup.GetEnglishRendering())})
+		}
 	}
+	place := fact.GetAppleStoredPlace()
+	fields = append(fields,
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CAPTION, 0, fact.GetAppleCaption()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TITLE, 0, fact.GetAppleTitle()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_POINT_OF_INTEREST, 1, place.GetAppleStoredPointOfInterestName()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STREET, 1, place.GetAppleStoredStreet()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_NEIGHBOURHOOD, 1, place.GetAppleStoredNeighbourhoodName()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TOWN, 1, place.GetAppleStoredTownName()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTY, 1, place.GetAppleStoredCountyName()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_STATE, 1, place.GetAppleStoredStateName()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_COUNTRY, 1, place.GetAppleStoredCountryName()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_WATER, 1, place.GetAppleStoredWaterName()},
+		photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_ISLAND, 1, place.GetAppleStoredIslandName()},
+	)
 	for _, area := range place.GetAppleStoredPlaceAreasInSourceOrder() {
 		fields = append(fields, photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PLACE_AREA, 1, area.GetAreaName()})
 	}
@@ -183,20 +210,20 @@ func originalPhotoSearchSourceFields(fact *photo.AppleLibraryPhotoFacts) []photo
 	return append(fields, photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_MOMENT, 4, fact.GetAppleMomentTitle()}, photoSearchSourceText{photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT, 5, joinNonEmptyLines(fact.GetAppleRecognisedTextLines()...)})
 }
 
-func photoSearchFieldsForFacts(fact *photo.AppleLibraryPhotoFacts, markedFields [6]string) []*search.SearchMatchTextField {
-	var coveredTerms [6]map[string]bool
+func photoSearchFieldsForMatchedText(fact *photo.AppleLibraryPhotoFacts, writtenPhotoCard *photo.PhotoCard, markedFields [photoSearchIndexedColumnCount]string) []*search.SearchMatchTextField {
+	var coveredTerms [photoSearchIndexedColumnCount]map[string]bool
 	for index := range coveredTerms {
 		coveredTerms[index] = map[string]bool{}
 	}
 	var fields []*search.SearchMatchTextField
-	for _, source := range originalPhotoSearchSourceFields(fact) {
+	for _, source := range photoSearchSourceTexts(fact, writtenPhotoCard) {
 		indexedRuns := store.ParseFTS5MarkedText(markedFields[source.indexColumn])
 		contributesMatch := false
 		for _, run := range indexedRuns {
 			if !run.Matched {
 				continue
 			}
-			for _, term := range strings.Fields(run.Text) {
+			for _, term := range indexedMatchTerms(run.Text) {
 				key := strings.ToLower(term)
 				if coveredTerms[source.indexColumn][key] {
 					continue
@@ -214,7 +241,7 @@ func photoSearchFieldsForFacts(fact *photo.AppleLibraryPhotoFacts, markedFields 
 			continue
 		}
 		runs := originalPhotoTextRuns(source.sourceText, indexedRuns)
-		if field := trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(render.PhotoFactsSearchFieldDisplayName(source.sourceField), runs); field != nil {
+		if field := trawlkit.NewSearchMatchTextFieldFromFTS5TextRuns(render.PhotoSearchFieldDisplayName(source.sourceField), runs); field != nil {
 			fields = append(fields, field)
 		}
 	}
@@ -226,23 +253,23 @@ func photoSearchFieldsWithoutText(fact *photo.AppleLibraryPhotoFacts, filter tra
 		var fields []*search.SearchMatchTextField
 		for _, namedPerson := range fact.GetAppleNamedPeople() {
 			if photoNamedPersonMatchesSearchFilter(namedPerson, filter) {
-				fields = append(fields, trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch(render.PhotoFactsSearchFieldDisplayName(photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PERSON), namedPerson.GetPersonFullName()))
+				fields = append(fields, trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch(render.PhotoSearchFieldDisplayName(photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_PERSON), namedPerson.GetPersonFullName()))
 			}
 		}
 		return fields
 	}
-	for _, source := range originalPhotoSearchSourceFields(fact) {
+	for _, source := range photoSearchSourceTexts(fact, nil) {
 		if source.sourceField != photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TITLE && source.sourceField != photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CAPTION && source.sourceField != photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_MOMENT {
 			continue
 		}
-		if field := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch(render.PhotoFactsSearchFieldDisplayName(source.sourceField), source.sourceText); field != nil {
+		if field := trawlkit.NewSearchMatchTextFieldWithoutSearchQueryMatch(render.PhotoSearchFieldDisplayName(source.sourceField), source.sourceText); field != nil {
 			return []*search.SearchMatchTextField{field}
 		}
 	}
 	return nil
 }
 
-// The FTS index inserts spaces between East Asian character pairs. Marks are
+// The FTS index inserts spaces around each East Asian character. Marks are
 // transferred back to the unchanged source text so the index never becomes
 // the human-readable evidence.
 func originalPhotoTextRuns(originalText string, indexedRuns []store.FTS5TextRun) []store.FTS5TextRun {
@@ -252,19 +279,14 @@ func originalPhotoTextRuns(originalText string, indexedRuns []store.FTS5TextRun)
 		if !indexedRun.Matched {
 			continue
 		}
-		for _, indexedTerm := range strings.Fields(indexedRun.Text) {
-			term := []rune(indexedTerm)
-			for first := 0; first+len(term) <= len(originalRunes); first++ {
-				if !strings.EqualFold(string(originalRunes[first:first+len(term)]), indexedTerm) {
-					continue
-				}
-				last := first + len(term)
-				if len(term) > 0 && !isEastAsianWordCharacter(term[0]) &&
-					((first > 0 && isPhotoSearchWordCharacter(originalRunes[first-1])) || (last < len(originalRunes) && isPhotoSearchWordCharacter(originalRunes[last]))) {
-					continue
-				}
-				for index := first; index < first+len(term); index++ {
-					matchedRunes[index] = true
+		for _, indexedTerm := range indexedMatchTerms(indexedRun.Text) {
+			if markOriginalPhotoTerm(originalRunes, matchedRunes, indexedTerm) {
+				continue
+			}
+			termRunes := []rune(indexedTerm)
+			if len(termRunes) > 1 && isEastAsianWordCharacter(termRunes[0]) {
+				for _, singleCharacter := range termRunes {
+					markOriginalPhotoTerm(originalRunes, matchedRunes, string(singleCharacter))
 				}
 			}
 		}
@@ -279,6 +301,56 @@ func originalPhotoTextRuns(originalText string, indexedRuns []store.FTS5TextRun)
 		first = last
 	}
 	return runs
+}
+
+func markOriginalPhotoTerm(originalRunes []rune, matchedRunes []bool, indexedTerm string) bool {
+	term := []rune(indexedTerm)
+	if len(term) == 0 {
+		return false
+	}
+	marked := false
+	for first := 0; first+len(term) <= len(originalRunes); first++ {
+		if !strings.EqualFold(string(originalRunes[first:first+len(term)]), indexedTerm) {
+			continue
+		}
+		last := first + len(term)
+		if !isEastAsianWordCharacter(term[0]) &&
+			((first > 0 && isNonEastAsianPhotoSearchWordCharacter(originalRunes[first-1])) ||
+				(last < len(originalRunes) && isNonEastAsianPhotoSearchWordCharacter(originalRunes[last]))) {
+			continue
+		}
+		for index := first; index < last; index++ {
+			matchedRunes[index] = true
+		}
+		marked = true
+	}
+	return marked
+}
+
+func isNonEastAsianPhotoSearchWordCharacter(character rune) bool {
+	return isPhotoSearchWordCharacter(character) && !isEastAsianWordCharacter(character)
+}
+
+// indexedMatchTerms splits one highlighted run of the search index into the
+// terms to find in the source text. The index separates each East Asian
+// character with spaces; a phrase of them is joined again so that only the
+// whole phrase is marked in the source, not each of its characters wherever
+// it appears.
+func indexedMatchTerms(indexedRunText string) []string {
+	var terms []string
+	for _, field := range strings.Fields(indexedRunText) {
+		last := len(terms) - 1
+		fieldRunes, lastRunes := []rune(field), []rune("")
+		if last >= 0 {
+			lastRunes = []rune(terms[last])
+		}
+		if last >= 0 && len(fieldRunes) == 1 && isEastAsianWordCharacter(fieldRunes[0]) && isEastAsianWordCharacter(lastRunes[len(lastRunes)-1]) {
+			terms[last] += field
+			continue
+		}
+		terms = append(terms, field)
+	}
+	return terms
 }
 
 func isPhotoSearchWordCharacter(character rune) bool {

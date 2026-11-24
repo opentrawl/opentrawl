@@ -148,11 +148,15 @@ message AppleLibraryPhotoFacts {
   bool is_hidden = 28;
   // Apple's own ZADJUSTMENTSSTATE code; 0 means never edited.
   int32 apple_adjustments_state = 29;
+  // Apple changes it for any change, even a favourite or an album.
   google.protobuf.Timestamp apple_modification_time_utc = 30;
   repeated AppleLibraryPhotoNamedPerson apple_named_people = 31;
   repeated AppleLibraryPhotoAlbum apple_albums = 32;
   repeated string apple_recognised_text_lines = 33;
   repeated string apple_trip_uuids = 34;
+  // Apple's ZADJUSTMENTTIMESTAMP: when the pixels were last edited. Unset
+  // when the photo was never edited.
+  google.protobuf.Timestamp apple_adjustment_time_utc = 35;
 }
 
 // A trip Apple Photos detected (ZPHOTOSHIGHLIGHT with ZKIND 3).
@@ -169,8 +173,15 @@ message AppleLibraryTrip {
 enum PictureFetchOutcome {
   PICTURE_FETCH_OUTCOME_UNSPECIFIED = 0;
   PICTURE_FETCH_OUTCOME_FETCHED = 1;
-  PICTURE_FETCH_OUTCOME_NOT_AVAILABLE_IN_ICLOUD = 2;
-  PICTURE_FETCH_OUTCOME_FAILED = 3;
+  PICTURE_FETCH_OUTCOME_FAILED = 2;
+}
+
+enum PictureSource {
+  PICTURE_SOURCE_UNSPECIFIED = 0;
+  // A local copy of the library that the person configured.
+  PICTURE_SOURCE_PICTURE_MIRROR_FOLDER = 1;
+  // Apple Photos, which downloads the picture from iCloud when needed.
+  PICTURE_SOURCE_APPLE_PHOTOS = 2;
 }
 
 enum CameraBearingReference {
@@ -179,31 +190,35 @@ enum CameraBearingReference {
   CAMERA_BEARING_REFERENCE_MAGNETIC_NORTH = 2;
 }
 
-message PictureFileMetadataField {
-  string metadata_group = 1;
-  string metadata_field_name = 2;
-  string metadata_field_value_text = 3;
-}
-
+// The picture is an upright JPEG, at most 2576 pixels on its long edge by
+// default, in sRGB, kept in the picture cache under its SHA-256. Videos give
+// one frame from their middle. The compass bearing is the one file fact Apple's
+// library does not hold.
 message PictureFetchResult {
   string apple_photo_uuid = 1;
-  google.protobuf.Timestamp fetched_for_apple_modification_time_utc = 2;
-  PictureFetchOutcome picture_fetch_outcome = 3;
-  string picture_fetch_failure_message = 4;
-  google.protobuf.Timestamp retry_not_before_time_utc = 5;
-  string picture_sha256 = 6;
-  optional int64 picture_byte_count = 7;
-  optional double camera_bearing_degrees = 8;
-  CameraBearingReference camera_bearing_reference = 9;
-  repeated PictureFileMetadataField picture_file_metadata_fields = 10;
+  // The Apple edit the picture shows. A new edit fetches it again.
+  int32 fetched_for_apple_adjustments_state = 2;
+  google.protobuf.Timestamp fetched_for_apple_adjustment_time_utc = 3;
+  PictureFetchOutcome picture_fetch_outcome = 4;
+  string picture_fetch_failure_message = 5;
+  // Unset on a failure that will not succeed by trying again.
+  google.protobuf.Timestamp retry_not_before_time_utc = 6;
+  PictureSource picture_source = 7;
+  string picture_sha256 = 8;
+  optional int64 picture_byte_count = 9;
+  // The picture file's GPS ImgDirection: where the camera pointed.
+  optional double camera_bearing_degrees = 10;
+  CameraBearingReference camera_bearing_reference = 11;
+  // Maximum pixel count on the picture's long edge used when fetching it.
+  // Changing the configured pixel limit fetches the picture again.
+  optional int32 picture_long_edge_pixel_limit_used = 12;
 }
 
 // Family 3: derived.
 
 enum PlaceProvider {
   PLACE_PROVIDER_UNSPECIFIED = 0;
-  PLACE_PROVIDER_APPLE_MAP_POINTS_OF_INTEREST = 1;
-  PLACE_PROVIDER_OPENSTREETMAP_OVERPASS = 2;
+  PLACE_PROVIDER_OPENSTREETMAP_PHOTON = 1;
 }
 
 enum PlaceLookupOutcome {
@@ -232,27 +247,13 @@ message NearbyPlacesLookupResult {
   repeated NearbyPlace nearby_places_nearest_first = 9;
 }
 
-enum PhotoCardModelInputSectionName {
-  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_UNSPECIFIED = 0;
-  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_TIME = 1;
-  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA_POSITION_AND_DIRECTION = 2;
-  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_STORED_PLACE = 3;
-  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_NEARBY_PLACES = 4;
-  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_KNOWN_PLACE = 5;
-  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_CAMERA = 6;
-  PHOTO_CARD_MODEL_INPUT_SECTION_NAME_APPLE_PEOPLE_AND_TEXT = 7;
-}
-
-message PhotoCardModelInputSection {
-  PhotoCardModelInputSectionName section_name = 1;
-  string section_sha256 = 2;
-}
-
+// The plain text the card model reads beside the picture, rendered from the
+// stored facts when a card is written or inspected. It is never stored on its
+// own: each card keeps the exact text it was made from.
 message PhotoCardModelInput {
   string apple_photo_uuid = 1;
   string photo_card_model_input_text = 2;
   string photo_card_model_input_sha256 = 3;
-  repeated PhotoCardModelInputSection photo_card_model_input_sections = 4;
 }
 
 enum PhotoCardOutcome {
@@ -262,12 +263,19 @@ enum PhotoCardOutcome {
   PHOTO_CARD_OUTCOME_FAILED = 3;
 }
 
-enum PlaceShownJudgement {
-  PLACE_SHOWN_JUDGEMENT_UNSPECIFIED = 0;
-  PLACE_SHOWN_JUDGEMENT_NEARBY_PLACE = 1;
-  PLACE_SHOWN_JUDGEMENT_RECOGNISED_FROM_PICTURE = 2;
-  PLACE_SHOWN_JUDGEMENT_WHERE_CAMERA_STOOD = 3;
-  PLACE_SHOWN_JUDGEMENT_UNKNOWN = 4;
+// Where the card model runs.
+enum CardModelProvider {
+  CARD_MODEL_PROVIDER_UNSPECIFIED = 0;
+  // https://ollama.com/api/chat with an API key.
+  CARD_MODEL_PROVIDER_OLLAMA_CLOUD = 1;
+  // The Codex command-line tool, signed in to a ChatGPT account.
+  CARD_MODEL_PROVIDER_CODEX_COMMAND_LINE = 2;
+  // The Antigravity ACP server (agy acp), signed in to a Google account.
+  CARD_MODEL_PROVIDER_ANTIGRAVITY_ACP = 3;
+  // https://api.anthropic.com/v1/messages with an API key.
+  CARD_MODEL_PROVIDER_ANTHROPIC_API = 4;
+  // The Claude Code command-line tool, signed in to a Claude account.
+  CARD_MODEL_PROVIDER_CLAUDE_COMMAND_LINE = 5;
 }
 
 message PhotoCardVisibleTextGroup {
@@ -286,20 +294,34 @@ message PhotoCard {
   string one_line_summary = 7;
   string description = 8;
   repeated PhotoCardVisibleTextGroup visible_text_groups = 9;
-  PlaceShownJudgement place_shown_judgement = 10;
-  string place_shown_name = 11;
-  string place_shown_reasoning = 12;
-  string raw_model_answer = 13;
-  optional int64 input_tokens = 14;
-  optional int64 output_tokens = 15;
-  optional int64 reasoning_tokens = 16;
-  google.protobuf.Timestamp retry_not_before_time_utc = 17;
+  // Empty when the photo shows no place (e.g. a screenshot) or the place
+  // cannot be identified.
+  string place_shown_name = 10;
+  string place_shown_reasoning = 11;
+  string raw_model_answer = 12;
+  optional int64 input_tokens = 13;
+  optional int64 output_tokens = 14;
+  optional int64 reasoning_tokens = 15;
+  google.protobuf.Timestamp retry_not_before_time_utc = 16;
+  CardModelProvider card_model_provider = 17;
+  // Why a failed or invalid card has no text: the service's error, or what
+  // was wrong with the model's answer.
+  string photo_card_failure_message = 18;
+  google.protobuf.Timestamp card_written_time_utc = 19;
+  // Reasoning effort requested from the card model (for example "low",
+  // "medium", or "high"), empty when the provider's default was used.
+  string card_model_effort = 20;
+  // Maximum pixel count on the picture's long edge used when fetching the
+  // picture this card was written from.
+  optional int32 picture_long_edge_pixel_limit_used = 21;
 }
 
 // Human-facing records carry source facts without display strings.
 message PhotoRecord {
   trawl.identity.CanonicalArchiveRecordReference canonical_record_reference = 1;
   AppleLibraryPhotoFacts apple_library_photo_facts = 2;
+  // Empty when the photo has no written card.
+  string written_photo_card_one_line_summary = 3;
 }
 message PhotoListResponse {
   repeated PhotoRecord photo_records_newest_first = 1;
@@ -314,7 +336,12 @@ message OpenedPhotoRecord {
   PhotoCard photo_card = 4;
   trawl.identity.GloballyRoutableTrawlLink photo_trawl_link = 5;
   PictureFetchResult picture_fetch_result = 6;
-  bool picture_fetch_step_is_built = 7;
+  // Empty when the picture is not in the picture cache.
+  string cached_picture_file_path = 7;
+  // True when the card model input rendered from today's facts differs from
+  // the one the card was written from. The card stays usable; it is remade
+  // only with --recard.
+  bool card_model_input_changed_since_card_was_written = 8;
 }
 enum PhotoInspectionLayer {
   PHOTO_INSPECTION_LAYER_UNSPECIFIED = 0;
@@ -324,9 +351,24 @@ enum PhotoInspectionLayer {
   PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT = 4;
   PHOTO_INSPECTION_LAYER_CARD = 5;
 }
+// A stored nearby place measured from where one photo's camera stood, not
+// from the camera spot its lookup was made for.
+message NearbyPlaceFromCamera {
+  NearbyPlace nearby_place = 1;
+  double distance_from_camera_metres = 2;
+  // Degrees clockwise from true north.
+  double direction_from_camera_degrees = 3;
+}
 message PhotoInspectionResponse {
   OpenedPhotoRecord photo_record = 1;
   PhotoInspectionLayer photo_inspection_layer = 2;
+  // The nearby-places layer only. Unspecified when no lookup is stored for
+  // the photo's camera spot.
+  PlaceLookupOutcome nearby_places_lookup_outcome = 3;
+  string nearby_places_lookup_failure_message = 4;
+  repeated NearbyPlaceFromCamera nearby_places_from_camera_nearest_first = 5;
+  // The card-model-input layer only: what the card model would read now.
+  PhotoCardModelInput current_photo_card_model_input = 6;
 }
 message PhotoDayStay {
   PhotoCaptureLocalTime first_photo_capture_local_time = 1;
@@ -367,6 +409,10 @@ enum PhotoSearchSourceField {
   PHOTO_SEARCH_SOURCE_FIELD_ALBUM = 16;
   PHOTO_SEARCH_SOURCE_FIELD_MOMENT = 17;
   PHOTO_SEARCH_SOURCE_FIELD_RECOGNISED_TEXT = 18;
+  PHOTO_SEARCH_SOURCE_FIELD_CARD_ONE_LINE_SUMMARY = 19;
+  PHOTO_SEARCH_SOURCE_FIELD_CARD_DESCRIPTION = 20;
+  PHOTO_SEARCH_SOURCE_FIELD_CARD_VISIBLE_TEXT = 21;
+  PHOTO_SEARCH_SOURCE_FIELD_CARD_PLACE_SHOWN = 22;
 }
 message PhotoLocalDayListResponse {
   repeated PhotoLocalDayRecord photo_local_day_records_newest_first = 1;

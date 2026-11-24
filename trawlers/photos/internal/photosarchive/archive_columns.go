@@ -3,6 +3,8 @@ package photosarchive
 import (
 	"context"
 	"database/sql"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type archiveQueryer interface {
@@ -31,6 +33,13 @@ func optionalFloat64Column(value *float64) any {
 		return nil
 	}
 	return *value
+}
+
+func optionalArchiveTimeColumn(archiveTime *timestamppb.Timestamp) any {
+	if archiveTime == nil {
+		return nil
+	}
+	return formatArchiveTime(archiveTime.AsTime())
 }
 
 func emptyTextAsNull(text string) any {
@@ -66,4 +75,29 @@ func optionalFloat64FromColumn(column sql.NullFloat64) *float64 {
 		return nil
 	}
 	return &column.Float64
+}
+
+func optionalArchiveTimeFromColumn(column sql.NullString) (*timestamppb.Timestamp, error) {
+	if !column.Valid {
+		return nil, nil
+	}
+	archiveTime, err := parseArchiveTime(column.String)
+	if err != nil {
+		return nil, err
+	}
+	return timestamppb.New(archiveTime), nil
+}
+
+func optionalInt64Column(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func optionalInt64FromColumn(column sql.NullInt64) *int64 {
+	if !column.Valid {
+		return nil
+	}
+	return &column.Int64
 }

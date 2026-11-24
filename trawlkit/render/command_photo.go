@@ -16,8 +16,16 @@ import (
 
 const photoRecognisedTextFieldDisplayName = "Recognised text (Apple)"
 
-func PhotoFactsSearchFieldDisplayName(field photo.PhotoSearchSourceField) string {
+func PhotoSearchFieldDisplayName(field photo.PhotoSearchSourceField) string {
 	switch field {
+	case photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_ONE_LINE_SUMMARY:
+		return "Summary"
+	case photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_DESCRIPTION:
+		return "Description"
+	case photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_VISIBLE_TEXT:
+		return "Visible text"
+	case photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CARD_PLACE_SHOWN:
+		return "Place shown"
 	case photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_CAPTION:
 		return "Caption"
 	case photo.PhotoSearchSourceField_PHOTO_SEARCH_SOURCE_FIELD_TITLE:
@@ -63,11 +71,15 @@ func PhotoFactsSearchFieldDisplayName(field photo.PhotoSearchSourceField) string
 // values and order as the shared opened-record renderer.
 func PhotoOpenedRecordPresentation(record *photo.OpenedPhotoRecord) *open.TrawlerSpecificOpenedRecordPresentation {
 	fields := openedRecordFieldsFromAppleLibraryPhotoFacts(record)
-	if modelCard := record.GetPhotoCard(); modelCard != nil {
+	if modelCard := record.GetPhotoCard(); modelCard.GetPhotoCardOutcome() == photo.PhotoCardOutcome_PHOTO_CARD_OUTCOME_WRITTEN {
 		modelCardPresentation := openedRecordCardFromPhotoModelOutput(modelCard)
-		fields = append(append([]cardField{{label: "Summary", value: modelCardPresentation.title}}, modelCardPresentation.fields...), fields...)
+		cardFields := append([]cardField{{label: "Summary", value: modelCardPresentation.title}}, modelCardPresentation.fields...)
+		if record.GetCardModelInputChangedSinceCardWasWritten() {
+			cardFields = append(cardFields, cardField{label: "Card note", value: photoCardWrittenFromOlderFactsSentence})
+		}
+		fields = append(cardFields, fields...)
 	}
-	fields = append(fields, cardField{label: "Full picture", value: photoPictureArchiveStateForHumanOutput(record)})
+	fields = append(fields, cardField{label: "Picture", value: photoPictureStateForHumanOutput(record)})
 	detail := &presentation.TrawlerSpecificCommandDetailPresentation{
 		DetailDisplayName:       PhotoMediaKindDisplayName(record.GetAppleLibraryPhotoFacts()),
 		DetailDisplayNameAnchor: &identity.RecordAnchorIdentifier{RecordAnchorIdentifier: openrecord.PhotoDetailAnchorID},
@@ -125,24 +137,6 @@ func photoCaptureTimeZoneDescription(capture *photo.PhotoCaptureLocalTime) strin
 		return name + " · " + photoCaptureTimeZoneSourceDescription(capture)
 	}
 	return photoCaptureTimeZoneSourceDescription(capture)
-}
-
-func photoPictureArchiveStateForHumanOutput(record *photo.OpenedPhotoRecord) string {
-	if fetchedPicture := record.GetPictureFetchResult(); fetchedPicture != nil {
-		switch fetchedPicture.GetPictureFetchOutcome() {
-		case photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FETCHED:
-			return "Fetched into the archive; its file location is not recorded."
-		case photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_NOT_AVAILABLE_IN_ICLOUD:
-			return "The picture was not available from iCloud."
-		case photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED:
-			return "Fetching the picture failed: " + fetchedPicture.GetPictureFetchFailureMessage()
-		case photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_UNSPECIFIED:
-		}
-	}
-	if !record.GetPictureFetchStepIsBuilt() {
-		return "Not fetched yet. Picture fetching is not built yet."
-	}
-	return "Not fetched yet."
 }
 
 func photoSharedLibraryContributorForHumanOutput(facts *photo.AppleLibraryPhotoFacts) string {
@@ -248,6 +242,9 @@ func writePhotoListResponse(writer io.Writer, response *photo.PhotoListResponse,
 			photosWithoutKnownCaptureZone++
 		}
 		content := photoListPrimaryHumanContent(facts)
+		if summary := record.GetWrittenPhotoCardOneLineSummary(); summary != "" {
+			content = summary
+		}
 		if facts.GetIsFavourite() {
 			content += " · favourite"
 		}
@@ -293,10 +290,15 @@ func writeOpenedPhotoRecord(writer io.Writer, record *photo.OpenedPhotoRecord) e
 	if record == nil {
 		return fmt.Errorf("opened photo record is missing")
 	}
-	// A card, when produced, is the first evidence an assistant reads.
-	if card := record.GetPhotoCard(); card != nil {
-		if err := writeCard(writer, openedRecordCardFromPhotoModelOutput(card)); err != nil {
+	// A written card is the first evidence an assistant reads.
+	if photoCard := record.GetPhotoCard(); photoCard.GetPhotoCardOutcome() == photo.PhotoCardOutcome_PHOTO_CARD_OUTCOME_WRITTEN {
+		if err := writeCard(writer, openedRecordCardFromPhotoModelOutput(photoCard)); err != nil {
 			return err
+		}
+		if record.GetCardModelInputChangedSinceCardWasWritten() {
+			if err := writeLines(writer, Wrap(photoCardWrittenFromOlderFactsSentence, OutputWidth(writer))); err != nil {
+				return err
+			}
 		}
 		if err := writeLine(writer, ""); err != nil {
 			return err
@@ -305,18 +307,31 @@ func writeOpenedPhotoRecord(writer io.Writer, record *photo.OpenedPhotoRecord) e
 	if err := writeCard(writer, card{title: PhotoMediaKindDisplayName(record.GetAppleLibraryPhotoFacts()), fields: openedRecordFieldsFromAppleLibraryPhotoFacts(record)}); err != nil {
 		return err
 	}
-	if err := writeLines(writer, Wrap("Full picture: "+photoPictureArchiveStateForHumanOutput(record), OutputWidth(writer))); err != nil {
+	if err := writePhotoPictureLine(writer, record); err != nil {
 		return err
 	}
 	return writeNextCommands(writer, []NextCommand{nextCommandWithLabel(nextCommandLabelMoreDetail, "photos", "inspect", globallyRoutableTrawlLinkText(record.GetPhotoTrawlLink()))})
 }
 
+const photoCardWrittenFromOlderFactsSentence = "This card was written from older facts about the photo; it is remade only when asked with --recard."
+
+// photoCardVisibleTextFields keeps each group's place in the value, so a
+// long description of where the text appears never pushes the text itself
+// into a narrow column.
+func photoCardVisibleTextFields(modelCard *photo.PhotoCard) []cardField {
+	var fields []cardField
+	for _, group := range modelCard.GetVisibleTextGroups() {
+		fields = append(fields, cardField{label: "Text", value: group.GetWhereTextAppears() + ":\n" + group.GetTextAsWritten()})
+		if english := group.GetEnglishRendering(); english != "" {
+			fields = append(fields, cardField{label: "In English", value: english})
+		}
+	}
+	return fields
+}
+
 func openedRecordCardFromPhotoModelOutput(modelCard *photo.PhotoCard) card {
 	fields := []cardField{{label: "Place shown", value: modelCard.GetPlaceShownName()}, {label: "Description", value: modelCard.GetDescription()}}
-	for _, group := range modelCard.GetVisibleTextGroups() {
-		fields = append(fields, cardField{label: group.GetWhereTextAppears(), value: group.GetTextAsWritten()})
-	}
-	return card{title: modelCard.GetOneLineSummary(), fields: fields}
+	return card{title: modelCard.GetOneLineSummary(), fields: append(fields, photoCardVisibleTextFields(modelCard)...)}
 }
 
 func openedRecordFieldsFromAppleLibraryPhotoFacts(record *photo.OpenedPhotoRecord) []cardField {
@@ -426,6 +441,8 @@ func photoEditingStateForHumanOutput(appleEditingState int32) string {
 		return "Not edited"
 	case 2:
 		return "Edited"
+	case 3:
+		return "Edited by the camera"
 	default:
 		return "Editing state not known"
 	}
@@ -609,6 +626,7 @@ func inspectedRecordFieldsFromAppleLibraryPhotoFacts(record *photo.OpenedPhotoRe
 		cardField{label: "Favourite", value: photoInspectionYesOrNo(facts.GetIsFavourite())}, cardField{label: "Hidden", value: photoInspectionYesOrNo(facts.GetIsHidden())},
 		cardField{label: "Editing state (Apple)", value: fmt.Sprintf("%s (Apple editing state code %d)", photoEditingStateForHumanOutput(facts.GetAppleAdjustmentsState()), facts.GetAppleAdjustmentsState())},
 		cardField{label: "Modified UTC (exact)", value: photoInspectionRecordedText(formatExactUTCTimeForInspection(facts.GetAppleModificationTimeUtc()))},
+		cardField{label: "Edited UTC (exact)", value: photoInspectionRecordedText(formatExactUTCTimeForInspection(facts.GetAppleAdjustmentTimeUtc()))},
 		cardField{label: "Moment (Apple)", value: photoInspectionRecordedText(facts.GetAppleMomentTitle())},
 		cardField{label: "Part of an Apple burst", value: photoInspectionYesOrNo(facts.GetAppleBurstUuid() != "")},
 	)
@@ -640,31 +658,15 @@ func writePhotoInspectionResponse(writer io.Writer, response *photo.PhotoInspect
 			return err
 		}
 		return writeNextCommands(writer, []NextCommand{nextCommandOpeningRecord(link)})
+	case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_PICTURE_METADATA:
+		return writePhotoPictureInspection(writer, record, link)
+	case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_NEARBY_PLACES:
+		return writePhotoNearbyPlacesInspection(writer, response, link)
+	case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT:
+		return writePhotoCardModelInputInspection(writer, response, link)
+	case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD:
+		return writePhotoCardInspection(writer, record, link)
 	default:
-		layerName, stepName := "", ""
-		switch response.GetPhotoInspectionLayer() {
-		case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_PICTURE_METADATA:
-			layerName = "Picture metadata"
-			stepName = "fetch_picture"
-		case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_NEARBY_PLACES:
-			layerName = "Nearby places"
-			stepName = "look_up_places_near_spot"
-		case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT:
-			layerName = "Card model input"
-			stepName = "write_card_model_input"
-		case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD:
-			layerName = "Card"
-			stepName = "write_photo_card"
-		default:
-			return fmt.Errorf("photo inspection layer is missing")
-		}
-		if err := writeLine(writer, layerName+": the step has not run for this photo. The step is not built yet."); err != nil {
-			return err
-		}
-		requiredStepCommandLines := trawlCommandLinesWrappedBetweenArguments("Required step (not built): ", wrappedTrawlCommandContinuationIndent, quotedTrawlCommandArguments(writer, []string{"photos", "run", stepName, "--photo", link}), OutputWidth(writer))
-		if err := writeLines(writer, requiredStepCommandLines); err != nil {
-			return err
-		}
-		return writeNextCommands(writer, []NextCommand{nextCommandOpeningRecord(link)})
+		return fmt.Errorf("photo inspection layer is missing")
 	}
 }

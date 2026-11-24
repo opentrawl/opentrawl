@@ -28,8 +28,7 @@ public nonisolated enum Trawl_Photos_Step_PhotosStepName: SwiftProtobuf.Enum, Sw
   case readAppleLibrary // = 1
   case fetchPicture // = 2
   case lookUpPlacesNearSpot // = 3
-  case writeCardModelInput // = 4
-  case writePhotoCard // = 5
+  case writePhotoCard // = 4
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -42,8 +41,7 @@ public nonisolated enum Trawl_Photos_Step_PhotosStepName: SwiftProtobuf.Enum, Sw
     case 1: self = .readAppleLibrary
     case 2: self = .fetchPicture
     case 3: self = .lookUpPlacesNearSpot
-    case 4: self = .writeCardModelInput
-    case 5: self = .writePhotoCard
+    case 4: self = .writePhotoCard
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -54,8 +52,7 @@ public nonisolated enum Trawl_Photos_Step_PhotosStepName: SwiftProtobuf.Enum, Sw
     case .readAppleLibrary: return 1
     case .fetchPicture: return 2
     case .lookUpPlacesNearSpot: return 3
-    case .writeCardModelInput: return 4
-    case .writePhotoCard: return 5
+    case .writePhotoCard: return 4
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -66,7 +63,6 @@ public nonisolated enum Trawl_Photos_Step_PhotosStepName: SwiftProtobuf.Enum, Sw
     .readAppleLibrary,
     .fetchPicture,
     .lookUpPlacesNearSpot,
-    .writeCardModelInput,
     .writePhotoCard,
   ]
 
@@ -158,6 +154,7 @@ public nonisolated struct Trawl_Photos_Step_AppleLibrarySnapshot: Sendable {
   public init() {}
 }
 
+/// Apple's facts that decide which picture to fetch and where to find it.
 public nonisolated struct Trawl_Photos_Step_FetchPictureRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -165,38 +162,39 @@ public nonisolated struct Trawl_Photos_Step_FetchPictureRequest: Sendable {
 
   public var applePhotoUuid: String = String()
 
-  public var appleModificationTimeUtc: SwiftProtobuf.Google_Protobuf_Timestamp {
-    get {_appleModificationTimeUtc ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
-    set {_appleModificationTimeUtc = newValue}
+  public var captureTimeUtc: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_captureTimeUtc ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_captureTimeUtc = newValue}
   }
-  /// Returns true if `appleModificationTimeUtc` has been explicitly set.
-  public var hasAppleModificationTimeUtc: Bool {self._appleModificationTimeUtc != nil}
-  /// Clears the value of `appleModificationTimeUtc`. Subsequent reads from it will return its default value.
-  public mutating func clearAppleModificationTimeUtc() {self._appleModificationTimeUtc = nil}
+  /// Returns true if `captureTimeUtc` has been explicitly set.
+  public var hasCaptureTimeUtc: Bool {self._captureTimeUtc != nil}
+  /// Clears the value of `captureTimeUtc`. Subsequent reads from it will return its default value.
+  public mutating func clearCaptureTimeUtc() {self._captureTimeUtc = nil}
+
+  public var appleMediaKind: Int32 = 0
+
+  public var appleAdjustmentsState: Int32 = 0
+
+  public var appleAdjustmentTimeUtc: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_appleAdjustmentTimeUtc ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_appleAdjustmentTimeUtc = newValue}
+  }
+  /// Returns true if `appleAdjustmentTimeUtc` has been explicitly set.
+  public var hasAppleAdjustmentTimeUtc: Bool {self._appleAdjustmentTimeUtc != nil}
+  /// Clears the value of `appleAdjustmentTimeUtc`. Subsequent reads from it will return its default value.
+  public mutating func clearAppleAdjustmentTimeUtc() {self._appleAdjustmentTimeUtc = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _appleModificationTimeUtc: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _captureTimeUtc: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _appleAdjustmentTimeUtc: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
 }
 
-public nonisolated struct Trawl_Photos_Step_PhotosPlaceLookupRequestParameters: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var placeProvider: Trawl_Photo_PlaceProvider = .unspecified
-
-  public var placeSearchRadiusMetres: Double = 0
-
-  public var placeSearchQuery: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
+/// One spot is the centre of a cell of the camera spot grid. The request text
+/// is the exact provider path and query, without the base URL, so the same
+/// request to a self-hosted or public provider is one cached lookup.
 public nonisolated struct Trawl_Photos_Step_LookUpPlacesNearSpotRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -210,48 +208,11 @@ public nonisolated struct Trawl_Photos_Step_LookUpPlacesNearSpotRequest: Sendabl
 
   public var cameraSpotLongitude: Double = 0
 
-  public var placeSearchRadiusMetres: Double = 0
-
-  public var placeSearchQuery: String = String()
+  public var placeLookupRequestText: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
-}
-
-public nonisolated struct Trawl_Photos_Step_WriteCardModelInputRequest: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts {
-    get {_appleLibraryPhotoFacts ?? Trawl_Photo_AppleLibraryPhotoFacts()}
-    set {_appleLibraryPhotoFacts = newValue}
-  }
-  /// Returns true if `appleLibraryPhotoFacts` has been explicitly set.
-  public var hasAppleLibraryPhotoFacts: Bool {self._appleLibraryPhotoFacts != nil}
-  /// Clears the value of `appleLibraryPhotoFacts`. Subsequent reads from it will return its default value.
-  public mutating func clearAppleLibraryPhotoFacts() {self._appleLibraryPhotoFacts = nil}
-
-  public var pictureFetchResult: Trawl_Photo_PictureFetchResult {
-    get {_pictureFetchResult ?? Trawl_Photo_PictureFetchResult()}
-    set {_pictureFetchResult = newValue}
-  }
-  /// Returns true if `pictureFetchResult` has been explicitly set.
-  public var hasPictureFetchResult: Bool {self._pictureFetchResult != nil}
-  /// Clears the value of `pictureFetchResult`. Subsequent reads from it will return its default value.
-  public mutating func clearPictureFetchResult() {self._pictureFetchResult = nil}
-
-  public var nearbyPlacesLookupResults: [Trawl_Photo_NearbyPlacesLookupResult] = []
-
-  public var knownPlaces: [Trawl_Photos_Knownplaces_KnownPlace] = []
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-
-  fileprivate var _appleLibraryPhotoFacts: Trawl_Photo_AppleLibraryPhotoFacts? = nil
-  fileprivate var _pictureFetchResult: Trawl_Photo_PictureFetchResult? = nil
 }
 
 public nonisolated struct Trawl_Photos_Step_WritePhotoCardRequest: Sendable {
@@ -270,11 +231,21 @@ public nonisolated struct Trawl_Photos_Step_WritePhotoCardRequest: Sendable {
 
   public var pictureSha256: String = String()
 
+  public var pictureLongEdgePixelLimitUsed: Int32 {
+    get {_pictureLongEdgePixelLimitUsed ?? 0}
+    set {_pictureLongEdgePixelLimitUsed = newValue}
+  }
+  /// Returns true if `pictureLongEdgePixelLimitUsed` has been explicitly set.
+  public var hasPictureLongEdgePixelLimitUsed: Bool {self._pictureLongEdgePixelLimitUsed != nil}
+  /// Clears the value of `pictureLongEdgePixelLimitUsed`. Subsequent reads from it will return its default value.
+  public mutating func clearPictureLongEdgePixelLimitUsed() {self._pictureLongEdgePixelLimitUsed = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _photoCardModelInput: Trawl_Photo_PhotoCardModelInput? = nil
+  fileprivate var _pictureLongEdgePixelLimitUsed: Int32? = nil
 }
 
 public nonisolated struct Trawl_Photos_Step_PhotosStepRunItem: @unchecked Sendable {
@@ -309,14 +280,6 @@ public nonisolated struct Trawl_Photos_Step_PhotosStepRunItem: @unchecked Sendab
       return Trawl_Photos_Step_LookUpPlacesNearSpotRequest()
     }
     set {_uniqueStorage()._stepInput = .lookUpPlacesNearSpotRequest(newValue)}
-  }
-
-  public var writeCardModelInputRequest: Trawl_Photos_Step_WriteCardModelInputRequest {
-    get {
-      if case .writeCardModelInputRequest(let v)? = _storage._stepInput {return v}
-      return Trawl_Photos_Step_WriteCardModelInputRequest()
-    }
-    set {_uniqueStorage()._stepInput = .writeCardModelInputRequest(newValue)}
   }
 
   public var writePhotoCardRequest: Trawl_Photos_Step_WritePhotoCardRequest {
@@ -356,14 +319,6 @@ public nonisolated struct Trawl_Photos_Step_PhotosStepRunItem: @unchecked Sendab
     set {_uniqueStorage()._stepOutput = .nearbyPlacesLookupResult(newValue)}
   }
 
-  public var photoCardModelInput: Trawl_Photo_PhotoCardModelInput {
-    get {
-      if case .photoCardModelInput(let v)? = _storage._stepOutput {return v}
-      return Trawl_Photo_PhotoCardModelInput()
-    }
-    set {_uniqueStorage()._stepOutput = .photoCardModelInput(newValue)}
-  }
-
   public var photoCard: Trawl_Photo_PhotoCard {
     get {
       if case .photoCard(let v)? = _storage._stepOutput {return v}
@@ -378,7 +333,6 @@ public nonisolated struct Trawl_Photos_Step_PhotosStepRunItem: @unchecked Sendab
     case readAppleLibraryRequest(Trawl_Photos_Step_ReadAppleLibraryRequest)
     case fetchPictureRequest(Trawl_Photos_Step_FetchPictureRequest)
     case lookUpPlacesNearSpotRequest(Trawl_Photos_Step_LookUpPlacesNearSpotRequest)
-    case writeCardModelInputRequest(Trawl_Photos_Step_WriteCardModelInputRequest)
     case writePhotoCardRequest(Trawl_Photos_Step_WritePhotoCardRequest)
 
   }
@@ -387,7 +341,6 @@ public nonisolated struct Trawl_Photos_Step_PhotosStepRunItem: @unchecked Sendab
     case appleLibrarySnapshot(Trawl_Photos_Step_AppleLibrarySnapshot)
     case pictureFetchResult(Trawl_Photo_PictureFetchResult)
     case nearbyPlacesLookupResult(Trawl_Photo_NearbyPlacesLookupResult)
-    case photoCardModelInput(Trawl_Photo_PhotoCardModelInput)
     case photoCard(Trawl_Photo_PhotoCard)
 
   }
@@ -463,7 +416,7 @@ public nonisolated struct Trawl_Photos_Step_PhotosPipelineStatus: Sendable {
 fileprivate nonisolated let _protobuf_package = "trawl.photos.step"
 
 nonisolated extension Trawl_Photos_Step_PhotosStepName: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PHOTOS_STEP_NAME_UNSPECIFIED\0\u{1}PHOTOS_STEP_NAME_READ_APPLE_LIBRARY\0\u{1}PHOTOS_STEP_NAME_FETCH_PICTURE\0\u{1}PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT\0\u{1}PHOTOS_STEP_NAME_WRITE_CARD_MODEL_INPUT\0\u{1}PHOTOS_STEP_NAME_WRITE_PHOTO_CARD\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PHOTOS_STEP_NAME_UNSPECIFIED\0\u{1}PHOTOS_STEP_NAME_READ_APPLE_LIBRARY\0\u{1}PHOTOS_STEP_NAME_FETCH_PICTURE\0\u{1}PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT\0\u{1}PHOTOS_STEP_NAME_WRITE_PHOTO_CARD\0")
 }
 
 nonisolated extension Trawl_Photos_Step_PhotosStepRunStopReason: SwiftProtobuf._ProtoNameProviding {
@@ -556,7 +509,7 @@ nonisolated extension Trawl_Photos_Step_AppleLibrarySnapshot: SwiftProtobuf.Mess
 
 nonisolated extension Trawl_Photos_Step_FetchPictureRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".FetchPictureRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}apple_photo_uuid\0\u{3}apple_modification_time_utc\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}apple_photo_uuid\0\u{3}capture_time_utc\0\u{3}apple_media_kind\0\u{3}apple_adjustments_state\0\u{3}apple_adjustment_time_utc\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -565,7 +518,10 @@ nonisolated extension Trawl_Photos_Step_FetchPictureRequest: SwiftProtobuf.Messa
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.applePhotoUuid) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._appleModificationTimeUtc) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._captureTimeUtc) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.appleMediaKind) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.appleAdjustmentsState) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._appleAdjustmentTimeUtc) }()
       default: break
       }
     }
@@ -579,55 +535,27 @@ nonisolated extension Trawl_Photos_Step_FetchPictureRequest: SwiftProtobuf.Messa
     if !self.applePhotoUuid.isEmpty {
       try visitor.visitSingularStringField(value: self.applePhotoUuid, fieldNumber: 1)
     }
-    try { if let v = self._appleModificationTimeUtc {
+    try { if let v = self._captureTimeUtc {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    if self.appleMediaKind != 0 {
+      try visitor.visitSingularInt32Field(value: self.appleMediaKind, fieldNumber: 3)
+    }
+    if self.appleAdjustmentsState != 0 {
+      try visitor.visitSingularInt32Field(value: self.appleAdjustmentsState, fieldNumber: 4)
+    }
+    try { if let v = self._appleAdjustmentTimeUtc {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Photos_Step_FetchPictureRequest, rhs: Trawl_Photos_Step_FetchPictureRequest) -> Bool {
     if lhs.applePhotoUuid != rhs.applePhotoUuid {return false}
-    if lhs._appleModificationTimeUtc != rhs._appleModificationTimeUtc {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Photos_Step_PhotosPlaceLookupRequestParameters: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".PhotosPlaceLookupRequestParameters"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}place_provider\0\u{3}place_search_radius_metres\0\u{3}place_search_query\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularEnumField(value: &self.placeProvider) }()
-      case 2: try { try decoder.decodeSingularDoubleField(value: &self.placeSearchRadiusMetres) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.placeSearchQuery) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.placeProvider != .unspecified {
-      try visitor.visitSingularEnumField(value: self.placeProvider, fieldNumber: 1)
-    }
-    if self.placeSearchRadiusMetres.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.placeSearchRadiusMetres, fieldNumber: 2)
-    }
-    if !self.placeSearchQuery.isEmpty {
-      try visitor.visitSingularStringField(value: self.placeSearchQuery, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Photos_Step_PhotosPlaceLookupRequestParameters, rhs: Trawl_Photos_Step_PhotosPlaceLookupRequestParameters) -> Bool {
-    if lhs.placeProvider != rhs.placeProvider {return false}
-    if lhs.placeSearchRadiusMetres != rhs.placeSearchRadiusMetres {return false}
-    if lhs.placeSearchQuery != rhs.placeSearchQuery {return false}
+    if lhs._captureTimeUtc != rhs._captureTimeUtc {return false}
+    if lhs.appleMediaKind != rhs.appleMediaKind {return false}
+    if lhs.appleAdjustmentsState != rhs.appleAdjustmentsState {return false}
+    if lhs._appleAdjustmentTimeUtc != rhs._appleAdjustmentTimeUtc {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -635,7 +563,7 @@ nonisolated extension Trawl_Photos_Step_PhotosPlaceLookupRequestParameters: Swif
 
 nonisolated extension Trawl_Photos_Step_LookUpPlacesNearSpotRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LookUpPlacesNearSpotRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}place_provider\0\u{3}camera_spot_key\0\u{3}camera_spot_latitude\0\u{3}camera_spot_longitude\0\u{3}place_search_radius_metres\0\u{3}place_search_query\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}place_provider\0\u{3}camera_spot_key\0\u{3}camera_spot_latitude\0\u{3}camera_spot_longitude\0\u{3}place_lookup_request_text\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -647,8 +575,7 @@ nonisolated extension Trawl_Photos_Step_LookUpPlacesNearSpotRequest: SwiftProtob
       case 2: try { try decoder.decodeSingularStringField(value: &self.cameraSpotKey) }()
       case 3: try { try decoder.decodeSingularDoubleField(value: &self.cameraSpotLatitude) }()
       case 4: try { try decoder.decodeSingularDoubleField(value: &self.cameraSpotLongitude) }()
-      case 5: try { try decoder.decodeSingularDoubleField(value: &self.placeSearchRadiusMetres) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.placeSearchQuery) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.placeLookupRequestText) }()
       default: break
       }
     }
@@ -667,11 +594,8 @@ nonisolated extension Trawl_Photos_Step_LookUpPlacesNearSpotRequest: SwiftProtob
     if self.cameraSpotLongitude.bitPattern != 0 {
       try visitor.visitSingularDoubleField(value: self.cameraSpotLongitude, fieldNumber: 4)
     }
-    if self.placeSearchRadiusMetres.bitPattern != 0 {
-      try visitor.visitSingularDoubleField(value: self.placeSearchRadiusMetres, fieldNumber: 5)
-    }
-    if !self.placeSearchQuery.isEmpty {
-      try visitor.visitSingularStringField(value: self.placeSearchQuery, fieldNumber: 6)
+    if !self.placeLookupRequestText.isEmpty {
+      try visitor.visitSingularStringField(value: self.placeLookupRequestText, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -681,57 +605,7 @@ nonisolated extension Trawl_Photos_Step_LookUpPlacesNearSpotRequest: SwiftProtob
     if lhs.cameraSpotKey != rhs.cameraSpotKey {return false}
     if lhs.cameraSpotLatitude != rhs.cameraSpotLatitude {return false}
     if lhs.cameraSpotLongitude != rhs.cameraSpotLongitude {return false}
-    if lhs.placeSearchRadiusMetres != rhs.placeSearchRadiusMetres {return false}
-    if lhs.placeSearchQuery != rhs.placeSearchQuery {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Trawl_Photos_Step_WriteCardModelInputRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".WriteCardModelInputRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}apple_library_photo_facts\0\u{3}picture_fetch_result\0\u{3}nearby_places_lookup_results\0\u{3}known_places\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._appleLibraryPhotoFacts) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._pictureFetchResult) }()
-      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.nearbyPlacesLookupResults) }()
-      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.knownPlaces) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._appleLibraryPhotoFacts {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    try { if let v = self._pictureFetchResult {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    if !self.nearbyPlacesLookupResults.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.nearbyPlacesLookupResults, fieldNumber: 3)
-    }
-    if !self.knownPlaces.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.knownPlaces, fieldNumber: 4)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Trawl_Photos_Step_WriteCardModelInputRequest, rhs: Trawl_Photos_Step_WriteCardModelInputRequest) -> Bool {
-    if lhs._appleLibraryPhotoFacts != rhs._appleLibraryPhotoFacts {return false}
-    if lhs._pictureFetchResult != rhs._pictureFetchResult {return false}
-    if lhs.nearbyPlacesLookupResults != rhs.nearbyPlacesLookupResults {return false}
-    if lhs.knownPlaces != rhs.knownPlaces {return false}
+    if lhs.placeLookupRequestText != rhs.placeLookupRequestText {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -739,7 +613,7 @@ nonisolated extension Trawl_Photos_Step_WriteCardModelInputRequest: SwiftProtobu
 
 nonisolated extension Trawl_Photos_Step_WritePhotoCardRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WritePhotoCardRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_card_model_input\0\u{3}picture_sha256\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}photo_card_model_input\0\u{3}picture_sha256\0\u{3}picture_long_edge_pixel_limit_used\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -749,6 +623,7 @@ nonisolated extension Trawl_Photos_Step_WritePhotoCardRequest: SwiftProtobuf.Mes
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._photoCardModelInput) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.pictureSha256) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self._pictureLongEdgePixelLimitUsed) }()
       default: break
       }
     }
@@ -765,12 +640,16 @@ nonisolated extension Trawl_Photos_Step_WritePhotoCardRequest: SwiftProtobuf.Mes
     if !self.pictureSha256.isEmpty {
       try visitor.visitSingularStringField(value: self.pictureSha256, fieldNumber: 2)
     }
+    try { if let v = self._pictureLongEdgePixelLimitUsed {
+      try visitor.visitSingularInt32Field(value: v, fieldNumber: 3)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Photos_Step_WritePhotoCardRequest, rhs: Trawl_Photos_Step_WritePhotoCardRequest) -> Bool {
     if lhs._photoCardModelInput != rhs._photoCardModelInput {return false}
     if lhs.pictureSha256 != rhs.pictureSha256 {return false}
+    if lhs._pictureLongEdgePixelLimitUsed != rhs._pictureLongEdgePixelLimitUsed {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -778,7 +657,7 @@ nonisolated extension Trawl_Photos_Step_WritePhotoCardRequest: SwiftProtobuf.Mes
 
 nonisolated extension Trawl_Photos_Step_PhotosStepRunItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PhotosStepRunItem"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}read_apple_library_request\0\u{3}fetch_picture_request\0\u{3}look_up_places_near_spot_request\0\u{3}write_card_model_input_request\0\u{3}write_photo_card_request\0\u{3}apple_library_snapshot\0\u{3}picture_fetch_result\0\u{3}nearby_places_lookup_result\0\u{3}photo_card_model_input\0\u{3}photo_card\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}read_apple_library_request\0\u{3}fetch_picture_request\0\u{3}look_up_places_near_spot_request\0\u{3}write_photo_card_request\0\u{3}apple_library_snapshot\0\u{3}picture_fetch_result\0\u{3}nearby_places_lookup_result\0\u{3}photo_card\0")
 
   fileprivate class _StorageClass {
     var _stepInput: Trawl_Photos_Step_PhotosStepRunItem.OneOf_StepInput?
@@ -853,19 +732,6 @@ nonisolated extension Trawl_Photos_Step_PhotosStepRunItem: SwiftProtobuf.Message
           }
         }()
         case 4: try {
-          var v: Trawl_Photos_Step_WriteCardModelInputRequest?
-          var hadOneofValue = false
-          if let current = _storage._stepInput {
-            hadOneofValue = true
-            if case .writeCardModelInputRequest(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._stepInput = .writeCardModelInputRequest(v)
-          }
-        }()
-        case 5: try {
           var v: Trawl_Photos_Step_WritePhotoCardRequest?
           var hadOneofValue = false
           if let current = _storage._stepInput {
@@ -878,7 +744,7 @@ nonisolated extension Trawl_Photos_Step_PhotosStepRunItem: SwiftProtobuf.Message
             _storage._stepInput = .writePhotoCardRequest(v)
           }
         }()
-        case 6: try {
+        case 5: try {
           var v: Trawl_Photos_Step_AppleLibrarySnapshot?
           var hadOneofValue = false
           if let current = _storage._stepOutput {
@@ -891,7 +757,7 @@ nonisolated extension Trawl_Photos_Step_PhotosStepRunItem: SwiftProtobuf.Message
             _storage._stepOutput = .appleLibrarySnapshot(v)
           }
         }()
-        case 7: try {
+        case 6: try {
           var v: Trawl_Photo_PictureFetchResult?
           var hadOneofValue = false
           if let current = _storage._stepOutput {
@@ -904,7 +770,7 @@ nonisolated extension Trawl_Photos_Step_PhotosStepRunItem: SwiftProtobuf.Message
             _storage._stepOutput = .pictureFetchResult(v)
           }
         }()
-        case 8: try {
+        case 7: try {
           var v: Trawl_Photo_NearbyPlacesLookupResult?
           var hadOneofValue = false
           if let current = _storage._stepOutput {
@@ -917,20 +783,7 @@ nonisolated extension Trawl_Photos_Step_PhotosStepRunItem: SwiftProtobuf.Message
             _storage._stepOutput = .nearbyPlacesLookupResult(v)
           }
         }()
-        case 9: try {
-          var v: Trawl_Photo_PhotoCardModelInput?
-          var hadOneofValue = false
-          if let current = _storage._stepOutput {
-            hadOneofValue = true
-            if case .photoCardModelInput(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._stepOutput = .photoCardModelInput(v)
-          }
-        }()
-        case 10: try {
+        case 8: try {
           var v: Trawl_Photo_PhotoCard?
           var hadOneofValue = false
           if let current = _storage._stepOutput {
@@ -968,36 +821,28 @@ nonisolated extension Trawl_Photos_Step_PhotosStepRunItem: SwiftProtobuf.Message
         guard case .lookUpPlacesNearSpotRequest(let v)? = _storage._stepInput else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
       }()
-      case .writeCardModelInputRequest?: try {
-        guard case .writeCardModelInputRequest(let v)? = _storage._stepInput else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-      }()
       case .writePhotoCardRequest?: try {
         guard case .writePhotoCardRequest(let v)? = _storage._stepInput else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
       }()
       case nil: break
       }
       switch _storage._stepOutput {
       case .appleLibrarySnapshot?: try {
         guard case .appleLibrarySnapshot(let v)? = _storage._stepOutput else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
       }()
       case .pictureFetchResult?: try {
         guard case .pictureFetchResult(let v)? = _storage._stepOutput else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
       }()
       case .nearbyPlacesLookupResult?: try {
         guard case .nearbyPlacesLookupResult(let v)? = _storage._stepOutput else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
-      }()
-      case .photoCardModelInput?: try {
-        guard case .photoCardModelInput(let v)? = _storage._stepOutput else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
       }()
       case .photoCard?: try {
         guard case .photoCard(let v)? = _storage._stepOutput else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
       }()
       case nil: break
       }

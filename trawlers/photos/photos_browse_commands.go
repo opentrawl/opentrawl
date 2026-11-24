@@ -8,7 +8,9 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/knownplacesfile"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photosarchive"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/placelookup"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
@@ -30,7 +32,7 @@ func (c *Crawler) registerPhotoFieldListCommandFlags(flagSet *flag.FlagSet) {
 	c.photoListFlags = photoFieldListCommandFlags{limit: defaultPhotoListLimit}
 	flagSet.StringVar(&c.photoListFlags.on, "on", "", "Photos on this capture-local `DATE` (YYYY-MM-DD)")
 	c.registerPhotoDateRangeCommandFlags(flagSet)
-	flagSet.StringVar(&c.photoListFlags.place, "place", "", "Match whole words in any Apple place level, address or area by `NAME`")
+	flagSet.StringVar(&c.photoListFlags.place, "place", "", "Match whole words in any Apple place level, address or area, or the place a card says the photo shows, by `NAME`")
 	flagSet.StringVar(&c.photoListFlags.person, "person", "", "Match an Apple named person by `NAME`")
 	flagSet.StringVar(&c.photoListFlags.album, "album", "", "Match an Apple album by `NAME`")
 	flagSet.StringVar(&c.photoListFlags.camera, "camera", "", "Match camera make or model by `NAME`")
@@ -102,7 +104,15 @@ func (c *Crawler) listPhotoFactsCommand(ctx context.Context, req *trawlkit.Trawl
 	}
 	records := make([]*photo.PhotoRecord, 0, len(facts))
 	for _, fact := range facts {
-		records = append(records, &photo.PhotoRecord{CanonicalRecordReference: photoCanonicalRecordReference(fact), AppleLibraryPhotoFacts: fact})
+		photoCard, err := archive.ReadStoredPhotoCard(ctx, fact.GetApplePhotoUuid())
+		if err != nil {
+			return nil, err
+		}
+		record := &photo.PhotoRecord{CanonicalRecordReference: photoCanonicalRecordReference(fact), AppleLibraryPhotoFacts: fact}
+		if photoCard.GetPhotoCardOutcome() == photo.PhotoCardOutcome_PHOTO_CARD_OUTCOME_WRITTEN {
+			record.WrittenPhotoCardOneLineSummary = photoCard.GetOneLineSummary()
+		}
+		records = append(records, record)
 	}
 	return &command.TrawlerCommandResponse{TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PhotoListResponse{PhotoListResponse: &photo.PhotoListResponse{PhotoRecordsNewestFirst: records, PersonFilterIsApplied: filters.Person != "", TotalMatchingPhotoCount: total, MoreMatchingPhotosExist: uint64(len(records)) < total}}}, nil
 }
@@ -118,7 +128,7 @@ func (c *Crawler) listPhotoLocalDaysCommand(ctx context.Context, req *trawlkit.T
 	}
 	var knownPlaces *knownplaces.KnownPlacesFile
 	if path := c.knownPlacesFilePath(); path != "" {
-		knownPlaces, err = knownplacesfile.ReadKnownPlacesFile(path)
+		knownPlaces, err = knownplacesfile.ReadKnownPlacesFile(config.ExpandHome(path))
 		if err != nil {
 			return nil, err
 		}
@@ -152,9 +162,46 @@ func (c *Crawler) inspectPhotoLayerCommand(ctx context.Context, req *trawlkit.Tr
 	if err != nil {
 		return nil, err
 	}
-	openedPhoto, err := loadOpenedPhotoRecord(ctx, archive, uuid)
+	needsCardModelInput := layer == photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD ||
+		layer == photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT
+	openedPhoto, currentModelInput, err := c.loadOpenedPhotoRecord(ctx, archive, req.TrawlerArchivePaths.TrawlerArchivePath, uuid, needsCardModelInput)
 	if err != nil {
 		return nil, err
 	}
-	return &command.TrawlerCommandResponse{TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PhotoInspectionResponse{PhotoInspectionResponse: &photo.PhotoInspectionResponse{PhotoRecord: openedPhoto, PhotoInspectionLayer: layer}}}, nil
+	inspectionResponse := &photo.PhotoInspectionResponse{PhotoRecord: openedPhoto, PhotoInspectionLayer: layer}
+	switch layer {
+	case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_NEARBY_PLACES:
+		if err := addStoredNearbyPlacesFromCamera(ctx, archive, inspectionResponse); err != nil {
+			return nil, err
+		}
+	case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD_MODEL_INPUT:
+		if currentModelInput == nil {
+			if currentModelInput, err = c.currentPhotoCardModelInput(ctx, archive, uuid); err != nil {
+				return nil, err
+			}
+		}
+		inspectionResponse.CurrentPhotoCardModelInput = currentModelInput
+	case photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_UNSPECIFIED,
+		photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_APPLE_FACTS,
+		photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_PICTURE_METADATA,
+		photo.PhotoInspectionLayer_PHOTO_INSPECTION_LAYER_CARD:
+	}
+	return &command.TrawlerCommandResponse{TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_PhotoInspectionResponse{PhotoInspectionResponse: inspectionResponse}}, nil
+}
+
+func addStoredNearbyPlacesFromCamera(ctx context.Context, archive *photosarchive.PhotosArchive, inspectionResponse *photo.PhotoInspectionResponse) error {
+	cameraLocation := inspectionResponse.GetPhotoRecord().GetAppleLibraryPhotoFacts().GetCameraLocation()
+	if cameraLocation == nil {
+		return nil
+	}
+	cameraSpot := photosarchive.CameraSpotForCameraPosition(cameraLocation.GetCameraLatitude(), cameraLocation.GetCameraLongitude())
+	lookupResult, lookupIsStored, err := archive.ReadStoredNearbyPlacesLookupResult(ctx,
+		placelookup.PhotonReverseLookupRequestForCameraSpot(cameraSpot.CameraSpotKey, cameraSpot.CameraSpotLatitude, cameraSpot.CameraSpotLongitude))
+	if err != nil || !lookupIsStored {
+		return err
+	}
+	inspectionResponse.NearbyPlacesLookupOutcome = lookupResult.GetPlaceLookupOutcome()
+	inspectionResponse.NearbyPlacesLookupFailureMessage = lookupResult.GetPlaceLookupFailureMessage()
+	inspectionResponse.NearbyPlacesFromCameraNearestFirst = placelookup.NearbyPlacesFromCameraNearestFirst(cameraLocation, lookupResult.GetNearbyPlacesNearestFirst())
+	return nil
 }

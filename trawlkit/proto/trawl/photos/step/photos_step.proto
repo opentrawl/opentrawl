@@ -4,7 +4,6 @@ package trawl.photos.step;
 
 import "google/protobuf/timestamp.proto";
 import "trawl/photo/photo.proto";
-import "trawl/photos/knownplaces/known_places.proto";
 
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step;photosstep";
 
@@ -15,8 +14,7 @@ enum PhotosStepName {
   PHOTOS_STEP_NAME_READ_APPLE_LIBRARY = 1;
   PHOTOS_STEP_NAME_FETCH_PICTURE = 2;
   PHOTOS_STEP_NAME_LOOK_UP_PLACES_NEAR_SPOT = 3;
-  PHOTOS_STEP_NAME_WRITE_CARD_MODEL_INPUT = 4;
-  PHOTOS_STEP_NAME_WRITE_PHOTO_CARD = 5;
+  PHOTOS_STEP_NAME_WRITE_PHOTO_CARD = 4;
 }
 
 // Why the last run of a step stopped.
@@ -41,36 +39,30 @@ message AppleLibrarySnapshot {
   repeated trawl.photo.AppleLibraryTrip apple_library_trips = 2;
 }
 
+// Apple's facts that decide which picture to fetch and where to find it.
 message FetchPictureRequest {
   string apple_photo_uuid = 1;
-  google.protobuf.Timestamp apple_modification_time_utc = 2;
+  google.protobuf.Timestamp capture_time_utc = 2;
+  int32 apple_media_kind = 3;
+  int32 apple_adjustments_state = 4;
+  google.protobuf.Timestamp apple_adjustment_time_utc = 5;
 }
 
-message PhotosPlaceLookupRequestParameters {
-  trawl.photo.PlaceProvider place_provider = 1;
-  double place_search_radius_metres = 2;
-  string place_search_query = 3;
-}
-
+// One spot is the centre of a cell of the camera spot grid. The request text
+// is the exact provider path and query, without the base URL, so the same
+// request to a self-hosted or public provider is one cached lookup.
 message LookUpPlacesNearSpotRequest {
   trawl.photo.PlaceProvider place_provider = 1;
   string camera_spot_key = 2;
   double camera_spot_latitude = 3;
   double camera_spot_longitude = 4;
-  double place_search_radius_metres = 5;
-  string place_search_query = 6;
-}
-
-message WriteCardModelInputRequest {
-  trawl.photo.AppleLibraryPhotoFacts apple_library_photo_facts = 1;
-  trawl.photo.PictureFetchResult picture_fetch_result = 2;
-  repeated trawl.photo.NearbyPlacesLookupResult nearby_places_lookup_results = 3;
-  repeated trawl.photos.knownplaces.KnownPlace known_places = 4;
+  string place_lookup_request_text = 5;
 }
 
 message WritePhotoCardRequest {
   trawl.photo.PhotoCardModelInput photo_card_model_input = 1;
   string picture_sha256 = 2;
+  optional int32 picture_long_edge_pixel_limit_used = 3;
 }
 
 message PhotosStepRunItem {
@@ -78,15 +70,13 @@ message PhotosStepRunItem {
     ReadAppleLibraryRequest read_apple_library_request = 1;
     FetchPictureRequest fetch_picture_request = 2;
     LookUpPlacesNearSpotRequest look_up_places_near_spot_request = 3;
-    WriteCardModelInputRequest write_card_model_input_request = 4;
-    WritePhotoCardRequest write_photo_card_request = 5;
+    WritePhotoCardRequest write_photo_card_request = 4;
   }
   oneof step_output {
-    AppleLibrarySnapshot apple_library_snapshot = 6;
-    trawl.photo.PictureFetchResult picture_fetch_result = 7;
-    trawl.photo.NearbyPlacesLookupResult nearby_places_lookup_result = 8;
-    trawl.photo.PhotoCardModelInput photo_card_model_input = 9;
-    trawl.photo.PhotoCard photo_card = 10;
+    AppleLibrarySnapshot apple_library_snapshot = 5;
+    trawl.photo.PictureFetchResult picture_fetch_result = 6;
+    trawl.photo.NearbyPlacesLookupResult nearby_places_lookup_result = 7;
+    trawl.photo.PhotoCard photo_card = 8;
   }
 }
 

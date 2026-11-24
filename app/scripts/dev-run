@@ -119,6 +119,9 @@ plutil -create xml1 "$development_entitlements"
 /usr/libexec/PlistBuddy \
   -c "Add :com.apple.security.cs.disable-library-validation bool true" \
   "$development_entitlements"
+/usr/libexec/PlistBuddy \
+  -c "Add :com.apple.security.personal-information.photos-library bool true" \
+  "$development_entitlements"
 
 rewrite_nix_resolver() {
   local binary="$1"
@@ -167,6 +170,7 @@ plutil -insert GitDirty -bool "$git_dirty" "$info_plist"
 plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info_plist"
 plutil -insert LSMinimumSystemVersion -string 26.0 "$info_plist"
 plutil -insert NSHighResolutionCapable -bool true "$info_plist"
+plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads your photos so you and your assistants can search what they show." "$info_plist"
 plutil -insert SUEnableAutomaticChecks -bool false "$info_plist"
 /usr/libexec/PlistBuddy \
   -c "Add :NSAppTransportSecurity dict" \
