@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -93,7 +92,7 @@ func ReadSourceRecordsWithOptions(ctx context.Context, source Source, keyAndSalt
 }
 
 func OpenDecryptedDB(ctx context.Context, dbPath string, keyAndSalt []byte) (*sql.DB, func(), error) {
-	encrypted, err := os.ReadFile(dbPath)
+	encrypted, err := readEncryptedPostboxSnapshot(ctx, dbPath)
 	if err != nil {
 		return nil, func() {}, err
 	}
