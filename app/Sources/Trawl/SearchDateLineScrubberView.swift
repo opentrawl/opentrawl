@@ -17,6 +17,9 @@ struct SearchDateLineScrubberView: View {
 
   @State private var draftStartFraction: CGFloat?
   @State private var draftEndFraction: CGFloat?
+  @State private var dragAnchorFraction: CGFloat?
+
+  private static let brushHandleGrabDistance: CGFloat = 8
 
   private var relevantStatuses: [TrawlerStatus] {
     if let scopedTrawlerID {
@@ -49,15 +52,33 @@ struct SearchDateLineScrubberView: View {
     draftStartFraction != nil && draftEndFraction != nil
   }
 
-  private var activeFractions: (lower: CGFloat, upper: CGFloat)? {
-    if let draftStartFraction, let draftEndFraction {
-      return (min(draftStartFraction, draftEndFraction), max(draftStartFraction, draftEndFraction))
-    }
+  private var committedFractions: (lower: CGFloat, upper: CGFloat)? {
     guard earliestDateInclusive != nil || latestDateInclusive != nil else { return nil }
     let axis = timeAxis
     let lower = earliestDateInclusive.map { CGFloat(axis.datedNormalizedPosition(for: $0)) } ?? 0
     let upper = latestDateInclusive.map { CGFloat(axis.datedNormalizedPosition(for: $0)) } ?? 1
     return (min(lower, upper), max(lower, upper))
+  }
+
+  private var activeFractions: (lower: CGFloat, upper: CGFloat)? {
+    if let draftStartFraction, let draftEndFraction {
+      return (min(draftStartFraction, draftEndFraction), max(draftStartFraction, draftEndFraction))
+    }
+    return committedFractions
+  }
+
+  /// A drag that starts on a handle moves that edge and keeps the other one.
+  /// A drag that starts anywhere else picks a new range.
+  private func anchorFraction(forDragStartingAt startX: CGFloat, width: CGFloat) -> CGFloat {
+    let startFraction = min(max(startX / width, 0), 1)
+    guard let committedFractions else { return startFraction }
+    if abs(startX - committedFractions.lower * width) <= Self.brushHandleGrabDistance {
+      return committedFractions.upper
+    }
+    if abs(startX - committedFractions.upper * width) <= Self.brushHandleGrabDistance {
+      return committedFractions.lower
+    }
+    return startFraction
   }
 
   private var rangeBadgeText: String? {
@@ -93,7 +114,7 @@ struct SearchDateLineScrubberView: View {
         Spacer(minLength: TrawlDesign.Space.sm)
         if let rangeBadgeText {
           Text(rangeBadgeText)
-            .font(TrawlDesign.Typography.monoSmall)
+            .font(TrawlDesign.Typography.monoSmall.weight(.semibold))
             .foregroundStyle(TrawlDesign.Colors.matchRed)
             .lineLimit(1)
           if !isDragging {
@@ -118,23 +139,32 @@ struct SearchDateLineScrubberView: View {
             let x2 = active.upper * width
             let bandW = max(3, x2 - x1)
             Rectangle()
-              .fill(TrawlDesign.Colors.matchRed.opacity(0.14))
+              .fill(TrawlDesign.Colors.matchRed.opacity(0.12))
               .frame(width: bandW, height: height)
               .offset(x: x1)
+            DateBrushEdgeHandle(height: height)
+              .offset(x: x1 - DateBrushEdgeHandle.width / 2)
+            DateBrushEdgeHandle(height: height)
+              .offset(x: x1 + bandW - DateBrushEdgeHandle.width / 2)
           }
         }
         .contentShape(Rectangle())
         .gesture(
           DragGesture(minimumDistance: 2)
             .onChanged { value in
-              let s = min(max(value.startLocation.x / width, 0), 1)
-              let c = min(max(value.location.x / width, 0), 1)
-              draftStartFraction = s
-              draftEndFraction = c
+              let anchor =
+                dragAnchorFraction
+                ?? anchorFraction(forDragStartingAt: value.startLocation.x, width: width)
+              dragAnchorFraction = anchor
+              draftStartFraction = anchor
+              draftEndFraction = min(max(value.location.x / width, 0), 1)
             }
             .onEnded { value in
-              let s = min(max(value.startLocation.x / width, 0), 1)
+              let s =
+                dragAnchorFraction
+                ?? anchorFraction(forDragStartingAt: value.startLocation.x, width: width)
               let e = min(max(value.location.x / width, 0), 1)
+              dragAnchorFraction = nil
               draftStartFraction = nil
               draftEndFraction = nil
               let lower = min(s, e)
@@ -151,12 +181,22 @@ struct SearchDateLineScrubberView: View {
 
       GeometryReader { proxy in
         let ticks = axis.yearTicks(forTrackWidth: Double(proxy.size.width))
+        let pickedFractions = activeFractions
         ZStack(alignment: .leading) {
           ForEach(ticks) { tick in
             let x = CGFloat(tick.normalizedPosition) * proxy.size.width
+            let isInPickedRange =
+              pickedFractions.map {
+                CGFloat(tick.normalizedPosition) >= $0.lower
+                  && CGFloat(tick.normalizedPosition) <= $0.upper
+              } ?? false
             Text(tick.label)
               .font(TrawlDesign.Typography.smallNumber)
-              .foregroundStyle(tick.isToday ? TrawlDesign.Colors.ink : TrawlDesign.Colors.mutedInk)
+              .fontWeight(isInPickedRange || tick.isToday ? .semibold : .regular)
+              .foregroundStyle(
+                isInPickedRange
+                  ? TrawlDesign.Colors.matchRed
+                  : (tick.isToday ? TrawlDesign.Colors.ink : TrawlDesign.Colors.mutedInk))
               .fixedSize()
               .position(
                 x: min(max(x, 16), max(16, proxy.size.width - 18)),
@@ -242,11 +282,11 @@ struct SearchDateLineScrubberView: View {
     fillPath.addLine(to: CGPoint(x: previousX, y: baselineY))
     fillPath.closeSubpath()
 
-    context.fill(fillPath, with: .color(TrawlDesign.Colors.mutedInk.opacity(0.15)))
+    context.fill(fillPath, with: .color(TrawlDesign.Colors.mutedInk.opacity(0.18)))
     context.stroke(
       strokePath,
-      with: .color(TrawlDesign.Colors.mutedInk.opacity(0.65)),
-      style: StrokeStyle(lineWidth: 1.35, lineJoin: .round)
+      with: .color(TrawlDesign.Colors.mutedInk.opacity(0.70)),
+      style: StrokeStyle(lineWidth: 1.4, lineJoin: .round)
     )
 
     if let active = activeFractions {
@@ -258,7 +298,7 @@ struct SearchDateLineScrubberView: View {
       )
       context.drawLayer { layer in
         layer.clip(to: Path(clipRect))
-        layer.fill(fillPath, with: .color(TrawlDesign.Colors.matchRed.opacity(0.24)))
+        layer.fill(fillPath, with: .color(TrawlDesign.Colors.matchRed.opacity(0.28)))
         layer.stroke(
           strokePath,
           with: .color(TrawlDesign.Colors.matchRed),
@@ -266,5 +306,28 @@ struct SearchDateLineScrubberView: View {
         )
       }
     }
+  }
+}
+
+/// One edge of the picked date range: a red rule with a grip to drag.
+private struct DateBrushEdgeHandle: View {
+  static let width: CGFloat = 5
+
+  let height: CGFloat
+
+  var body: some View {
+    ZStack {
+      Rectangle()
+        .fill(TrawlDesign.Colors.matchRed)
+        .frame(width: 1.5, height: height)
+      RoundedRectangle(cornerRadius: Self.width / 2, style: .continuous)
+        .fill(TrawlDesign.Colors.matchRed)
+        .overlay(
+          RoundedRectangle(cornerRadius: Self.width / 2, style: .continuous)
+            .strokeBorder(TrawlDesign.Colors.surface, lineWidth: 1)
+        )
+        .frame(width: Self.width, height: 16)
+    }
+    .frame(width: Self.width, height: height)
   }
 }
