@@ -598,6 +598,10 @@ func (handler *agentMCPHTTPHandler) ServeHTTP(response http.ResponseWriter, requ
 		writeMCPJSONBytes(response, http.StatusOK, mustMarshalMCPJSON(mcpHealthzResponse{Status: "ok"}))
 		return
 	}
+	if isRemoteMCPServerCardPath(request.URL.Path) {
+		handler.handleRemoteMCPServerCard(response, request)
+		return
+	}
 	if handler.oauth != nil && handler.oauth.isOAuthPath(request.URL.Path) {
 		handler.oauth.ServeHTTP(response, request)
 		return
