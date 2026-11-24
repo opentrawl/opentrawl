@@ -297,6 +297,13 @@ plutil -insert SUAllowsAutomaticUpdates -bool true "$info"
 plutil -insert SUEnableSystemProfiling -bool false "$info"
 plutil -insert SUShowReleaseNotes -bool true "$info"
 plutil -insert SUVerifyUpdateBeforeExtraction -bool true "$info"
+/usr/libexec/PlistBuddy \
+  -c "Add :NSAppTransportSecurity dict" \
+  -c "Add :NSAppTransportSecurity:NSExceptionDomains dict" \
+  -c "Add :NSAppTransportSecurity:NSExceptionDomains:ts.net dict" \
+  -c "Add :NSAppTransportSecurity:NSExceptionDomains:ts.net:NSIncludesSubdomains bool true" \
+  -c "Add :NSAppTransportSecurity:NSExceptionDomains:ts.net:NSExceptionAllowsInsecureHTTPLoads bool true" \
+  "$info"
 
 chmod +x "$contents/MacOS/Trawl"
 xattr -cr "$app"

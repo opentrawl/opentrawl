@@ -67,7 +67,7 @@ enum SearchWorkspaceFieldContent: Equatable {
   }
 }
 
-struct StrataWorkspaceView: View {
+struct ArchiveTimelineWorkspaceView: View {
   let client: any TrawlClient
   let trawlers: [RestingTrawler]
   let searchableTrawlers: [RestingTrawler]
@@ -135,14 +135,14 @@ struct StrataWorkspaceView: View {
       let restingFooterHeight: CGFloat = 44
       let restingAvailableLanesHeight: CGFloat = max(
         180,
-        proxy.size.height - searchBarHeight - TrawlDesign.strataAxisHeight - restingFooterHeight - 4
+        proxy.size.height - searchBarHeight - TrawlDesign.timelineAxisHeight - restingFooterHeight - 4
       )
       let maxSearchLanesHeight: CGFloat? =
         isSearchActive
         ? max(
           112,
-          proxy.size.height - searchBarHeight - TrawlDesign.strataAxisHeight
-            - TrawlDesign.strataMinimumBottomSplitHeight - 8
+          proxy.size.height - searchBarHeight - TrawlDesign.timelineAxisHeight
+            - TrawlDesign.timelineMinimumBottomSplitHeight - 8
         )
         : nil
 
@@ -172,12 +172,13 @@ struct StrataWorkspaceView: View {
           .fill(TrawlDesign.Colors.hairline)
           .frame(height: 1)
 
-        StrataBandView(
+        ArchiveTimelineBandView(
           trawlers: trawlers,
           statusesByID: statusesByID,
           detailOverrides: detailOverrides,
           updatingTrawlers: updatingTrawlers,
           isSearchActive: isSearchActive,
+          isSearchLoading: model.phase == .loading,
           selectedTrawlerID: interaction.registeredTrawler,
           earliestDateInclusive: interaction.earliestMatchingArchiveRecordTimeInclusive,
           latestDateInclusive: interaction.latestMatchingArchiveRecordTimeInclusive,
@@ -532,7 +533,7 @@ private struct SearchField: View {
   @State private var draftEndDate = Date()
 
   private var dateRangeLabel: String? {
-    StrataDateRangeFormatting.label(
+    ArchiveTimelineDateRangeFormatting.label(
       earliestInclusive: earliestDateInclusive,
       latestInclusive: latestDateInclusive,
       locale: locale
@@ -652,7 +653,7 @@ private struct SearchField: View {
             let high = max(draftStartDate, draftEndDate)
             let calendar = Calendar.current
             let start = calendar.startOfDay(for: low)
-            let end = StrataTimeAxis.inclusiveEndOfDay(for: high, calendar: calendar)
+            let end = ArchiveTimelineTimeAxis.inclusiveEndOfDay(for: high, calendar: calendar)
             onSetDateRange(start, max(start, end))
             isShowingDatePicker = false
           }
@@ -672,7 +673,7 @@ private struct SearchField: View {
       let precedingDays = max(0, inclusiveDays - 1)
       let rawStart = calendar.date(byAdding: .day, value: -precedingDays, to: now) ?? now
       let start = calendar.startOfDay(for: rawStart)
-      let end = StrataTimeAxis.inclusiveEndOfDay(for: now, calendar: calendar)
+      let end = ArchiveTimelineTimeAxis.inclusiveEndOfDay(for: now, calendar: calendar)
       onSetDateRange(start, max(start, end))
       isShowingDatePicker = false
     }

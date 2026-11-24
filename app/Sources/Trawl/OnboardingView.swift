@@ -11,17 +11,41 @@ struct OnboardingView: View {
   let appInstallations: MacAppInstallations
   let buildIdentity: BuildIdentity
   let aiInstruction: String
+  var connectionStore: ArchiveConnectionStore? = nil
+  var onConnectedToRemoteArchive: (() -> Void)? = nil
   let onFinish: () -> Void
+
+  @State private var isShowingRemoteConnectionSheet = false
 
   var body: some View {
     switch onboarding.stage {
     case .welcome:
       WelcomeStep(
         registeredTrawlerCatalog: appModel.registeredTrawlerCatalog,
+        secondaryTitle: connectionStore != nil
+          ? OperationalCopy.Connection.connectRemoteArchive
+          : nil,
+        onSecondaryAction: connectionStore != nil
+          ? { isShowingRemoteConnectionSheet = true }
+          : nil,
         onContinue: {
           onboarding.showPermission(appModel: appModel)
         }
       )
+      .sheet(isPresented: $isShowingRemoteConnectionSheet) {
+        if let connectionStore {
+          RemoteArchiveConnectionView(
+            connectionStore: connectionStore,
+            showsLocalOption: false,
+            onConnectionChanged: {
+              onConnectedToRemoteArchive?()
+            },
+            onDismiss: {
+              isShowingRemoteConnectionSheet = false
+            }
+          )
+        }
+      }
     case .permission:
       PermissionStep(
         permissionCheck: onboarding.permissionCheck,
@@ -110,6 +134,8 @@ struct OnboardingView: View {
 struct WelcomeStep: View {
   var icon = NSApplication.shared.applicationIconImage
   let registeredTrawlerCatalog: [RegisteredTrawlerCatalogEntry]
+  var secondaryTitle: String? = nil
+  var onSecondaryAction: (() -> Void)? = nil
   let onContinue: () -> Void
 
   var body: some View {
@@ -135,8 +161,8 @@ struct WelcomeStep: View {
     } actions: {
       OnboardingActionRow(
         backAction: nil,
-        secondaryTitle: nil,
-        secondaryAction: nil,
+        secondaryTitle: secondaryTitle,
+        secondaryAction: onSecondaryAction,
         primaryTitle: HumanCopy.Welcome.primaryAction,
         primaryAction: onContinue
       )

@@ -1,7 +1,7 @@
 import Foundation
 import TrawlClient
 
-public struct StrataAxisTick: Sendable, Equatable, Identifiable {
+public struct ArchiveTimelineAxisTick: Sendable, Equatable, Identifiable {
   public let id: String
   public let label: String
   public let normalizedPosition: Double
@@ -15,12 +15,12 @@ public struct StrataAxisTick: Sendable, Equatable, Identifiable {
   }
 }
 
-public enum StrataIntensityScale {
+public enum ArchiveTimelineIntensityScale {
   public static let legendReferenceCounts: [UInt64] = [10, 1_000, 10_000]
   public static let referenceCeilingCount: Double = 10_000
 
   /// Shared squared-log intensity in [0, 1] used identically by every monthly
-  /// strata bar and by the 10 / 1k / 10k legend. Empty months always return 0.
+  /// timeline bar and by the 10 / 1k / 10k legend. Empty months always return 0.
   public static func normalizedStrength(forRecordCount count: UInt64) -> Double {
     guard count > 0 else { return 0 }
     let ratio = min(
@@ -49,7 +49,7 @@ extension ArchiveMonthlyHistory {
   }
 }
 
-public struct StrataTimeAxis: Sendable, Equatable {
+public struct ArchiveTimelineTimeAxis: Sendable, Equatable {
   public let referenceDate: Date
   public let earliestAxisDate: Date
   public let latestFutureDate: Date
@@ -94,7 +94,7 @@ public struct StrataTimeAxis: Sendable, Equatable {
   public static func build(
     from histories: [ArchiveMonthlyHistory],
     referenceDate: Date = Date()
-  ) -> StrataTimeAxis {
+  ) -> ArchiveTimelineTimeAxis {
     var utcCalendar = Calendar(identifier: .gregorian)
     utcCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
     let axisFloor =
@@ -133,7 +133,7 @@ public struct StrataTimeAxis: Sendable, Equatable {
       sortedPastMonths.first(where: { (countsByMonth[$0] ?? 0) >= 3 })
       ?? sortedPastMonths.first
 
-    return StrataTimeAxis(
+    return ArchiveTimelineTimeAxis(
       referenceDate: referenceDate,
       earliestDatedRecordTime: earliestDenseMonth,
       latestFutureRecordTime: latestFuture
@@ -201,7 +201,7 @@ public struct StrataTimeAxis: Sendable, Equatable {
   public func yearTicks(
     forTrackWidth trackWidth: Double,
     minimumLabelSpacing: Double = 54
-  ) -> [StrataAxisTick] {
+  ) -> [ArchiveTimelineAxisTick] {
     guard trackWidth > 40 else { return [] }
     var utcCalendar = Calendar(identifier: .gregorian)
     utcCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
@@ -209,8 +209,8 @@ public struct StrataTimeAxis: Sendable, Equatable {
     let startYear = utcCalendar.component(.year, from: earliestAxisDate)
     let endYear = utcCalendar.component(.year, from: referenceDate)
 
-    var ticks: [StrataAxisTick] = [
-      StrataAxisTick(id: "today", label: "Today", normalizedPosition: 1.0, isToday: true),
+    var ticks: [ArchiveTimelineAxisTick] = [
+      ArchiveTimelineAxisTick(id: "today", label: "Today", normalizedPosition: 1.0, isToday: true),
     ]
     var lastAcceptedPixel = trackWidth
 
@@ -227,7 +227,7 @@ public struct StrataTimeAxis: Sendable, Equatable {
       let pixel = pos * trackWidth
       if lastAcceptedPixel - pixel >= minimumLabelSpacing, pixel >= 18 {
         ticks.append(
-          StrataAxisTick(
+          ArchiveTimelineAxisTick(
             id: "year-\(year)",
             label: String(year),
             normalizedPosition: pos,
@@ -254,21 +254,21 @@ public struct StrataTimeAxis: Sendable, Equatable {
   }
 }
 
-public enum StrataMatchRegion: Sendable, Equatable {
+public enum ArchiveTimelineMatchRegion: Sendable, Equatable {
   case undated
   case dated
   case future
 }
 
-public struct StrataMatchMarkerPlacement: Sendable, Equatable {
+public struct ArchiveTimelineMatchMarkerPlacement: Sendable, Equatable {
   public let matchIdentifier: SearchMatchIdentifier
-  public let region: StrataMatchRegion
+  public let region: ArchiveTimelineMatchRegion
   public let exactX: Double
   public let verticalStackOffset: Double
 
   public init(
     matchIdentifier: SearchMatchIdentifier,
-    region: StrataMatchRegion,
+    region: ArchiveTimelineMatchRegion,
     exactX: Double,
     verticalStackOffset: Double
   ) {
@@ -279,13 +279,13 @@ public struct StrataMatchMarkerPlacement: Sendable, Equatable {
   }
 }
 
-public enum StrataMatchMarkerLayout {
+public enum ArchiveTimelineMatchMarkerLayout {
   /// Places search matches at their exact horizontal date without sideways
   /// displacement. Coincident matches within `clusterThreshold` points stack
   /// vertically around the lane midline.
   public static func placements(
     for matches: [SearchMatch],
-    axis: StrataTimeAxis,
+    axis: ArchiveTimelineTimeAxis,
     undatedCenterX: Double,
     datedMinX: Double,
     datedWidth: Double,
@@ -293,11 +293,11 @@ public enum StrataMatchMarkerLayout {
     futureWidth: Double,
     clusterThreshold: Double = 4.0,
     verticalStep: Double = 3.5
-  ) -> [StrataMatchMarkerPlacement] {
+  ) -> [ArchiveTimelineMatchMarkerPlacement] {
     guard !matches.isEmpty else { return [] }
     struct RawPoint {
       let id: SearchMatchIdentifier
-      let region: StrataMatchRegion
+      let region: ArchiveTimelineMatchRegion
       let x: Double
     }
     let rawPoints: [RawPoint] = matches.map { match in
@@ -331,7 +331,7 @@ public enum StrataMatchMarkerLayout {
       }
     }
 
-    var result: [StrataMatchMarkerPlacement] = []
+    var result: [ArchiveTimelineMatchMarkerPlacement] = []
     result.reserveCapacity(sorted.count)
     for cluster in clusters {
       let visibleCount = min(cluster.count, 3)
@@ -339,7 +339,7 @@ public enum StrataMatchMarkerLayout {
         let slot = index % visibleCount
         let centered = Double(slot) - Double(visibleCount - 1) / 2.0
         result.append(
-          StrataMatchMarkerPlacement(
+          ArchiveTimelineMatchMarkerPlacement(
             matchIdentifier: point.id,
             region: point.region,
             exactX: point.x,
@@ -351,7 +351,7 @@ public enum StrataMatchMarkerLayout {
   }
 }
 
-public enum StrataDateRangeFormatting {
+public enum ArchiveTimelineDateRangeFormatting {
   public static func label(
     earliestInclusive: Date?,
     latestInclusive: Date?,

@@ -69,6 +69,31 @@ enum OperationalCopy {
     static let updatingArchive = "Updating your archive…"
     static let updatedAtFormat = "Updated at %1$@"
     static let lastUpdatedAtFormat = "Last updated at %1$@"
+    static let refreshRemoteArchive = "Refresh"
+  }
+
+  enum Connection {
+    static let thisMac = "This Mac"
+    static let connectRemoteArchive = "Connect to a remote archive"
+    static let sheetTitle = "Archive host"
+    static let readOnlyBadge = "Read-only"
+    static let connectedToLabel = "Connected to remote archive"
+    static let switchToThisMac = "Use this Mac"
+    static let serverAddressLabel = "Server address"
+    static let serverAddressPlaceholder = "http://host.tailnet.ts.net:7391 or https://..."
+    static let accessTokenLabel = "Access token"
+    static let accessTokenPlaceholder = "otk_..."
+    static let savedAccessTokenPlaceholder = "Saved in Keychain for this host (leave blank to reuse)"
+    static let unencryptedHTTPWarning =
+      "Plain HTTP is blocked outside Tailscale and localhost. Use Tailscale or https://."
+    static let hostSetupHint =
+      "Binds only to Tailscale or localhost, never open Wi-Fi. On your archive Mac, run trawl token create macbook --sources all and trawl mcp --http --tailscale."
+    static let staleStatusPrefix = "Showing earlier status because refresh failed:"
+    static let changeArchiveHost = "Change archive host"
+    static let connectAction = "Connect"
+    static let connecting = "Connecting…"
+    static let cancel = "Cancel"
+    static let forgetSavedConnection = "Forget"
   }
 
   enum Search {

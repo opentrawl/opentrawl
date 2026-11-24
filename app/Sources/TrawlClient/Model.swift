@@ -72,19 +72,42 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
   case oversizedFrame
   case invalidFrame
   case invalidProtobuf
+  case remoteServerURLInvalid
+  case remoteInsecureTransportRejected
+  case remoteAuthenticationRequired
+  case remoteAccessDenied(String)
+  case remoteRequestRejected(String)
+  case remoteServerUnreachable(String)
+  case remoteArchiveReadOnly
 
   public var errorDescription: String? {
     switch self {
     case .helperMissing: "OpenTrawl's bundled helper is missing. Rebuild the app."
     case .launchFailed: "OpenTrawl could not start its bundled helper."
-    case .timedOut: "OpenTrawl's helper took too long to respond."
-    case .cancelled: "OpenTrawl stopped the helper request."
+    case .timedOut: "OpenTrawl took too long to respond."
+    case .cancelled: "OpenTrawl stopped the request."
     case .terminatedBySignal: "OpenTrawl's helper stopped unexpectedly."
     case .nonZeroExitBeforeFrame: "OpenTrawl's helper stopped before it returned a result."
     case .missingFrame: "OpenTrawl's helper returned no result."
     case .extraFrame, .invalidFrame, .invalidProtobuf:
-      "OpenTrawl's helper returned unreadable data."
-    case .oversizedFrame: "OpenTrawl's helper returned too much data in one result."
+      "OpenTrawl returned unreadable data."
+    case .oversizedFrame: "OpenTrawl returned too much data in one result."
+    case .remoteServerURLInvalid:
+      "Enter a valid Tailscale or https:// server address."
+    case .remoteInsecureTransportRejected:
+      "Plain HTTP is only allowed over Tailscale or localhost. Use Tailscale or https://."
+    case .remoteAuthenticationRequired:
+      "The access token was rejected or revoked. Create a new token on the archive Mac."
+    case .remoteAccessDenied(let detail):
+      detail.isEmpty ? "This access token does not allow that source." : detail
+    case .remoteRequestRejected(let detail):
+      detail.isEmpty ? "The remote archive rejected the request." : detail
+    case .remoteServerUnreachable(let detail):
+      detail.isEmpty
+        ? "Could not reach the remote archive server."
+        : "Could not reach the remote archive server: \(detail)"
+    case .remoteArchiveReadOnly:
+      "Remote archives are read-only. Run updates on the archive host."
     }
   }
 }

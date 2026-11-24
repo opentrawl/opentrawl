@@ -15,7 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var automaticRefreshTrawlers: [RegisteredTrawlerIdentity] = []
   private let appInstallations = MacAppInstallations()
   let runtimeConfiguration = TrawlRuntimeConfiguration()
-  lazy var client: any TrawlClient = ProcessTrawlClient(configuration: runtimeConfiguration)
+  lazy var connectionStore = ArchiveConnectionStore(runtimeConfiguration: runtimeConfiguration)
+  lazy var client: any TrawlClient = connectionStore.switchableClient
   lazy var model = AppModel(
     client: client,
     prepareSourceAppsForUpdate: { manifests in
@@ -30,6 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApplication.shared.setActivationPolicy(launchInBackground ? .accessory : .regular)
     UserDefaults.standard.removeObject(forKey: "OpenTrawlLaunchInBackground")
+    if connectionStore.isRemote && !onboarding.isComplete {
+      onboarding.complete()
+    }
     _ = updates
     observeAutomaticArchiveRefresh()
     Task { await model.refresh() }
@@ -37,6 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private func observeAutomaticArchiveRefresh() {
     let registeredTrawlers = withObservationTracking {
+      if connectionStore.isRemote {
+        return [RegisteredTrawlerIdentity]()
+      }
       appInstallations.refresh(registeredTrawlerCatalog: model.registeredTrawlerCatalog)
       return onboarding.isComplete ? AppFeatureFlags.current().trawlersToUpdate(
         reportedTrawlers: model.updateCandidateTrawlers,
@@ -48,6 +55,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     guard registeredTrawlers != automaticRefreshTrawlers else { return }
     automaticRefreshTrawlers = registeredTrawlers
     archiveRefreshTask?.cancel()
+    guard !registeredTrawlers.isEmpty else {
+      archiveRefreshTask = nil
+      return
+    }
     archiveRefreshTask = Task {
       await model.runAutomaticUpdateLoop(registeredTrawlers: registeredTrawlers)
     }
@@ -97,6 +108,7 @@ struct TrawlApp: App {
       RootView(
         model: delegate.model,
         client: delegate.client,
+        connectionStore: delegate.connectionStore,
         onboarding: delegate.onboarding,
         aiInstruction: AgentPrompts.connectAI,
         openFullDiskAccess: delegate.requestFullDiskAccess

@@ -102,17 +102,17 @@ enum TrawlDesign {
   static let permissionStateSlotHeight: CGFloat = 56
   static let onboardingRowHeight: CGFloat = 36
 
-  // Strata band geometry
-  static let strataRestingLaneMinimumHeight: CGFloat = 34
-  static let strataRestingLaneMaximumHeight: CGFloat = 50
-  static let strataLaneHeight: CGFloat = 26
-  static let strataSlimLaneHeight: CGFloat = 14
-  static let strataLabelColumnWidth: CGFloat = 156
-  static let strataCountColumnWidth: CGFloat = 94
-  static let strataUndatedColumnWidth: CGFloat = 28
-  static let strataFutureGutterWidth: CGFloat = 34
-  static let strataAxisHeight: CGFloat = 28
-  static let strataMinimumBottomSplitHeight: CGFloat = 400
+  // Archive timeline band geometry
+  static let timelineRestingLaneMinimumHeight: CGFloat = 34
+  static let timelineRestingLaneMaximumHeight: CGFloat = 50
+  static let timelineLaneHeight: CGFloat = 26
+  static let timelineSlimLaneHeight: CGFloat = 14
+  static let timelineLabelColumnWidth: CGFloat = 156
+  static let timelineCountColumnWidth: CGFloat = 94
+  static let timelineUndatedColumnWidth: CGFloat = 28
+  static let timelineFutureGutterWidth: CGFloat = 34
+  static let timelineAxisHeight: CGFloat = 28
+  static let timelineMinimumBottomSplitHeight: CGFloat = 400
 
   // Search split geometry
   static let searchResultsMinimumWidth: CGFloat = 380

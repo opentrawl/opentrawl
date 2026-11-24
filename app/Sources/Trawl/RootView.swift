@@ -9,6 +9,7 @@ struct RootView: View {
   @Bindable var model: AppModel
 
   let client: any TrawlClient
+  let connectionStore: ArchiveConnectionStore
   let featureFlags: AppFeatureFlags
   let buildIdentity: BuildIdentity
   let aiInstruction: String
@@ -19,6 +20,7 @@ struct RootView: View {
   @State private var appInstallations: MacAppInstallations
   @State private var trawlerIconStore = TrawlerIconStore()
   @State private var searchFocusRequestToken = 0
+  @State private var isShowingConnectionPopover = false
   @State private var hasCopiedAIInstructions = false
   @State private var aiPromptCopyResetTask: Task<Void, Never>?
   @State private var hasCopiedTerminalCommand = false
@@ -29,6 +31,8 @@ struct RootView: View {
   init(
     model: AppModel,
     client: any TrawlClient,
+    connectionStore: ArchiveConnectionStore = ArchiveConnectionStore(
+      runtimeConfiguration: TrawlRuntimeConfiguration()),
     onboarding: OnboardingModel = OnboardingModel(),
     featureFlags: AppFeatureFlags = .current(),
     appInstallations: MacAppInstallations = MacAppInstallations(),
@@ -41,6 +45,7 @@ struct RootView: View {
   ) {
     self.model = model
     self.client = client
+    self.connectionStore = connectionStore
     self.featureFlags = featureFlags
     self.buildIdentity = buildIdentity
     self.aiInstruction = aiInstruction
@@ -78,6 +83,11 @@ struct RootView: View {
             appInstallations: appInstallations,
             buildIdentity: buildIdentity,
             aiInstruction: aiInstruction,
+            connectionStore: connectionStore,
+            onConnectedToRemoteArchive: {
+              handleArchiveConnectionChanged()
+              finishOnboarding()
+            },
             onFinish: finishOnboarding
           )
         }
@@ -99,38 +109,43 @@ struct RootView: View {
     .toolbar {
       if onboarding.isComplete {
         ToolbarItem {
-          Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(aiInstruction, forType: .string)
-            confirmAIPromptCopied()
-          } label: {
-            Label(
-              hasCopiedAIInstructions
-                ? OperationalCopy.Home.copiedAIPromptConfirmation
-                : OperationalCopy.Home.copyAIPromptAction,
-              systemImage: hasCopiedAIInstructions ? "checkmark" : "sparkles"
-            )
-            .labelStyle(.titleAndIcon)
-          }
+          archiveConnectionButton
         }
-        ToolbarItem {
-          Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(terminalCommand, forType: .string)
-            confirmTerminalCommandCopied()
-          } label: {
-            Label {
-              Text(
-                markdownStyled(
-                  hasCopiedTerminalCommand
-                    ? OperationalCopy.Home.copiedTerminalCommandConfirmation
-                    : OperationalCopy.Home.copyTerminalCommandAction)
+        if !connectionStore.isRemote {
+          ToolbarItem {
+            Button {
+              NSPasteboard.general.clearContents()
+              NSPasteboard.general.setString(aiInstruction, forType: .string)
+              confirmAIPromptCopied()
+            } label: {
+              Label(
+                hasCopiedAIInstructions
+                  ? OperationalCopy.Home.copiedAIPromptConfirmation
+                  : OperationalCopy.Home.copyAIPromptAction,
+                systemImage: hasCopiedAIInstructions ? "checkmark" : "sparkles"
               )
-            } icon: {
-              Image(
-                systemName: hasCopiedTerminalCommand ? "checkmark" : "apple.terminal")
+              .labelStyle(.titleAndIcon)
             }
-            .labelStyle(.titleAndIcon)
+          }
+          ToolbarItem {
+            Button {
+              NSPasteboard.general.clearContents()
+              NSPasteboard.general.setString(terminalCommand, forType: .string)
+              confirmTerminalCommandCopied()
+            } label: {
+              Label {
+                Text(
+                  markdownStyled(
+                    hasCopiedTerminalCommand
+                      ? OperationalCopy.Home.copiedTerminalCommandConfirmation
+                      : OperationalCopy.Home.copyTerminalCommandAction)
+                )
+              } icon: {
+                Image(
+                  systemName: hasCopiedTerminalCommand ? "checkmark" : "apple.terminal")
+              }
+              .labelStyle(.titleAndIcon)
+            }
           }
         }
         ToolbarItem {
@@ -153,10 +168,14 @@ struct RootView: View {
       refreshAppMetadata()
       if onboarding.isComplete {
         Task {
-          await model.recoverFullDiskAccess(
-            registeredTrawlers: trawlersToUpdate)
+          if connectionStore.isRemote {
+            await model.refresh()
+          } else {
+            await model.recoverFullDiskAccess(
+              registeredTrawlers: trawlersToUpdate)
+          }
         }
-      } else {
+      } else if !connectionStore.isRemote {
         onboarding.applicationDidBecomeActive(appModel: model) {
           trawlersToUpdate
         }
@@ -164,9 +183,13 @@ struct RootView: View {
     }
     .task {
       if onboarding.isComplete {
-        await model.recoverFullDiskAccess(
-          registeredTrawlers: trawlersToUpdate)
-      } else {
+        if connectionStore.isRemote {
+          await model.refresh()
+        } else {
+          await model.recoverFullDiskAccess(
+            registeredTrawlers: trawlersToUpdate)
+        }
+      } else if !connectionStore.isRemote {
         onboarding.checkPermission(appModel: model) {
           trawlersToUpdate
         }
@@ -174,6 +197,40 @@ struct RootView: View {
     }
     .onChange(of: model.registeredTrawlerCatalog, initial: true) { _, _ in
       refreshAppMetadata()
+    }
+  }
+
+  private func handleArchiveConnectionChanged() {
+    model.clearForConnectionSwitch()
+    Task {
+      await model.refresh()
+    }
+  }
+
+  private var archiveConnectionButton: some View {
+    Button {
+      isShowingConnectionPopover.toggle()
+    } label: {
+      Label(
+        connectionStore.activeHostDisplayName,
+        systemImage: connectionStore.isRemote ? "network" : "desktopcomputer"
+      )
+      .labelStyle(.titleAndIcon)
+    }
+    .help(
+      connectionStore.isRemote
+        ? "Connected to remote archive \(connectionStore.activeHostDisplayName)"
+        : "Reading archive on this Mac. Click to connect to a remote archive."
+    )
+    .popover(isPresented: $isShowingConnectionPopover, arrowEdge: .bottom) {
+      RemoteArchiveConnectionView(
+        connectionStore: connectionStore,
+        showsLocalOption: true,
+        onConnectionChanged: handleArchiveConnectionChanged,
+        onDismiss: {
+          isShowingConnectionPopover = false
+        }
+      )
     }
   }
 
@@ -194,25 +251,43 @@ struct RootView: View {
   @ViewBuilder
   private var home: some View {
     VStack(spacing: 0) {
-      if model.needsFullDiskAccessRecovery {
+      if !connectionStore.isRemote && model.needsFullDiskAccessRecovery {
         PermissionRecoveryBanner {
           openFullDiskAccess()
         }
         .padding(.horizontal, TrawlDesign.contentInset)
         .padding(.top, TrawlDesign.Space.md)
       }
+      if let refreshFailure = model.statusRefreshFailure, !model.trawlerStatuses.isEmpty {
+        StaleStatusBanner(
+          message: refreshFailure,
+          showsConnectionAction: connectionStore.isRemote,
+          onRetry: { Task { await model.refresh() } },
+          onOpenConnection: { isShowingConnectionPopover = true }
+        )
+        .padding(.horizontal, TrawlDesign.contentInset)
+        .padding(.top, TrawlDesign.Space.sm)
+      }
       if case .loading = model.phase, model.trawlerStatuses.isEmpty {
         ProgressView("Loading apps")
           .controlSize(.large)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if model.needsFullDiskAccessRecovery, model.restingTrawlers.isEmpty {
+      } else if !connectionStore.isRemote, model.needsFullDiskAccessRecovery,
+        model.restingTrawlers.isEmpty
+      {
         Spacer()
-      } else if model.blockingFailureMessage != nil {
-        FailureView {
-          Task { await model.refresh() }
-        }
+      } else if let failureMessage = model.blockingFailureMessage {
+        FailureView(
+          detail: connectionStore.isRemote ? failureMessage : nil,
+          onOpenConnection: connectionStore.isRemote
+            ? { isShowingConnectionPopover = true }
+            : nil,
+          retry: {
+            Task { await model.refresh() }
+          }
+        )
       } else {
-        StrataWorkspaceView(
+        ArchiveTimelineWorkspaceView(
           client: client,
           trawlers: homeTrawlers,
           searchableTrawlers: searchableHomeTrawlers,
@@ -221,11 +296,13 @@ struct RootView: View {
           },
           detailOverrides: HomeTrawlerPresentation.detailOverrides(
             for: homeTrawlers,
-            appInstallations: appInstallations
+            appInstallations: appInstallations,
+            isRemoteArchive: connectionStore.isRemote
           ),
-          updatingTrawlers: activelyUpdatingTrawlers,
+          updatingTrawlers: connectionStore.isRemote ? [] : activelyUpdatingTrawlers,
           focusRequestToken: searchFocusRequestToken
         )
+        .id(connectionStore.connectionRevision)
       }
     }
   }
@@ -259,7 +336,17 @@ struct RootView: View {
   /// lets people start an update themselves.
   @ViewBuilder
   private var archiveUpdateButton: some View {
-    if model.isUpdating {
+    if connectionStore.isRemote {
+      Button {
+        Task { await model.refresh() }
+      } label: {
+        Label(
+          OperationalCopy.Home.refreshRemoteArchive,
+          systemImage: "arrow.clockwise"
+        )
+        .labelStyle(.titleAndIcon)
+      }
+    } else if model.isUpdating {
       Button {
       } label: {
         Label {
@@ -335,7 +422,8 @@ enum HomeTrawlerPresentation {
   @MainActor
   static func detailOverrides(
     for trawlers: [RestingTrawler],
-    appInstallations: MacAppInstallations
+    appInstallations: MacAppInstallations,
+    isRemoteArchive: Bool = false
   ) -> [RegisteredTrawlerIdentity: String] {
     Dictionary(
       uniqueKeysWithValues: trawlers.compactMap { trawler in
@@ -345,7 +433,7 @@ enum HomeTrawlerPresentation {
         case .failed, .skipped:
           return (trawler.id, OperationalCopy.Home.unavailableApp)
         case .ok:
-          guard !appInstallations.isAvailable(trawler.id) else { return nil }
+          guard !isRemoteArchive, !appInstallations.isAvailable(trawler.id) else { return nil }
           return (trawler.id, HumanCopy.AppStatus.notInstalled)
         }
       })
@@ -368,17 +456,65 @@ private struct CanvasBackground: View {
   }
 }
 
+private struct StaleStatusBanner: View {
+  let message: String
+  let showsConnectionAction: Bool
+  let onRetry: () -> Void
+  let onOpenConnection: () -> Void
+
+  var body: some View {
+    HStack(spacing: TrawlDesign.Space.sm) {
+      Image(systemName: "exclamationmark.triangle.fill")
+        .foregroundStyle(TrawlDesign.Colors.warningAmber)
+      Text("\(OperationalCopy.Connection.staleStatusPrefix) \(message)")
+        .font(TrawlDesign.Typography.meta)
+        .foregroundStyle(TrawlDesign.Colors.ink)
+        .lineLimit(2)
+      Spacer()
+      if showsConnectionAction {
+        Button(OperationalCopy.Connection.changeArchiveHost, action: onOpenConnection)
+          .buttonStyle(.bordered)
+          .controlSize(.small)
+      }
+      Button(OperationalCopy.SharedAction.retry, action: onRetry)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .background(
+      TrawlDesign.Colors.surface,
+      in: RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface)
+    )
+    .overlay {
+      RoundedRectangle(cornerRadius: TrawlDesign.Radius.surface)
+        .stroke(TrawlDesign.Colors.warningAmber.opacity(0.45), lineWidth: 1)
+    }
+  }
+}
+
 private struct FailureView: View {
+  var detail: String? = nil
+  var onOpenConnection: (() -> Void)? = nil
   let retry: () -> Void
 
   var body: some View {
     ContentUnavailableView {
       Label(OperationalCopy.AppStatus.appsUnavailable, systemImage: "exclamationmark.triangle")
     } description: {
-      Text(OperationalCopy.AppStatus.statusCheckFailed)
-      Text(OperationalCopy.AppStatus.statusCheckRecovery)
+      if let detail, !detail.isEmpty {
+        Text(detail)
+      } else {
+        Text(OperationalCopy.AppStatus.statusCheckFailed)
+        Text(OperationalCopy.AppStatus.statusCheckRecovery)
+      }
     } actions: {
-      Button(OperationalCopy.SharedAction.retry, action: retry)
+      HStack(spacing: 10) {
+        if let onOpenConnection {
+          Button(OperationalCopy.Connection.changeArchiveHost, action: onOpenConnection)
+        }
+        Button(OperationalCopy.SharedAction.retry, action: retry)
+      }
     }
   }
 }

@@ -50,6 +50,7 @@ public final class AppModel {
     [RegisteredTrawlerIdentity: TrawlerArchiveUpdateProgressState] = [:]
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
   private var automaticUpdateFailureCounts: [RegisteredTrawlerIdentity: Int] = [:]
+  private var refreshGeneration: UInt64 = 0
 
   public var restingTrawlers: [RestingTrawler] {
     let runtimeTrawlers = TrawlerRestingCopy.trawlers(
@@ -152,21 +153,52 @@ public final class AppModel {
     self.prepareSourceAppsForUpdate = prepareSourceAppsForUpdate
   }
 
+  public func clearForConnectionSwitch() {
+    refreshGeneration &+= 1
+    phase = .loading
+    trawlerStatuses = []
+    registeredTrawlerCatalog = []
+    keepSourceAppsRunningForAutomaticUpdates = false
+    statusOperationFailures = []
+    trawlersSkippedFromStatus = []
+    statusOperationOutcome = .complete
+    statusRefreshFailure = nil
+    lastSuccessfullyCompletedArchiveUpdateTime = nil
+    updateMessage = nil
+    trawlerArchiveUpdateResults = []
+    updateOperationFailures = []
+    updateProgress = [:]
+  }
+
   public func refresh() async {
+    refreshGeneration &+= 1
+    let generation = refreshGeneration
     if trawlerStatuses.isEmpty {
       phase = .loading
     }
     do {
       let response = try await client.status()
+      guard generation == refreshGeneration else { return }
       applyStatus(response)
     } catch is CancellationError {
       return
     } catch TrawlClientError.cancelled {
       return
+    } catch TrawlClientError.remoteAuthenticationRequired {
+      guard generation == refreshGeneration else { return }
+      let message = TrawlClientError.remoteAuthenticationRequired.localizedDescription
+      trawlerStatuses = []
+      registeredTrawlerCatalog = []
+      statusOperationFailures = []
+      trawlersSkippedFromStatus = []
+      statusRefreshFailure = message
+      phase = .failed(message)
     } catch TrawlClientError.timedOut {
+      guard generation == refreshGeneration else { return }
       statusRefreshFailure = "Trawler status checks timed out."
       phase = .timedOut
     } catch {
+      guard generation == refreshGeneration else { return }
       let message = error.localizedDescription
       statusRefreshFailure = message
       phase = .failed(message)

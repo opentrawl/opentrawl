@@ -168,6 +168,13 @@ plutil -insert LSApplicationCategoryType -string public.app-category.utilities "
 plutil -insert LSMinimumSystemVersion -string 26.0 "$info_plist"
 plutil -insert NSHighResolutionCapable -bool true "$info_plist"
 plutil -insert SUEnableAutomaticChecks -bool false "$info_plist"
+/usr/libexec/PlistBuddy \
+  -c "Add :NSAppTransportSecurity dict" \
+  -c "Add :NSAppTransportSecurity:NSExceptionDomains dict" \
+  -c "Add :NSAppTransportSecurity:NSExceptionDomains:ts.net dict" \
+  -c "Add :NSAppTransportSecurity:NSExceptionDomains:ts.net:NSIncludesSubdomains bool true" \
+  -c "Add :NSAppTransportSecurity:NSExceptionDomains:ts.net:NSExceptionAllowsInsecureHTTPLoads bool true" \
+  "$info_plist"
 
 echo "Signing the local app"
 "$repository_root/scripts/dev-cert"

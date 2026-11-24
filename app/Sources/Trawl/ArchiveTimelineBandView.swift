@@ -2,7 +2,7 @@ import SwiftUI
 import TrawlClient
 import TrawlCore
 
-struct StrataBandView: View {
+struct ArchiveTimelineBandView: View {
   @Environment(TrawlerIconStore.self) private var icons
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.locale) private var locale
@@ -12,6 +12,7 @@ struct StrataBandView: View {
   let detailOverrides: [RegisteredTrawlerIdentity: String]
   let updatingTrawlers: Set<RegisteredTrawlerIdentity>
   let isSearchActive: Bool
+  let isSearchLoading: Bool
   let selectedTrawlerID: RegisteredTrawlerIdentity?
   let earliestDateInclusive: Date?
   let latestDateInclusive: Date?
@@ -26,17 +27,17 @@ struct StrataBandView: View {
   let onBrushDateRange: (Date, Date, RegisteredTrawlerIdentity?) -> Void
   let onSelectMatch: (SearchMatch) -> Void
 
-  @State private var activeBrush: StrataDragBrush?
+  @State private var activeBrush: ArchiveTimelineDragBrush?
 
-  private struct StrataDragBrush: Equatable {
+  private struct ArchiveTimelineDragBrush: Equatable {
     let startNormalizedX: Double
     var currentNormalizedX: Double
     let targetTrawlerID: RegisteredTrawlerIdentity?
   }
 
-  private var axis: StrataTimeAxis {
+  private var axis: ArchiveTimelineTimeAxis {
     let histories = trawlers.compactMap { statusesByID[$0.id]?.archiveMonthlyHistory }
-    return StrataTimeAxis.build(from: histories)
+    return ArchiveTimelineTimeAxis.build(from: histories)
   }
 
   private var hasAnyUndatedRecords: Bool {
@@ -86,7 +87,7 @@ struct StrataBandView: View {
       fromNormalizedPosition: activeBrush.startNormalizedX,
       toNormalizedPosition: activeBrush.currentNormalizedX
     )
-    return StrataDateRangeFormatting.label(
+    return ArchiveTimelineDateRangeFormatting.label(
       earliestInclusive: range.earliestInclusive,
       latestInclusive: range.latestInclusive,
       locale: locale
@@ -95,12 +96,12 @@ struct StrataBandView: View {
 
   private var restingLaneHeight: CGFloat {
     guard !isSearchActive, let available = restingAvailableLanesHeight, !trawlers.isEmpty else {
-      return TrawlDesign.strataLaneHeight
+      return TrawlDesign.timelineLaneHeight
     }
     let perLane = floor(available / CGFloat(trawlers.count))
     return min(
-      TrawlDesign.strataRestingLaneMaximumHeight,
-      max(TrawlDesign.strataRestingLaneMinimumHeight, perLane)
+      TrawlDesign.timelineRestingLaneMaximumHeight,
+      max(TrawlDesign.timelineRestingLaneMinimumHeight, perLane)
     )
   }
 
@@ -120,10 +121,10 @@ struct StrataBandView: View {
       intensityLegend
         .padding(.leading, TrawlDesign.Space.md)
         .padding(.trailing, TrawlDesign.Space.sm)
-        .frame(width: TrawlDesign.strataLabelColumnWidth, alignment: .leading)
+        .frame(width: TrawlDesign.timelineLabelColumnWidth, alignment: .leading)
 
       GeometryReader { proxy in
-        let geometry = StrataTrackGeometry(
+        let geometry = ArchiveTimelineTrackGeometry(
           totalWidth: proxy.size.width,
           showsUndatedColumn: hasAnyUndatedRecords
         )
@@ -134,7 +135,7 @@ struct StrataBandView: View {
             let x1 = geometry.datedMinX + CGFloat(range.upperBound) * geometry.datedWidth
             Rectangle()
               .fill(TrawlDesign.Colors.selectBlueSurface)
-              .frame(width: max(2, x1 - x0), height: TrawlDesign.strataAxisHeight)
+              .frame(width: max(2, x1 - x0), height: TrawlDesign.timelineAxisHeight)
               .offset(x: x0)
           }
 
@@ -157,7 +158,7 @@ struct StrataBandView: View {
               .fixedSize()
               .position(
                 x: min(max(tickX, geometry.datedMinX + 16), geometry.datedMaxX - 18),
-                y: TrawlDesign.strataAxisHeight / 2
+                y: TrawlDesign.timelineAxisHeight / 2
               )
           }
 
@@ -180,31 +181,31 @@ struct StrataBandView: View {
               .fixedSize()
               .position(
                 x: min(max(midX, geometry.datedMinX + 60), geometry.datedMaxX - 60),
-                y: TrawlDesign.strataAxisHeight / 2
+                y: TrawlDesign.timelineAxisHeight / 2
               )
           }
         }
         .contentShape(.rect)
         .gesture(axisBrushGesture(geometry: geometry))
       }
-      .frame(height: TrawlDesign.strataAxisHeight)
+      .frame(height: TrawlDesign.timelineAxisHeight)
 
       Text(isSearchActive ? "Matches" : "Records")
         .font(TrawlDesign.Typography.monoAxis)
         .foregroundStyle(TrawlDesign.Colors.mutedInk)
         .padding(.trailing, TrawlDesign.Space.md)
-        .frame(width: TrawlDesign.strataCountColumnWidth, alignment: .trailing)
+        .frame(width: TrawlDesign.timelineCountColumnWidth, alignment: .trailing)
     }
-    .frame(height: TrawlDesign.strataAxisHeight)
+    .frame(height: TrawlDesign.timelineAxisHeight)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Archive timeline axis. Use the Dates control in the search bar or drag across the dated timeline to filter by date range.")
   }
 
   private var intensityLegend: some View {
     HStack(spacing: 6) {
-      ForEach(StrataIntensityScale.legendReferenceCounts, id: \.self) { count in
-        let barHeight = CGFloat(StrataIntensityScale.barHeightFraction(forRecordCount: count)) * 12
-        let opacity = StrataIntensityScale.fillOpacity(forRecordCount: count)
+      ForEach(ArchiveTimelineIntensityScale.legendReferenceCounts, id: \.self) { count in
+        let barHeight = CGFloat(ArchiveTimelineIntensityScale.barHeightFraction(forRecordCount: count)) * 12
+        let opacity = ArchiveTimelineIntensityScale.fillOpacity(forRecordCount: count)
         HStack(spacing: 3) {
           Rectangle()
             .fill(TrawlDesign.Colors.ink.opacity(opacity))
@@ -235,9 +236,9 @@ struct StrataBandView: View {
         let isSlimmed = isSearchActive && selectedTrawlerID != nil && !isFocused
         let laneHeight: CGFloat =
           isSearchActive
-          ? (isSlimmed ? TrawlDesign.strataSlimLaneHeight : TrawlDesign.strataLaneHeight)
+          ? (isSlimmed ? TrawlDesign.timelineSlimLaneHeight : TrawlDesign.timelineLaneHeight)
           : baseRestingHeight
-        StrataLaneRow(
+        ArchiveTimelineLaneRow(
           trawler: trawler,
           status: statusesByID[trawler.id],
           detailOverride: detailOverrides[trawler.id],
@@ -250,6 +251,7 @@ struct StrataBandView: View {
           isSlimmed: isSlimmed,
           isUpdating: updatingTrawlers.contains(trawler.id),
           isSearchActive: isSearchActive,
+          isSearchLoading: isSearchLoading,
           highlightedRange: highlightedNormalizedRange,
           isBrushTarget: activeBrush?.targetTrawlerID == trawler.id,
           laneMatches: matchesByTrawler[trawler.id] ?? [],
@@ -263,7 +265,7 @@ struct StrataBandView: View {
             onSelectTrawler(isFocused ? nil : trawler.id)
           },
           onBrushChanged: { startU, currentU in
-            activeBrush = StrataDragBrush(
+            activeBrush = ArchiveTimelineDragBrush(
               startNormalizedX: startU,
               currentNormalizedX: currentU,
               targetTrawlerID: trawler.id
@@ -303,13 +305,13 @@ struct StrataBandView: View {
     trawlers.reduce(0) { sum, trawler in
       if isSearchActive {
         let isSlimmed = selectedTrawlerID != nil && selectedTrawlerID != trawler.id
-        return sum + (isSlimmed ? TrawlDesign.strataSlimLaneHeight : TrawlDesign.strataLaneHeight)
+        return sum + (isSlimmed ? TrawlDesign.timelineSlimLaneHeight : TrawlDesign.timelineLaneHeight)
       }
       return sum + baseRestingHeight
     }
   }
 
-  private func axisBrushGesture(geometry: StrataTrackGeometry) -> some Gesture {
+  private func axisBrushGesture(geometry: ArchiveTimelineTrackGeometry) -> some Gesture {
     DragGesture(minimumDistance: 6, coordinateSpace: .local)
       .onChanged { value in
         guard geometry.containsDatedX(value.startLocation.x),
@@ -318,7 +320,7 @@ struct StrataBandView: View {
         else {
           return
         }
-        activeBrush = StrataDragBrush(
+        activeBrush = ArchiveTimelineDragBrush(
           startNormalizedX: startU,
           currentNormalizedX: currentU,
           targetTrawlerID: nil
@@ -341,7 +343,7 @@ struct StrataBandView: View {
   }
 }
 
-private struct StrataTrackGeometry {
+private struct ArchiveTimelineTrackGeometry {
   let undatedMinX: CGFloat
   let undatedWidth: CGFloat
   let datedMinX: CGFloat
@@ -353,8 +355,8 @@ private struct StrataTrackGeometry {
   var datedMaxX: CGFloat { datedMinX + datedWidth }
 
   init(totalWidth: CGFloat, showsUndatedColumn: Bool) {
-    let undatedW: CGFloat = showsUndatedColumn ? TrawlDesign.strataUndatedColumnWidth : 0
-    let futureW: CGFloat = TrawlDesign.strataFutureGutterWidth
+    let undatedW: CGFloat = showsUndatedColumn ? TrawlDesign.timelineUndatedColumnWidth : 0
+    let futureW: CGFloat = TrawlDesign.timelineFutureGutterWidth
     let gap: CGFloat = 6
     self.undatedMinX = 0
     self.undatedWidth = undatedW
@@ -376,12 +378,12 @@ private struct StrataTrackGeometry {
   }
 }
 
-private struct StrataLaneRow: View {
+private struct ArchiveTimelineLaneRow: View {
   let trawler: RestingTrawler
   let status: TrawlerStatus?
   let detailOverride: String?
   let accentColor: Color
-  let axis: StrataTimeAxis
+  let axis: ArchiveTimelineTimeAxis
   let showsUndatedColumn: Bool
   let laneHeight: CGFloat
   let isRestingExpanded: Bool
@@ -389,6 +391,7 @@ private struct StrataLaneRow: View {
   let isSlimmed: Bool
   let isUpdating: Bool
   let isSearchActive: Bool
+  let isSearchLoading: Bool
   let highlightedRange: ClosedRange<Double>?
   let isBrushTarget: Bool
   let laneMatches: [SearchMatch]
@@ -431,7 +434,7 @@ private struct StrataLaneRow: View {
         }
         .padding(.leading, TrawlDesign.Space.md)
         .padding(.trailing, TrawlDesign.Space.sm)
-        .frame(width: TrawlDesign.strataLabelColumnWidth, height: laneHeight, alignment: .leading)
+        .frame(width: TrawlDesign.timelineLabelColumnWidth, height: laneHeight, alignment: .leading)
         .contentShape(.rect)
       }
       .buttonStyle(.plain)
@@ -440,11 +443,11 @@ private struct StrataLaneRow: View {
       .accessibilityAddTraits(isFocused ? .isSelected : [])
 
       GeometryReader { proxy in
-        let geometry = StrataTrackGeometry(
+        let geometry = ArchiveTimelineTrackGeometry(
           totalWidth: proxy.size.width,
           showsUndatedColumn: showsUndatedColumn
         )
-        let placements = StrataMatchMarkerLayout.placements(
+        let placements = ArchiveTimelineMatchMarkerLayout.placements(
           for: laneMatches,
           axis: axis,
           undatedCenterX: Double(geometry.undatedCenterX),
@@ -468,7 +471,7 @@ private struct StrataLaneRow: View {
 
       countColumn
         .padding(.trailing, TrawlDesign.Space.md)
-        .frame(width: TrawlDesign.strataCountColumnWidth, height: laneHeight, alignment: .trailing)
+        .frame(width: TrawlDesign.timelineCountColumnWidth, height: laneHeight, alignment: .trailing)
     }
     .frame(height: laneHeight)
     .background(laneBackground)
@@ -554,6 +557,9 @@ private struct StrataLaneRow: View {
         }
         return CountReadout(text: "0", color: TrawlDesign.Colors.mutedInk.opacity(0.75), emphasized: false)
       }
+      if isSearchLoading {
+        return CountReadout(text: "…", color: TrawlDesign.Colors.mutedInk.opacity(0.6), emphasized: false)
+      }
       return CountReadout(text: "0", color: TrawlDesign.Colors.mutedInk.opacity(0.6), emphasized: false)
     }
 
@@ -604,8 +610,8 @@ private struct StrataLaneRow: View {
   private func drawLane(
     in context: inout GraphicsContext,
     size: CGSize,
-    geometry: StrataTrackGeometry,
-    placements: [StrataMatchMarkerPlacement]
+    geometry: ArchiveTimelineTrackGeometry,
+    placements: [ArchiveTimelineMatchMarkerPlacement]
   ) {
     let midY = size.height / 2
     let verticalMargin: CGFloat = isSlimmed ? 4 : (isRestingExpanded ? 12 : 8)
@@ -662,8 +668,8 @@ private struct StrataLaneRow: View {
 
     // Undated record bar (left dedicated slot, e.g. Contacts).
     if showsUndatedColumn && history.undatedRecordCount > 0 {
-      let heightFrac = StrataIntensityScale.barHeightFraction(forRecordCount: history.undatedRecordCount)
-      let fillAlpha = StrataIntensityScale.fillOpacity(forRecordCount: history.undatedRecordCount)
+      let heightFrac = ArchiveTimelineIntensityScale.barHeightFraction(forRecordCount: history.undatedRecordCount)
+      let fillAlpha = ArchiveTimelineIntensityScale.fillOpacity(forRecordCount: history.undatedRecordCount)
       let barH = max(3, CGFloat(heightFrac) * maxBarHeight)
       let barW = min(14, geometry.undatedWidth - 6)
       let rect = CGRect(
@@ -682,11 +688,11 @@ private struct StrataLaneRow: View {
     // Dated and future monthly bars using the shared squared-log intensity scale.
     for bucket in history.monthlyRecordCountsInChronologicalOrder where bucket.recordCount > 0 {
       guard
-        let monthStart = StrataTimeAxis.utcMonthStart(
+        let monthStart = ArchiveTimelineTimeAxis.utcMonthStart(
           year: Int(bucket.calendarYear),
           month: Int(bucket.calendarMonth)
         ),
-        let monthEnd = StrataTimeAxis.utcMonthEndExclusive(
+        let monthEnd = ArchiveTimelineTimeAxis.utcMonthEndExclusive(
           year: Int(bucket.calendarYear),
           month: Int(bucket.calendarMonth)
         )
@@ -694,8 +700,8 @@ private struct StrataLaneRow: View {
         continue
       }
 
-      let heightFrac = StrataIntensityScale.barHeightFraction(forRecordCount: bucket.recordCount)
-      let fillAlpha = StrataIntensityScale.fillOpacity(forRecordCount: bucket.recordCount)
+      let heightFrac = ArchiveTimelineIntensityScale.barHeightFraction(forRecordCount: bucket.recordCount)
+      let fillAlpha = ArchiveTimelineIntensityScale.fillOpacity(forRecordCount: bucket.recordCount)
       let barH = max(3, CGFloat(heightFrac) * maxBarHeight)
 
       if axis.isFuture(monthStart) {
@@ -768,8 +774,8 @@ private struct StrataLaneRow: View {
   }
 
   private func trackInteractionGesture(
-    geometry: StrataTrackGeometry,
-    placements: [StrataMatchMarkerPlacement]
+    geometry: ArchiveTimelineTrackGeometry,
+    placements: [ArchiveTimelineMatchMarkerPlacement]
   ) -> some Gesture {
     DragGesture(minimumDistance: 0, coordinateSpace: .local)
       .onChanged { value in
@@ -815,11 +821,11 @@ private struct StrataLaneRow: View {
 
   private func nearestPlacement(
     to point: CGPoint,
-    in placements: [StrataMatchMarkerPlacement],
+    in placements: [ArchiveTimelineMatchMarkerPlacement],
     midY: CGFloat,
     maxDistance: CGFloat
-  ) -> StrataMatchMarkerPlacement? {
-    var best: StrataMatchMarkerPlacement?
+  ) -> ArchiveTimelineMatchMarkerPlacement? {
+    var best: ArchiveTimelineMatchMarkerPlacement?
     var bestDist = maxDistance
     for placement in placements {
       let dx = CGFloat(placement.exactX) - point.x
