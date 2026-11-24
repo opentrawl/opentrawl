@@ -20,12 +20,19 @@ struct AppSidebarRailView: View {
   let trawlers: [RestingTrawler]
   let operabilityByID: [RegisteredTrawlerIdentity: AppOperabilityState]
   let searchMatchCountByID: [RegisteredTrawlerIdentity: AppSearchMatchCount]
-  let totalSearchResultsCount: UInt64
-  let totalSearchCountIsLowerBound: Bool
+  let allAppsSearchMatchCountText: String?
   let hasActiveDateRange: Bool
   let isEmptyBrowse: Bool
   let isRemoteArchive: Bool
   let onOpenPluginsSettings: () -> Void
+
+  private var isFilteredSearch: Bool {
+    isSearching && !isEmptyBrowse
+  }
+
+  private var totalArchivedItemCount: UInt64 {
+    trawlers.reduce(UInt64(0)) { $0 + (operabilityByID[$1.id]?.archivedItemCount ?? 0) }
+  }
 
   var body: some View {
     List(selection: $selection) {
@@ -60,11 +67,13 @@ struct AppSidebarRailView: View {
 
   @ViewBuilder
   private var allItemsRow: some View {
-    if isSearching && totalSearchResultsCount > 0 {
-      let badgeText =
-        totalSearchCountIsLowerBound
-        ? "\(totalSearchResultsCount.formatted())+"
-        : totalSearchResultsCount.formatted()
+    let badgeText: String? = {
+      if isFilteredSearch {
+        return allAppsSearchMatchCountText
+      }
+      return totalArchivedItemCount > 0 ? totalArchivedItemCount.formatted() : nil
+    }()
+    if let badgeText {
       Label("All items", systemImage: "tray.full")
         .badge(Text(badgeText).monospacedDigit())
     } else {
@@ -76,14 +85,14 @@ struct AppSidebarRailView: View {
     let operability = operabilityByID[trawler.id]
     let isUndatedExcluded =
       isSearching
-      && (hasActiveDateRange || isEmptyBrowse)
+      && hasActiveDateRange
       && trawler.id.registeredTrawlerIdentity == "contacts"
 
     let badgeText: String? = {
       if isUndatedExcluded {
         return "No dates"
       }
-      if isSearching {
+      if isFilteredSearch {
         guard let count = searchMatchCountByID[trawler.id], count.searchMatchCount > 0 else {
           return nil
         }

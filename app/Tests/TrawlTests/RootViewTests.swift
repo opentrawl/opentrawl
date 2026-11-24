@@ -264,6 +264,28 @@ struct RootViewTests {
     #expect(linkRuns.map(\.absoluteString) == [longURL])
   }
 
+  @MainActor
+  @Test func switchingScopeClearsSelectionAndStaleOpenedRecord() {
+    let connectionStore = ArchiveConnectionStore(
+      runtimeConfiguration: TrawlRuntimeConfiguration(),
+      defaults: isolatedUserDefaults(),
+      environment: [:]
+    )
+    let searchModel = SearchModel(client: connectionStore.switchableClient)
+    let telegramID = RegisteredTrawlerIdentity(registeredTrawlerIdentity: "telegram")
+    let interaction = SearchInteraction(model: searchModel, registeredTrawler: telegramID)
+    interaction.selectedSearchMatchIdentifier = SearchMatchIdentifier(
+      trawlLink: GloballyRoutableTrawlLink(globallyRoutableTrawlLink: "telegram:1"),
+      recordAnchor: RecordAnchorIdentifier(recordAnchorIdentifier: "1")
+    )
+
+    interaction.changeScope(to: nil)
+
+    #expect(interaction.registeredTrawler == nil)
+    #expect(interaction.selectedSearchMatchIdentifier == nil)
+    #expect(searchModel.openPhase == .idle)
+  }
+
 }
 
 @MainActor

@@ -82,6 +82,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
   @State private var lastDetailWidth: CGFloat = 960
   @State private var searchRetryToken = 0
   @State private var searchMatchCountsFromLastSearchOfAllApps: SearchMatchCountsForAllApps?
+  @State private var emptyBrowseCountByID: [RegisteredTrawlerIdentity: UInt64] = [:]
   @FocusState private var focus: SearchFocus?
 
   init(
@@ -181,7 +182,45 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
       .totalSearchMatchCount.text
   }
 
+  private var effectiveOperabilityByID: [RegisteredTrawlerIdentity: AppOperabilityState] {
+    guard !emptyBrowseCountByID.isEmpty else { return operabilityByID }
+    var merged = operabilityByID
+    for (trawlerID, liveCount) in emptyBrowseCountByID {
+      guard let existing = merged[trawlerID] else { continue }
+      merged[trawlerID] = AppOperabilityState(
+        archivedItemCount: liveCount,
+        statusLine: existing.statusLine,
+        needsAttention: existing.needsAttention,
+        actionTitle: existing.actionTitle,
+        action: existing.action
+      )
+    }
+    return merged
+  }
+
+  private var allAppsChipCountText: String? {
+    if isEmptyBrowse {
+      let total = trawlers.reduce(UInt64(0)) { partial, trawler in
+        guard trawler.id.registeredTrawlerIdentity != "contacts" else { return partial }
+        return partial + (effectiveOperabilityByID[trawler.id]?.archivedItemCount ?? 0)
+      }
+      return total > 0 ? total.formatted() : allAppsSearchMatchCountText
+    }
+    return allAppsSearchMatchCountText
+  }
+
   private var searchAppFilterChips: [SearchAppFilterChip] {
+    if isEmptyBrowse {
+      return trawlers.compactMap { trawler in
+        guard trawler.id.registeredTrawlerIdentity != "contacts" else { return nil }
+        let count = effectiveOperabilityByID[trawler.id]?.archivedItemCount ?? 0
+        guard count > 0 else { return nil }
+        return SearchAppFilterChip(
+          registeredTrawler: trawler.id,
+          registeredTrawlerDisplayName: trawler.registeredTrawlerDisplayName,
+          searchMatchCountText: count.formatted())
+      }
+    }
     let counts = searchMatchCountByID
     return trawlers.compactMap { trawler in
       guard let count = counts[trawler.id], count.searchMatchCount > 0 else { return nil }
@@ -228,10 +267,9 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
         selection: $sidebarSelection,
         isSearching: destination == .search,
         trawlers: trawlers,
-        operabilityByID: operabilityByID,
+        operabilityByID: effectiveOperabilityByID,
         searchMatchCountByID: searchMatchCountByID,
-        totalSearchResultsCount: model.totalMatchedRecordCount,
-        totalSearchCountIsLowerBound: model.totalMatchedCountIsLowerBound,
+        allAppsSearchMatchCountText: allAppsSearchMatchCountText,
         hasActiveDateRange: hasActiveDateRange,
         isEmptyBrowse: isEmptyBrowse,
         isRemoteArchive: isRemoteArchive,
@@ -247,7 +285,7 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
               ArchiveOverviewView(
                 trawlers: trawlers,
                 statusesByID: statusesByID,
-                operabilityByID: operabilityByID,
+                operabilityByID: effectiveOperabilityByID,
                 hostDisplayName: hostDisplayName,
                 freshnessLine: freshnessLine,
                 isRemoteArchive: isRemoteArchive,
@@ -342,25 +380,37 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
     .onChange(of: model.phase) { _, newPhase in
       if newPhase != .loading {
         interaction.reconcileCommittedResults()
-        if let committedInput = model.committedInput, committedInput.registeredTrawler == nil {
-          searchMatchCountsFromLastSearchOfAllApps = SearchMatchCountsForAllApps(
-            query: committedInput.query.trimmingCharacters(in: .whitespacesAndNewlines),
-            earliestDateInclusive: committedInput.earliestMatchingArchiveRecordTimeInclusive,
-            latestDateInclusive: committedInput.latestMatchingArchiveRecordTimeInclusive,
-            searchMatchCountByRegisteredTrawler: Dictionary(
-              model.trawlerSearchResults.map {
-                (
-                  $0.registeredTrawler,
-                  AppSearchMatchCount(
-                    searchMatchCount: $0.totalSearchMatches,
-                    isLowerBound: $0.totalSearchMatchesIsLowerBound)
-                )
-              },
-              uniquingKeysWith: { _, latest in latest }
-            ),
-            totalSearchMatchCount: AppSearchMatchCount(
-              searchMatchCount: model.totalMatchedRecordCount,
-              isLowerBound: model.totalMatchedCountIsLowerBound))
+        if let committedInput = model.committedInput {
+          let committedIsEmptyBrowse =
+            committedInput.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && committedInput.earliestMatchingArchiveRecordTimeInclusive == nil
+            && committedInput.latestMatchingArchiveRecordTimeInclusive == nil
+          if committedIsEmptyBrowse {
+            for trawlerSearchResult in model.trawlerSearchResults {
+              emptyBrowseCountByID[trawlerSearchResult.registeredTrawler] =
+                trawlerSearchResult.totalSearchMatches
+            }
+          }
+          if committedInput.registeredTrawler == nil {
+            searchMatchCountsFromLastSearchOfAllApps = SearchMatchCountsForAllApps(
+              query: committedInput.query.trimmingCharacters(in: .whitespacesAndNewlines),
+              earliestDateInclusive: committedInput.earliestMatchingArchiveRecordTimeInclusive,
+              latestDateInclusive: committedInput.latestMatchingArchiveRecordTimeInclusive,
+              searchMatchCountByRegisteredTrawler: Dictionary(
+                model.trawlerSearchResults.map {
+                  (
+                    $0.registeredTrawler,
+                    AppSearchMatchCount(
+                      searchMatchCount: $0.totalSearchMatches,
+                      isLowerBound: $0.totalSearchMatchesIsLowerBound)
+                  )
+                },
+                uniquingKeysWith: { _, latest in latest }
+              ),
+              totalSearchMatchCount: AppSearchMatchCount(
+                searchMatchCount: model.totalMatchedRecordCount,
+                isLowerBound: model.totalMatchedCountIsLowerBound))
+          }
         }
         // Auto-open the first result on wide desktop layouts for both text search
         // and browsing; narrow layouts stay on the list so typing never kicks the
@@ -379,6 +429,8 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
     }
     .onChange(of: trawlerStatuses) { _, statuses in
       trawlerResolver.replace(with: statuses)
+      emptyBrowseCountByID = [:]
+      searchMatchCountsFromLastSearchOfAllApps = nil
     }
     .onExitCommand(perform: handleEscape)
     .task(
@@ -609,9 +661,8 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
       isLoadingMore: model.isLoadingMore,
       canLoadMore: model.canLoadMore,
       loadMoreFailureMessage: model.loadMoreFailureMessage,
-      showsUpToTodayContext: isEmptyBrowse && selectedScopeTrawler?.id.registeredTrawlerIdentity != "contacts",
       appFilterChips: searchAppFilterChips,
-      allAppsSearchMatchCountText: allAppsSearchMatchCountText,
+      allAppsSearchMatchCountText: allAppsChipCountText,
       appFilterSelection: interaction.registeredTrawler,
       onSelectAppFilter: { registeredTrawler in
         sidebarSelection = registeredTrawler.map { .app($0) } ?? .allItems

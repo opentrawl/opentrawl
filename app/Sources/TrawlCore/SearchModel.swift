@@ -197,7 +197,7 @@ public final class SearchModel {
       : earliestMatchingArchiveRecordTimeInclusive
     let effectiveLatest =
       isEmptyBrowse
-      ? Date()
+      ? nil
       : latestMatchingArchiveRecordTimeInclusive
 
     timedOutLocally = false
@@ -279,7 +279,7 @@ public final class SearchModel {
         : nextInput.earliestMatchingArchiveRecordTimeInclusive
       let effectiveLatest =
         isEmptyBrowse
-        ? Date()
+        ? nil
         : nextInput.latestMatchingArchiveRecordTimeInclusive
       let request = TrawlArchiveSearchRequest(
         searchQueryText: nextInput.query,
@@ -505,6 +505,8 @@ public final class SearchInteraction {
   public func changeScope(to registeredTrawler: RegisteredTrawlerIdentity?) {
     guard registeredTrawler != self.registeredTrawler else { return }
     self.registeredTrawler = registeredTrawler
+    selectedSearchMatchIdentifier = nil
+    model.clearOpenResult()
     invalidateInput()
   }
 
@@ -520,6 +522,8 @@ public final class SearchInteraction {
     }
     earliestMatchingArchiveRecordTimeInclusive = earliestInclusive
     latestMatchingArchiveRecordTimeInclusive = latestInclusive
+    selectedSearchMatchIdentifier = nil
+    model.clearOpenResult()
     invalidateInput()
   }
 
@@ -536,6 +540,8 @@ public final class SearchInteraction {
     self.registeredTrawler = registeredTrawler
     earliestMatchingArchiveRecordTimeInclusive = earliestInclusive
     latestMatchingArchiveRecordTimeInclusive = latestInclusive
+    selectedSearchMatchIdentifier = nil
+    model.clearOpenResult()
     invalidateInput()
   }
 
