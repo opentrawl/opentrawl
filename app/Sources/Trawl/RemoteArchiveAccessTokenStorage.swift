@@ -77,14 +77,14 @@ enum RemoteArchiveAccessTokenStorage {
         return
       }
       guard updateStatus == errSecItemNotFound else {
-        throw Self.storageFailure("save", detail: "Keychain status \(updateStatus)")
+        throw Self.couldNotSaveAccessToken
       }
       var addQuery = query
       addQuery[kSecValueData as String] = tokenData
       addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
       let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
       guard addStatus == errSecSuccess else {
-        throw Self.storageFailure("save", detail: "Keychain status \(addStatus)")
+        throw Self.couldNotSaveAccessToken
       }
     case .privateFiles(let directory):
       do {
@@ -97,7 +97,7 @@ enum RemoteArchiveAccessTokenStorage {
         try tokenData.write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
       } catch {
-        throw Self.storageFailure("save", detail: error.localizedDescription)
+        throw Self.couldNotSaveAccessToken
       }
     }
   }
@@ -107,7 +107,7 @@ enum RemoteArchiveAccessTokenStorage {
     case .dataProtectionKeychain:
       let status = SecItemDelete(Self.keychainQuery(forOriginKey: originKey) as CFDictionary)
       guard status == errSecSuccess || status == errSecItemNotFound else {
-        throw Self.storageFailure("remove", detail: "Keychain status \(status)")
+        throw Self.couldNotRemoveAccessToken
       }
     case .privateFiles(let directory):
       let file = Self.tokenFile(in: directory, forOriginKey: originKey)
@@ -115,7 +115,7 @@ enum RemoteArchiveAccessTokenStorage {
       do {
         try FileManager.default.removeItem(at: file)
       } catch {
-        throw Self.storageFailure("remove", detail: error.localizedDescription)
+        throw Self.couldNotRemoveAccessToken
       }
     }
   }
@@ -145,7 +145,10 @@ enum RemoteArchiveAccessTokenStorage {
     return directory.appending(path: fileName, directoryHint: .notDirectory)
   }
 
-  private static func storageFailure(_ action: String, detail: String) -> TrawlClientError {
-    .remoteRequestRejected("Could not \(action) the saved access token (\(detail)).")
-  }
+  private static let couldNotSaveAccessToken = TrawlClientError.remoteRequestRejected(
+    "OpenTrawl could not save the access token on this Mac. The archive you were using is still connected. Try again."
+  )
+  private static let couldNotRemoveAccessToken = TrawlClientError.remoteRequestRejected(
+    "OpenTrawl could not remove the saved access token. The archive you were using is still connected. Try again."
+  )
 }
