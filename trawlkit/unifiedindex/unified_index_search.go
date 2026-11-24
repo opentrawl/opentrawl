@@ -350,16 +350,26 @@ func collapseCandidatesByConversation(candidates []indexedRecordCandidate) []ind
 	return collapsed
 }
 
+// candidateCollapseKey groups only chat messages and email threads. Other
+// records share a conversation key for grouping, such as a bank
+// counterparty, but are not a thread a person reads.
 func candidateCollapseKey(c indexedRecordCandidate) string {
 	conv := strings.TrimSpace(c.conversationKey)
 	if conv == "" {
 		return ""
 	}
-	if c.recordKind == "message" && c.occurredUnix.Valid {
+	switch c.recordKind {
+	case "message":
+		if !c.occurredUnix.Valid {
+			return c.trawler + ":" + conv
+		}
 		dayBucket := c.occurredUnix.Int64 / 86400
 		return fmt.Sprintf("%s:%s:%d", c.trawler, conv, dayBucket)
+	case "email":
+		return c.trawler + ":" + conv
+	default:
+		return ""
 	}
-	return c.trawler + ":" + conv
 }
 
 func applyPerTrawlerDiversityCap(candidates []indexedRecordCandidate, limit int, multiTrawler bool) []indexedRecordCandidate {
