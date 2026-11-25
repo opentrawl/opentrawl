@@ -43,6 +43,7 @@ enum TrawlDesign {
   enum Colors {
     static let paper = Color(nsColor: .windowBackgroundColor)
     static let surface = Color(nsColor: .controlBackgroundColor)
+    static let photoCanvas = Color(nsColor: .underPageBackgroundColor)
     static let ink = Color.primary
     static let mutedInk = Color.secondary
     static let hairline = Color(nsColor: .separatorColor)

@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 import TrawlClient
 import TrawlCore
@@ -11,7 +10,7 @@ struct ResultPreview: View {
   var onRetryOpen: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
   var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
 
-  @State private var copiedLink = false
+  @State private var isPhotoInspectorVisible = true
 
   var body: some View {
     Group {
@@ -21,52 +20,62 @@ struct ResultPreview: View {
       case .loading:
         ProgressView("Opening result")
       case .loaded(let response, let record):
-        VStack(spacing: 0) {
-          recordActionBar(link: response.requestedTrawlLink)
-          Divider()
-          Group {
-            switch record.openedRecordContent {
-            case .messageWithConversationContext(let openedMessage):
-              OpenedMessageRecordWithConversationContextView(
-                openedMessage: openedMessage,
-                targetAnchor: response.requestedRecordAnchor,
-                highlightedTerms: highlightedTerms)
-            case .conversation(let conversationRecord):
-              ConversationRecordView(
-                conversationRecord: conversationRecord,
-                trawlLink: response.requestedTrawlLink)
-            case .person(let personRecord):
-              PersonRecordView(
-                personRecord: personRecord,
-                targetAnchor: response.requestedRecordAnchor)
-            case .calendarEvent(let calendarEventRecord):
-              CalendarEventRecordView(
-                calendarEventRecord: calendarEventRecord,
-                targetAnchor: response.requestedRecordAnchor)
-            case .calendar(let calendarRecord):
-              CalendarRecordView(calendarRecord: calendarRecord)
-            case .note(let openedNoteRecord):
-              OpenedNoteRecordView(
-                openedNoteRecord: openedNoteRecord,
-                targetAnchor: response.requestedRecordAnchor)
-            case .trawlerSpecificRecordPresentation(let openedRecord):
-              TrawlerSpecificOpenedRecordPresentationView(
-                openedRecord: openedRecord,
-                recordTrawler: record.recordTrawler,
-                trawlLink: response.requestedTrawlLink,
-                targetAnchor: response.requestedRecordAnchor,
-                isRemoteArchive: isRemoteArchive,
-                loadPhotoImageData: loadPhotoImageData,
-                onRetryOpen: onRetryOpen.map { retryOpen in
-                  { retryOpen(response.requestedTrawlLink, response.requestedRecordAnchor) }
-                },
-                onOpenLink: onOpenLink)
+        let matchIdentifier = SearchMatchIdentifier(
+          trawlLink: response.requestedTrawlLink,
+          recordAnchor: response.requestedRecordAnchor
+        )
+        if case .trawlerSpecificRecordPresentation(let openedRecord) = record.openedRecordContent,
+          record.recordTrawler.registeredTrawlerIdentity == "photos"
+        {
+          OpenedPhotoRecordView(
+            openedRecord: openedRecord,
+            trawlLink: response.requestedTrawlLink,
+            isRemoteArchive: isRemoteArchive,
+            loadPhotoImageData: loadPhotoImageData,
+            onRetryLocalOpen: onRetryOpen.map { retryOpen in
+              { retryOpen(response.requestedTrawlLink, response.requestedRecordAnchor) }
+            },
+            isInspectorVisible: $isPhotoInspectorVisible
+          )
+          .id(matchIdentifier)
+        } else {
+          VStack(spacing: 0) {
+            RecordActionBar(trawlLink: response.requestedTrawlLink)
+            Divider()
+            Group {
+              switch record.openedRecordContent {
+              case .messageWithConversationContext(let openedMessage):
+                OpenedMessageRecordWithConversationContextView(
+                  openedMessage: openedMessage,
+                  targetAnchor: response.requestedRecordAnchor,
+                  highlightedTerms: highlightedTerms)
+              case .conversation(let conversationRecord):
+                ConversationRecordView(
+                  conversationRecord: conversationRecord,
+                  trawlLink: response.requestedTrawlLink)
+              case .person(let personRecord):
+                PersonRecordView(
+                  personRecord: personRecord,
+                  targetAnchor: response.requestedRecordAnchor)
+              case .calendarEvent(let calendarEventRecord):
+                CalendarEventRecordView(
+                  calendarEventRecord: calendarEventRecord,
+                  targetAnchor: response.requestedRecordAnchor)
+              case .calendar(let calendarRecord):
+                CalendarRecordView(calendarRecord: calendarRecord)
+              case .note(let openedNoteRecord):
+                OpenedNoteRecordView(
+                  openedNoteRecord: openedNoteRecord,
+                  targetAnchor: response.requestedRecordAnchor)
+              case .trawlerSpecificRecordPresentation(let openedRecord):
+                TrawlerSpecificOpenedRecordPresentationView(
+                  openedRecord: openedRecord,
+                  targetAnchor: response.requestedRecordAnchor,
+                  onOpenLink: onOpenLink)
+              }
             }
+            .id(matchIdentifier)
           }
-          .id(
-            SearchMatchIdentifier(
-              trawlLink: response.requestedTrawlLink,
-              recordAnchor: response.requestedRecordAnchor))
         }
       case .failed:
         ContentUnavailableView(
@@ -83,33 +92,16 @@ struct ResultPreview: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .onChange(of: phase) { _, _ in
-      copiedLink = false
-    }
   }
+}
 
-  private func recordActionBar(link: GloballyRoutableTrawlLink) -> some View {
+private struct RecordActionBar: View {
+  let trawlLink: GloballyRoutableTrawlLink
+
+  var body: some View {
     HStack(spacing: 10) {
       Spacer()
-      if !link.globallyRoutableTrawlLink.isEmpty {
-        Button {
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(link.globallyRoutableTrawlLink, forType: .string)
-          copiedLink = true
-          Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            copiedLink = false
-          }
-        } label: {
-          Label(
-            copiedLink ? "Link copied" : "Copy link for AI",
-            systemImage: copiedLink ? "checkmark" : "link"
-          )
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .help("Copy a link your AI can open to read this item")
-      }
+      CopyTrawlLinkButton(trawlLink: trawlLink)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 8)

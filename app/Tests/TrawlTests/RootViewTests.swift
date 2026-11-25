@@ -298,7 +298,7 @@ struct RootViewTests {
   }
 
   @MainActor
-  @Test func photoFieldHelperExtractsCachedPathAndHidesRawFilePathInPhotoRecords() {
+  @Test func photoFieldHelperExtractsCachedPathAndUnavailableReasons() {
     let cachedPathField = TrawlerSpecificCommandDetailPresentationField(
       fieldDisplayName: "Picture",
       fieldValue: .text("/tmp/opentrawl-picture-cache/example.jpg"),
@@ -316,54 +316,307 @@ struct RootViewTests {
     )
 
     #expect(
-      OpenedPhotoPreviewView.localCachedPictureFilePath(from: [cameraField, cachedPathField])
+      OpenedPhotoPresentation.localCachedPictureFilePath(from: [cameraField, cachedPathField])
         == "/tmp/opentrawl-picture-cache/example.jpg"
     )
     #expect(
-      OpenedPhotoPreviewView.localCachedPictureFilePath(from: [cameraField, notFetchedField]) == nil
+      OpenedPhotoPresentation.localCachedPictureFilePath(from: [cameraField, notFetchedField])
+        == nil
     )
     #expect(
-      OpenedPhotoPreviewView.shouldHideRawPicturePathField(cachedPathField, isPhotoRecord: true)
-    )
-    #expect(
-      !OpenedPhotoPreviewView.shouldHideRawPicturePathField(notFetchedField, isPhotoRecord: true)
-    )
-    #expect(
-      !OpenedPhotoPreviewView.shouldHideRawPicturePathField(cachedPathField, isPhotoRecord: false)
-    )
-    #expect(
-      OpenedPhotoPreviewView.unavailableReason(
+      OpenedPhotoPresentation.unavailableReason(
         fromPictureFieldText:
           "Fetching the picture failed: OpenTrawl does not have full access to Apple Photos."
       ) == "OpenTrawl does not have full access to Apple Photos."
     )
     #expect(
-      OpenedPhotoPreviewView.unavailableReason(fromPictureFieldText: "Not fetched yet.")
+      OpenedPhotoPresentation.unavailableReason(fromPictureFieldText: "Not fetched yet.")
         == "Not fetched yet."
     )
     #expect(
-      OpenedPhotoPreviewView.shouldHideRawPicturePathField(
-        notFetchedField,
-        isPhotoRecord: true,
-        isRemoteArchive: true
-      )
-    )
-    #expect(
-      OpenedPhotoPreviewView.unavailableReason(
+      OpenedPhotoPresentation.unavailableReason(
         fromPictureFieldText: "Not fetched yet.",
         isRemoteArchive: true
       ) == nil
     )
     #expect(
-      OpenedPhotoPreviewView.unavailableReason(
+      OpenedPhotoPresentation.unavailableReason(
         fromPictureFieldText: "Available via remote photo endpoint."
       ) == nil
     )
     #expect(
-      OpenedPhotoPreviewView.unavailableReason(
+      OpenedPhotoPresentation.unavailableReason(
         fromPictureFieldText: "/tmp/opentrawl-picture-cache/example.jpg"
       ) == nil
     )
+  }
+
+  @Test func photoPresentationGroupsMetadataCleansLabelsAndFormatsCompactCameraSummary() {
+    let detail = TrawlerSpecificCommandDetailPresentation(
+      detailDisplayName: "Photo",
+      detailDisplayNameAnchor: RecordAnchorIdentifier(recordAnchorIdentifier: "detail"),
+      fieldsInDisplayOrder: [
+        .init(
+          fieldDisplayName: "Summary",
+          fieldValue: .text("Stone bridge across a shallow river."),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Place shown",
+          fieldValue: .text("Stone Bridge"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Description",
+          fieldValue: .text("View across a stone footbridge in late afternoon light."),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Captured",
+          fieldValue: .text("2016-11-09 14:46 +00:00 (2016-11-09 14:46 UTC)"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Capture zone",
+          fieldValue: .text("Europe/London · time-zone map at camera position"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Where camera stood (Apple)",
+          fieldValue: .text("Market Town › Northern County › United Kingdom"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Camera GPS (standard coordinates)",
+          fieldValue: .text("Latitude 54.000000, longitude -2.000000"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Camera altitude (Apple)",
+          fieldValue: .text("45 m"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Camera",
+          fieldValue: .text("Apple iPhone 7"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Lens",
+          fieldValue: .text("iPhone 7 back camera 3.99mm f/1.8"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Settings",
+          fieldValue: .text("4.0 mm · 28 mm equivalent · f/1.8 · 1/100 s · ISO 32"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Dimensions",
+          fieldValue: .text("4032 × 3024 pixels"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "People (Apple)",
+          fieldValue: .text("Alex Example"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Trip (Apple)",
+          fieldValue: .text("Northern Hills · 2016-11-08 – 2016-11-10 (UTC dates)"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Favourite",
+          fieldValue: .text("Yes"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Editing state (Apple)",
+          fieldValue: .text("Not edited"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Shared Library contributor (Apple)",
+          fieldValue: .text("Library owner"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Recognised text (Apple)",
+          fieldValue: .text("FOOTPATH\nKEEP LEFT"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Picture",
+          fieldValue: .text("/tmp/opentrawl-picture-cache/example.jpg"),
+          fieldAnchor: nil
+        ),
+      ],
+      body: nil,
+      bodyAnchor: nil
+    )
+
+    let presentation = OpenedPhotoPresentation(
+      detailPresentation: detail,
+      locale: Locale(identifier: "en_GB")
+    )
+
+    #expect(presentation.headerPrimaryText == "Stone Bridge")
+    #expect(presentation.headerDateText == "9 Nov 2016, 14:46")
+    #expect(presentation.isFavourite)
+    #expect(presentation.summary == "Stone bridge across a shallow river.")
+    #expect(presentation.description == "View across a stone footbridge in late afternoon light.")
+    #expect(presentation.localCachedPictureFilePath == "/tmp/opentrawl-picture-cache/example.jpg")
+    #expect(presentation.recognisedText == "FOOTPATH\nKEEP LEFT")
+    #expect(presentation.copyableRecognisedText == "FOOTPATH\nKEEP LEFT")
+
+    let keyFactsByLabel = Dictionary(
+      uniqueKeysWithValues: presentation.keyFacts.map { ($0.label, $0.value) }
+    )
+    #expect(keyFactsByLabel["Date"] == "9 Nov 2016, 14:46")
+    #expect(keyFactsByLabel["Location"] == "Market Town, Northern County, United Kingdom")
+    #expect(keyFactsByLabel["Place shown"] == "Stone Bridge")
+    #expect(keyFactsByLabel["Trip"] == "Northern Hills · 2016-11-08 – 2016-11-10")
+    #expect(keyFactsByLabel["People"] == "Alex Example")
+    #expect(keyFactsByLabel["Camera"] == "iPhone 7 · 28 mm f/1.8 · 1/100 s · ISO 32 · 4032 × 3024")
+    #expect(keyFactsByLabel["Picture"] == nil)
+
+    // Zero "(Apple)" suffixes appear anywhere in key facts or technical details.
+    for field in presentation.keyFacts + presentation.technicalDetails {
+      #expect(!field.label.contains("(Apple)"))
+      #expect(field.label != "Picture")
+    }
+
+    let technicalByLabel = Dictionary(
+      uniqueKeysWithValues: presentation.technicalDetails.map { ($0.label, $0.value) }
+    )
+    #expect(technicalByLabel["Lens"] == "iPhone 7 back camera 3.99mm f/1.8")
+    #expect(technicalByLabel["Coordinates"] == "Latitude 54.000000, longitude -2.000000")
+    #expect(technicalByLabel["Altitude"] == "45 m")
+    #expect(technicalByLabel["Editing"] == "Not edited")
+    #expect(technicalByLabel["Contributor"] == "Library owner")
+  }
+
+  @Test func screenshotPhotoPresentationOmitsUnrecordedPlaceAndUsesMediaKindHeader() {
+    let detail = TrawlerSpecificCommandDetailPresentation(
+      detailDisplayName: "Screenshot",
+      detailDisplayNameAnchor: RecordAnchorIdentifier(recordAnchorIdentifier: "detail"),
+      fieldsInDisplayOrder: [
+        .init(
+          fieldDisplayName: "Captured",
+          fieldValue: .text("2026-11-25 00:06 UTC"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Where camera stood (Apple)",
+          fieldValue: .text("Place not recorded"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Dimensions",
+          fieldValue: .text("2560 × 1440 pixels"),
+          fieldAnchor: nil
+        ),
+        .init(
+          fieldDisplayName: "Favourite",
+          fieldValue: .text("No"),
+          fieldAnchor: nil
+        ),
+      ],
+      body: nil,
+      bodyAnchor: nil
+    )
+
+    let presentation = OpenedPhotoPresentation(
+      detailPresentation: detail,
+      locale: Locale(identifier: "en_GB")
+    )
+
+    #expect(presentation.headerPrimaryText == "Screenshot")
+    #expect(presentation.headerDateText == "25 Nov 2026, 00:06")
+    #expect(!presentation.isFavourite)
+    #expect(presentation.keyFacts.map(\.label) == ["Date", "Dimensions"])
+    #expect(presentation.keyFacts.last?.value == "2560 × 1440")
+  }
+
+  @Test func photoLayoutResolvesSideBySideBreakpointAndDynamicVerticalStageHeight() {
+    #expect(!OpenedPhotoLayout.usesSideBySideInspector(forPaneWidth: 680))
+    #expect(!OpenedPhotoLayout.usesSideBySideInspector(forPaneWidth: 819))
+    #expect(OpenedPhotoLayout.usesSideBySideInspector(forPaneWidth: 820))
+    #expect(OpenedPhotoLayout.usesSideBySideInspector(forPaneWidth: 1_120))
+
+    let desktopStageHeight = OpenedPhotoLayout.verticalPhotoStageHeight(forAvailableHeight: 720)
+    #expect(desktopStageHeight >= 460 && desktopStageHeight <= 520)
+
+    let compactStageHeight = OpenedPhotoLayout.verticalPhotoStageHeight(forAvailableHeight: 360)
+    #expect(compactStageHeight >= 220 && compactStageHeight <= 250)
+  }
+
+  @MainActor
+  @Test func openedPhotoRecordViewMountsWideAndNarrowLayoutsWithAdaptiveInspectorToggle() {
+    let openedRecord = TrawlerSpecificOpenedRecordPresentation(
+      detailPresentation: TrawlerSpecificCommandDetailPresentation(
+        detailDisplayName: "Photo",
+        detailDisplayNameAnchor: RecordAnchorIdentifier(recordAnchorIdentifier: "detail"),
+        fieldsInDisplayOrder: [
+          .init(
+            fieldDisplayName: "Captured",
+            fieldValue: .text("2026-11-25 00:06 UTC"),
+            fieldAnchor: nil
+          ),
+          .init(
+            fieldDisplayName: "Where camera stood (Apple)",
+            fieldValue: .text("Harbour Town › County › Country"),
+            fieldAnchor: nil
+          ),
+          .init(
+            fieldDisplayName: "Picture",
+            fieldValue: .text("Not fetched yet."),
+            fieldAnchor: nil
+          ),
+        ],
+        body: nil,
+        bodyAnchor: nil
+      )
+    )
+    let link = GloballyRoutableTrawlLink(globallyRoutableTrawlLink: "photos:1")
+
+    let wideSize = CGSize(width: 1_040, height: 760)
+    let wideWindow = hostedWindow(
+      OpenedPhotoRecordView(
+        openedRecord: openedRecord,
+        trawlLink: link,
+        isRemoteArchive: false,
+        loadPhotoImageData: nil,
+        isInspectorVisible: .constant(true)
+      ),
+      size: wideSize
+    )
+    let wideButtonCount = withExtendedLifetime(wideWindow) {
+      #expect(wideWindow.contentView!.bounds.size == wideSize)
+      let wideButtons = renderedButtonFrames(in: wideWindow.contentView!)
+      #expect(wideButtons.count >= 3)
+      wideWindow.orderOut(nil)
+      return wideButtons.count
+    }
+
+    let narrowSize = CGSize(width: 680, height: 760)
+    let narrowWindow = hostedWindow(
+      OpenedPhotoRecordView(
+        openedRecord: openedRecord,
+        trawlLink: link,
+        isRemoteArchive: false,
+        loadPhotoImageData: nil,
+        isInspectorVisible: .constant(true)
+      ),
+      size: narrowSize
+    )
+    withExtendedLifetime(narrowWindow) {
+      #expect(narrowWindow.contentView!.bounds.size == narrowSize)
+      let narrowButtons = renderedButtonFrames(in: narrowWindow.contentView!)
+      #expect(narrowButtons.count == wideButtonCount - 1)
+      narrowWindow.orderOut(nil)
+    }
   }
 
   @MainActor

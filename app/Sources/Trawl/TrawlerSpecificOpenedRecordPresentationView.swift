@@ -3,27 +3,8 @@ import TrawlClient
 
 struct TrawlerSpecificOpenedRecordPresentationView: View {
   let openedRecord: TrawlerSpecificOpenedRecordPresentation
-  let recordTrawler: RegisteredTrawlerIdentity
-  let trawlLink: GloballyRoutableTrawlLink
   let targetAnchor: RecordAnchorIdentifier
-  var isRemoteArchive: Bool = false
-  var loadPhotoImageData: ((GloballyRoutableTrawlLink) async throws -> Data?)?
-  var onRetryOpen: (() -> Void)?
   var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
-
-  private var isPhotoRecord: Bool {
-    recordTrawler.registeredTrawlerIdentity == "photos"
-  }
-
-  private var visibleFieldsInDisplayOrder: [TrawlerSpecificCommandDetailPresentationField] {
-    openedRecord.detailPresentation.fieldsInDisplayOrder.filter { field in
-      !OpenedPhotoPreviewView.shouldHideRawPicturePathField(
-        field,
-        isPhotoRecord: isPhotoRecord,
-        isRemoteArchive: isRemoteArchive
-      )
-    }
-  }
 
   private var defaultLinkAnchor: RecordAnchorIdentifier {
     openedRecord.detailPresentation.detailDisplayNameAnchor
@@ -48,23 +29,9 @@ struct TrawlerSpecificOpenedRecordPresentationView: View {
                 .textSelection(.enabled)
             }
           }
-          if isPhotoRecord {
-            OpenedPhotoPreviewView(
-              trawlLink: trawlLink,
-              localCachedPictureFilePath: OpenedPhotoPreviewView.localCachedPictureFilePath(
-                from: openedRecord.detailPresentation.fieldsInDisplayOrder
-              ),
-              pictureStatusFieldText: OpenedPhotoPreviewView.pictureFieldText(
-                from: openedRecord.detailPresentation.fieldsInDisplayOrder
-              ),
-              isRemoteArchive: isRemoteArchive,
-              loadPhotoImageData: loadPhotoImageData,
-              onRetryLocalOpen: onRetryOpen
-            )
-          }
           RecordDetailsGrid {
             ForEach(
-              Array(visibleFieldsInDisplayOrder.enumerated()),
+              Array(openedRecord.detailPresentation.fieldsInDisplayOrder.enumerated()),
               id: \.offset
             ) { fieldIndex, field in
               TrawlerSpecificOpenedRecordPresentationFieldView(
