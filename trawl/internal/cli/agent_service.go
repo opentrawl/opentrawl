@@ -72,7 +72,15 @@ func detectTailscaleMagicDNSHostName(ctx context.Context) string {
 func detectTailscaleIdentity(ctx context.Context) (string, string) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	for _, tailscaleExecutable := range []string{"tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"} {
+	for _, tailscaleExecutable := range []string{
+		"tailscale",
+		"/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+		"/opt/homebrew/bin/tailscale",
+		"/usr/local/bin/tailscale",
+		"/run/current-system/sw/bin/tailscale",
+		"/nix/var/nix/profiles/default/bin/tailscale",
+		"/usr/bin/tailscale",
+	} {
 		encoded, err := exec.CommandContext(ctx, tailscaleExecutable, "status", "--json").Output() // #nosec G204 -- fixed executable names.
 		if err != nil {
 			continue

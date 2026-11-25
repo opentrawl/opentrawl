@@ -200,6 +200,8 @@ private final class LocalTailscalePeerCache: @unchecked Sendable {
       "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
       "/opt/homebrew/bin/tailscale",
       "/usr/local/bin/tailscale",
+      "/run/current-system/sw/bin/tailscale",
+      "/nix/var/nix/profiles/default/bin/tailscale",
       "/usr/bin/tailscale",
     ]
     for executablePath in candidates {

@@ -422,6 +422,8 @@ final class RemoteArchiveServerController {
       "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
       "/opt/homebrew/bin/tailscale",
       "/usr/local/bin/tailscale",
+      "/run/current-system/sw/bin/tailscale",
+      "/nix/var/nix/profiles/default/bin/tailscale",
       "/usr/bin/tailscale",
     ]
     return candidates.contains { FileManager.default.isExecutableFile(atPath: $0) }
