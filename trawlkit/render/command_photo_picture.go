@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
 )
@@ -16,7 +17,10 @@ func photoPictureStateForHumanOutput(record *photo.OpenedPhotoRecord) string {
 		}
 		return "Fetched; no longer in the picture cache."
 	case photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED:
-		return "Fetching the picture failed: " + fetchedPicture.GetPictureFetchFailureMessage()
+		if message := strings.TrimSpace(fetchedPicture.GetPictureFetchFailureMessage()); message != "" {
+			return "Fetching the picture failed: " + message
+		}
+		return "Fetching the picture failed."
 	default:
 		return "Not fetched yet."
 	}

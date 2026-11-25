@@ -169,9 +169,42 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 // hydrateOpenedPhotoPictureIntoCache restores an evicted or unfetched picture
 // into the local picture cache when a photo is opened, so CLI users, the Mac
 // app and remote MCP receive a real JPEG path on disk. A missing mirror folder
-// falls back to Apple Photos for this single photo; any fetch failure leaves
-// the text record intact.
+// falls back to Apple Photos for this single photo; any fetch failure is
+// recorded on openedPhoto.PictureFetchResult so callers can show an honest
+// reason while leaving the text record intact.
 func (c *Crawler) hydrateOpenedPhotoPictureIntoCache(ctx context.Context, photosArchivePath string, openedPhoto *photo.OpenedPhotoRecord) {
+	if openedPhoto == nil || openedPhoto.GetCachedPictureFilePath() != "" {
+		return
+	}
+	facts := openedPhoto.GetAppleLibraryPhotoFacts()
+	if facts == nil {
+		return
+	}
+	fetchStep := c.fetchPictureStep(photosArchivePath, true)
+	hydrateOpenedPhotoPicture(
+		ctx,
+		openedPhoto,
+		func(ctx context.Context, request *photosstep.FetchPictureRequest) (*photo.PictureFetchResult, error) {
+			fetchedResult, err := fetchStep.RunPhotosStepOnOneInput(ctx, request)
+			var mirrorMissing *picturefetch.PictureMirrorFolderIsMissingError
+			if errors.As(err, &mirrorMissing) {
+				fetchStep.PictureMirrorFolder = nil
+				return fetchStep.RunPhotosStepOnOneInput(ctx, request)
+			}
+			return fetchedResult, err
+		},
+		func(pictureSHA256 string) (string, bool) {
+			return fetchStep.PictureCache.CachedPictureFilePath(pictureSHA256)
+		},
+	)
+}
+
+func hydrateOpenedPhotoPicture(
+	ctx context.Context,
+	openedPhoto *photo.OpenedPhotoRecord,
+	fetchPicture func(context.Context, *photosstep.FetchPictureRequest) (*photo.PictureFetchResult, error),
+	cachedPicturePath func(pictureSHA256 string) (string, bool),
+) {
 	if openedPhoto == nil || openedPhoto.GetCachedPictureFilePath() != "" {
 		return
 	}
@@ -186,18 +219,86 @@ func (c *Crawler) hydrateOpenedPhotoPictureIntoCache(ctx context.Context, photos
 		AppleAdjustmentsState:  facts.GetAppleAdjustmentsState(),
 		AppleAdjustmentTimeUtc: facts.GetAppleAdjustmentTimeUtc(),
 	}
-	fetchStep := c.fetchPictureStep(photosArchivePath, true)
-	fetchedResult, err := fetchStep.RunPhotosStepOnOneInput(ctx, fetchRequest)
-	var mirrorMissing *picturefetch.PictureMirrorFolderIsMissingError
-	if errors.As(err, &mirrorMissing) {
-		fetchStep.PictureMirrorFolder = nil
-		fetchedResult, err = fetchStep.RunPhotosStepOnOneInput(ctx, fetchRequest)
-	}
-	if err != nil || fetchedResult.GetPictureFetchOutcome() != photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FETCHED {
+	fetchedResult, err := fetchPicture(ctx, fetchRequest)
+	if err != nil {
+		openedPhoto.PictureFetchResult = failedOnDemandPictureFetchResult(facts, err)
 		return
 	}
-	if cachedPath, ok := fetchStep.PictureCache.CachedPictureFilePath(fetchedResult.GetPictureSha256()); ok {
-		openedPhoto.CachedPictureFilePath = cachedPath
-		openedPhoto.PictureFetchResult = fetchedResult
+	if fetchedResult.GetPictureFetchOutcome() == photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FETCHED {
+		if cachedPath, ok := cachedPicturePath(fetchedResult.GetPictureSha256()); ok {
+			openedPhoto.CachedPictureFilePath = cachedPath
+			openedPhoto.PictureFetchResult = fetchedResult
+			return
+		}
+		openedPhoto.PictureFetchResult = &photo.PictureFetchResult{
+			ApplePhotoUuid:                   facts.GetApplePhotoUuid(),
+			FetchedForAppleAdjustmentsState:  facts.GetAppleAdjustmentsState(),
+			FetchedForAppleAdjustmentTimeUtc: facts.GetAppleAdjustmentTimeUtc(),
+			PictureFetchOutcome:              photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED,
+			PictureFetchFailureMessage:       "The fetched picture could not be found in the local picture cache.",
+			PictureSource:                    fetchedResult.GetPictureSource(),
+		}
+		return
 	}
+	if fetchedResult != nil && fetchedResult.GetPictureFetchOutcome() == photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED {
+		preserved := &photo.PictureFetchResult{
+			ApplePhotoUuid:                   fetchedResult.GetApplePhotoUuid(),
+			FetchedForAppleAdjustmentsState:  fetchedResult.GetFetchedForAppleAdjustmentsState(),
+			FetchedForAppleAdjustmentTimeUtc: fetchedResult.GetFetchedForAppleAdjustmentTimeUtc(),
+			PictureFetchOutcome:              photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED,
+			PictureFetchFailureMessage:       safeOnDemandPictureFetchFailureMessage(fetchedResult.GetPictureFetchFailureMessage()),
+			RetryNotBeforeTimeUtc:            fetchedResult.GetRetryNotBeforeTimeUtc(),
+			PictureSource:                    fetchedResult.GetPictureSource(),
+			PictureLongEdgePixelLimitUsed:    fetchedResult.PictureLongEdgePixelLimitUsed,
+		}
+		if preserved.ApplePhotoUuid == "" {
+			preserved.ApplePhotoUuid = facts.GetApplePhotoUuid()
+		}
+		openedPhoto.PictureFetchResult = preserved
+		return
+	}
+	openedPhoto.PictureFetchResult = &photo.PictureFetchResult{
+		ApplePhotoUuid:                   facts.GetApplePhotoUuid(),
+		FetchedForAppleAdjustmentsState:  facts.GetAppleAdjustmentsState(),
+		FetchedForAppleAdjustmentTimeUtc: facts.GetAppleAdjustmentTimeUtc(),
+		PictureFetchOutcome:              photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED,
+		PictureFetchFailureMessage:       "The picture could not be fetched.",
+		PictureSource:                    photo.PictureSource_PICTURE_SOURCE_APPLE_PHOTOS,
+	}
+}
+
+func failedOnDemandPictureFetchResult(facts *photo.AppleLibraryPhotoFacts, fetchErr error) *photo.PictureFetchResult {
+	failureMessage := "OpenTrawl could not read or cache the picture."
+	pictureSource := photo.PictureSource_PICTURE_SOURCE_UNSPECIFIED
+	switch {
+	case errors.Is(fetchErr, picturefetch.ErrApplePhotosAccessNotGranted):
+		failureMessage = "OpenTrawl does not have full access to Apple Photos. Allow OpenTrawl in System Settings → Privacy & Security → Photos."
+		pictureSource = photo.PictureSource_PICTURE_SOURCE_APPLE_PHOTOS
+	case errors.Is(fetchErr, context.DeadlineExceeded):
+		failureMessage = "Fetching the picture timed out."
+	case errors.Is(fetchErr, context.Canceled):
+		failureMessage = "Fetching the picture was cancelled."
+	}
+	return &photo.PictureFetchResult{
+		ApplePhotoUuid:                   facts.GetApplePhotoUuid(),
+		FetchedForAppleAdjustmentsState:  facts.GetAppleAdjustmentsState(),
+		FetchedForAppleAdjustmentTimeUtc: facts.GetAppleAdjustmentTimeUtc(),
+		PictureFetchOutcome:              photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED,
+		PictureFetchFailureMessage:       failureMessage,
+		PictureSource:                    pictureSource,
+	}
+}
+
+func safeOnDemandPictureFetchFailureMessage(rawMessage string) string {
+	trimmed := strings.TrimSpace(rawMessage)
+	if trimmed == "" {
+		return "Apple Photos could not deliver the picture."
+	}
+	lower := strings.ToLower(trimmed)
+	for _, pathPrefix := range []string{"/users/", "/volumes/", "/private/", "/var/", "/tmp/", "/library/"} {
+		if strings.Contains(lower, pathPrefix) {
+			return "The picture file could not be read on the archive host."
+		}
+	}
+	return trimmed
 }

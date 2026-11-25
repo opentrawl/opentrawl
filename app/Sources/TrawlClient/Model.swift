@@ -78,6 +78,7 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
   case remoteSavedAccessTokenMissing(hostDisplayName: String)
   case remoteAccessDenied(String)
   case remoteRequestRejected(String)
+  case remotePhotoUnavailable(String)
   case remoteServerUnreachable(String)
   case remoteArchiveReadOnly
 
@@ -105,6 +106,8 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
       detail.isEmpty ? "This access token does not allow that source." : detail
     case .remoteRequestRejected(let detail):
       detail.isEmpty ? "The remote archive rejected the request." : detail
+    case .remotePhotoUnavailable(let detail):
+      detail.isEmpty ? "The photo could not be loaded from the remote archive." : detail
     case .remoteServerUnreachable(let detail):
       detail.isEmpty
         ? "Could not reach the remote archive server."

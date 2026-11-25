@@ -31,6 +31,7 @@ struct OpenTrawlSettingsView: View {
 
   @Bindable var model: AppModel
   let connectionStore: ArchiveConnectionStore
+  let remoteArchiveServer: RemoteArchiveServerController
   let runtimeConfiguration: TrawlRuntimeConfiguration
   let appInstallations: MacAppInstallations
   let buildIdentity: BuildIdentity
@@ -47,6 +48,7 @@ struct OpenTrawlSettingsView: View {
 
   @State private var copiedAIPrompt = false
   @State private var copiedMCPCommand = false
+  @State private var copiedRemoteArchiveAddress = false
   @State private var copiedTokenCommand = false
   @State private var copiedAuditPrompt = false
   @State private var openAtLogin = SMAppService.mainApp.status == .enabled
@@ -372,12 +374,43 @@ struct OpenTrawlSettingsView: View {
 
       Section("Macs that can search this archive") {
         VStack(alignment: .leading, spacing: 10) {
-          Text(
-            "To let another Mac search this Mac's archive read-only over Tailscale, create an access token on this Mac:"
-          )
-          .font(TrawlDesign.Typography.meta)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
+          Toggle(
+            isOn: Binding(
+              get: { remoteArchiveServer.isSharingEnabled },
+              set: { remoteArchiveServer.setSharingEnabled($0) }
+            )
+          ) {
+            VStack(alignment: .leading, spacing: 3) {
+              Text("Allow other Macs to search this archive over Tailscale")
+                .font(TrawlDesign.Typography.body)
+              Text(
+                "Runs the read-only Tailscale archive server inside OpenTrawl on port \(RemoteArchiveServerController.defaultPortDisplay) (never Wi-Fi or LAN). Every request needs an access token."
+              )
+              .font(TrawlDesign.Typography.meta)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            }
+          }
+          .disabled(connectionStore.isRemote)
+
+          remoteArchiveServerStatusView
+
+          Divider()
+
+          if remoteArchiveServer.activeLocalTokenCount > 0 {
+            let count = remoteArchiveServer.activeLocalTokenCount
+            Text(
+              count == 1
+                ? "1 active access token is configured on this Mac."
+                : "\(count) active access tokens are configured on this Mac."
+            )
+            .font(TrawlDesign.Typography.meta)
+            .foregroundStyle(.secondary)
+          }
+
+          Text("Create an access token for another Mac:")
+            .font(TrawlDesign.Typography.meta)
+            .foregroundStyle(.secondary)
 
           copyableCommandRow(
             command: tokenCommand,
@@ -389,6 +422,102 @@ struct OpenTrawlSettingsView: View {
       }
     }
     .formStyle(.grouped)
+    .onAppear {
+      remoteArchiveServer.refreshLocalAccessTokenStatus()
+    }
+  }
+
+  @ViewBuilder
+  private var remoteArchiveServerStatusView: some View {
+    switch remoteArchiveServer.state {
+    case .running(let advertisedAddress):
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 6) {
+          Image(systemName: "checkmark.circle.fill")
+            .foregroundStyle(.green)
+          Text("Sharing over Tailscale")
+            .font(TrawlDesign.Typography.meta.weight(.medium))
+            .foregroundStyle(TrawlDesign.Colors.ink)
+        }
+        copyableCommandRow(
+          command: advertisedAddress,
+          isCopied: copiedRemoteArchiveAddress,
+          onCopy: {
+            copyToPasteboard(advertisedAddress) { copiedRemoteArchiveAddress = $0 }
+          }
+        )
+      }
+
+    case .starting:
+      HStack(spacing: 8) {
+        ProgressView()
+          .controlSize(.small)
+        Text("Starting Tailscale archive server…")
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(.secondary)
+      }
+
+    case .portAlreadyInUse(let listenAddress):
+      HStack(alignment: .center, spacing: 10) {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .foregroundStyle(TrawlDesign.Colors.warningAmberText)
+        Text(
+          "Port \(RemoteArchiveServerController.defaultPortDisplay) (\(listenAddress)) is already in use by another process. Stop the other server and try again."
+        )
+        .font(TrawlDesign.Typography.meta)
+        .foregroundStyle(TrawlDesign.Colors.warningAmberText)
+        .fixedSize(horizontal: false, vertical: true)
+        Spacer(minLength: 6)
+        Button("Try again") {
+          remoteArchiveServer.retryNow()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .fixedSize()
+      }
+
+    case .tailscaleUnavailable:
+      HStack(alignment: .center, spacing: 10) {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .foregroundStyle(TrawlDesign.Colors.warningAmberText)
+        Text("Tailscale is not running on this Mac. Start Tailscale to share this archive.")
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(TrawlDesign.Colors.warningAmberText)
+          .fixedSize(horizontal: false, vertical: true)
+        Spacer(minLength: 6)
+        Button("Try again") {
+          remoteArchiveServer.retryNow()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .fixedSize()
+      }
+
+    case .failed(let message):
+      HStack(alignment: .center, spacing: 10) {
+        Image(systemName: "exclamationmark.circle.fill")
+          .foregroundStyle(TrawlDesign.Colors.matchRed)
+        Text(message)
+          .font(TrawlDesign.Typography.meta)
+          .foregroundStyle(TrawlDesign.Colors.matchRed)
+          .fixedSize(horizontal: false, vertical: true)
+        Spacer(minLength: 6)
+        Button("Try again") {
+          remoteArchiveServer.retryNow()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .fixedSize()
+      }
+
+    case .disabledInRemoteMode:
+      Text("Switch to This Mac above to share this Mac's archive.")
+        .font(TrawlDesign.Typography.meta)
+        .foregroundStyle(.secondary)
+
+    case .stopped:
+      EmptyView()
+    }
   }
 
   // MARK: - Privacy

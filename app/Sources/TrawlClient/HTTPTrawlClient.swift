@@ -281,6 +281,7 @@ public struct HTTPTrawlClient: TrawlClient {
   static let defaultStatusTimeout: TimeInterval = 15
   static let defaultSearchTimeout: TimeInterval = 15
   static let defaultOpenTimeout: TimeInterval = 20
+  static let defaultPhotoTimeout: TimeInterval = 60
   static let maximumPhotoResponseBytes: Int = 32 * 1024 * 1024
 
   public let configuration: RemoteArchiveEndpointConfiguration
@@ -314,7 +315,7 @@ public struct HTTPTrawlClient: TrawlClient {
       urlSessionConfiguration.httpCookieStorage = nil
       urlSessionConfiguration.httpShouldSetCookies = false
       urlSessionConfiguration.timeoutIntervalForRequest = Self.defaultOpenTimeout
-      urlSessionConfiguration.timeoutIntervalForResource = Self.defaultOpenTimeout
+      urlSessionConfiguration.timeoutIntervalForResource = Self.defaultPhotoTimeout
       self.session = URLSession(configuration: urlSessionConfiguration)
     }
   }
@@ -413,15 +414,17 @@ public struct HTTPTrawlClient: TrawlClient {
     else {
       throw TrawlClientError.invalidProtobuf
     }
-    let response = try await fetchAuthenticatedGET(
+    let data = try await fetchAuthenticatedGET(
       path: "/app/photo",
       queryItems: [URLQueryItem(name: "link", value: link.globallyRoutableTrawlLink)],
       accept: "image/jpeg, image/*",
-      timeout: Self.defaultOpenTimeout,
-      allowNotFoundAsNil: true,
-      maximumResponseBytes: Self.maximumPhotoResponseBytes
+      timeout: Self.defaultPhotoTimeout,
+      maximumResponseBytes: Self.maximumPhotoResponseBytes,
+      unavailableErrorOnMissingOrServiceUnavailable: true
     )
-    guard let data = response, !data.isEmpty else { return nil }
+    guard !data.isEmpty else {
+      throw TrawlClientError.remotePhotoUnavailable("The remote archive returned an empty photo.")
+    }
     return data
   }
 
@@ -430,18 +433,14 @@ public struct HTTPTrawlClient: TrawlClient {
     queryItems: [URLQueryItem],
     timeout: TimeInterval
   ) async throws -> Message {
-    guard
-      let data = try await fetchAuthenticatedGET(
-        path: path,
-        queryItems: queryItems,
-        accept: "application/x-protobuf",
-        timeout: timeout,
-        allowNotFoundAsNil: false,
-        maximumResponseBytes: DelimitedFrames.maximumFrameBytes
-      )
-    else {
-      throw TrawlClientError.invalidFrame
-    }
+    let data = try await fetchAuthenticatedGET(
+      path: path,
+      queryItems: queryItems,
+      accept: "application/x-protobuf",
+      timeout: timeout,
+      maximumResponseBytes: DelimitedFrames.maximumFrameBytes,
+      unavailableErrorOnMissingOrServiceUnavailable: false
+    )
     do {
       return try Message(serializedBytes: data)
     } catch {
@@ -472,9 +471,9 @@ public struct HTTPTrawlClient: TrawlClient {
     queryItems: [URLQueryItem],
     accept: String,
     timeout: TimeInterval,
-    allowNotFoundAsNil: Bool,
-    maximumResponseBytes: Int
-  ) async throws -> Data? {
+    maximumResponseBytes: Int,
+    unavailableErrorOnMissingOrServiceUnavailable: Bool
+  ) async throws -> Data {
     guard !configuration.bearerToken.isEmpty else {
       throw TrawlClientError.remoteAuthenticationRequired
     }
@@ -521,9 +520,6 @@ public struct HTTPTrawlClient: TrawlClient {
     guard let httpResponse = urlResponse as? HTTPURLResponse else {
       throw TrawlClientError.invalidFrame
     }
-    if httpResponse.statusCode == 404 && allowNotFoundAsNil {
-      return nil
-    }
 
     let readLimit = httpResponse.statusCode == 200 ? maximumResponseBytes : 64 * 1024
     if httpResponse.expectedContentLength > Int64(readLimit) {
@@ -565,6 +561,10 @@ public struct HTTPTrawlClient: TrawlClient {
       throw TrawlClientError.remoteAuthenticationRequired
     case 403:
       throw TrawlClientError.remoteAccessDenied(Self.decodedServerErrorMessage(from: data))
+    case 404 where unavailableErrorOnMissingOrServiceUnavailable,
+      422 where unavailableErrorOnMissingOrServiceUnavailable,
+      503 where unavailableErrorOnMissingOrServiceUnavailable:
+      throw TrawlClientError.remotePhotoUnavailable(Self.decodedServerErrorMessage(from: data))
     case 400, 404, 405:
       throw TrawlClientError.remoteRequestRejected(Self.decodedServerErrorMessage(from: data))
     default:

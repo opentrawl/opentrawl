@@ -130,10 +130,20 @@ struct RootViewTests {
   @MainActor
   @Test func settingsWindowMountsEveryPaneWithoutCrashingOrTruncatingButtons() {
     let runtimeConfiguration = TrawlRuntimeConfiguration()
+    let defaults = isolatedUserDefaults()
     let connectionStore = ArchiveConnectionStore(
       runtimeConfiguration: runtimeConfiguration,
-      defaults: isolatedUserDefaults(),
+      defaults: defaults,
       environment: [:]
+    )
+    let tempStateRoot = FileManager.default.temporaryDirectory
+      .appending(path: "opentrawl-settings-test-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let remoteArchiveServer = RemoteArchiveServerController(
+      runtimeConfiguration: runtimeConfiguration,
+      isRemoteArchiveMode: connectionStore.isRemote,
+      defaults: defaults,
+      stateRootURL: tempStateRoot,
+      isTailscaleInstalledProvider: { false }
     )
     let model = AppModel(client: connectionStore.switchableClient)
     let iconStore = TrawlerIconStore()
@@ -143,6 +153,7 @@ struct RootViewTests {
         OpenTrawlSettingsView(
           model: model,
           connectionStore: connectionStore,
+          remoteArchiveServer: remoteArchiveServer,
           runtimeConfiguration: runtimeConfiguration,
           appInstallations: MacAppInstallations(),
           buildIdentity: BuildIdentity(version: "0.1.0", gitCommit: nil, isDevelopmentBuild: true),
@@ -319,6 +330,118 @@ struct RootViewTests {
     )
     #expect(
       !OpenedPhotoPreviewView.shouldHideRawPicturePathField(cachedPathField, isPhotoRecord: false)
+    )
+    #expect(
+      OpenedPhotoPreviewView.unavailableReason(
+        fromPictureFieldText:
+          "Fetching the picture failed: OpenTrawl does not have full access to Apple Photos."
+      ) == "OpenTrawl does not have full access to Apple Photos."
+    )
+    #expect(
+      OpenedPhotoPreviewView.unavailableReason(fromPictureFieldText: "Not fetched yet.")
+        == "Not fetched yet."
+    )
+    #expect(
+      OpenedPhotoPreviewView.unavailableReason(
+        fromPictureFieldText: "Available via remote photo endpoint."
+      ) == nil
+    )
+    #expect(
+      OpenedPhotoPreviewView.unavailableReason(
+        fromPictureFieldText: "/tmp/opentrawl-picture-cache/example.jpg"
+      ) == nil
+    )
+  }
+
+  @MainActor
+  @Test func remoteArchiveServerAutoEnablesForLocalModeWithActiveTokenAndClassifiesExits() throws {
+    let tempStateRoot = FileManager.default.temporaryDirectory
+      .appending(path: "opentrawl-server-policy-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: tempStateRoot) }
+    let accessDir = tempStateRoot.appending(path: "agent-access", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: accessDir, withIntermediateDirectories: true)
+    let tokenJSON = """
+      {
+        "agent_access_tokens": [
+          {
+            "token_id": "tok_active",
+            "allowed_surface": "local"
+          },
+          {
+            "token_id": "tok_revoked",
+            "allowed_surface": "local",
+            "revoked_time": "2026-01-01T00:00:00Z"
+          },
+          {
+            "token_id": "tok_relay",
+            "allowed_surface": "relay"
+          }
+        ]
+      }
+      """
+    try Data(tokenJSON.utf8).write(
+      to: accessDir.appending(path: "access-tokens.json", directoryHint: .notDirectory)
+    )
+
+    let defaults = isolatedUserDefaults()
+    let localController = RemoteArchiveServerController(
+      runtimeConfiguration: TrawlRuntimeConfiguration(),
+      isRemoteArchiveMode: false,
+      defaults: defaults,
+      stateRootURL: tempStateRoot,
+      isTailscaleInstalledProvider: { true }
+    )
+    #expect(localController.activeLocalTokenCount == 1)
+    #expect(localController.isSharingEnabled)
+
+    // Explicit opt-out persists and disables auto-start.
+    localController.setSharingEnabled(false)
+    #expect(!localController.isSharingEnabled)
+
+    let reloadedOptOut = RemoteArchiveServerController(
+      runtimeConfiguration: TrawlRuntimeConfiguration(),
+      isRemoteArchiveMode: false,
+      defaults: defaults,
+      stateRootURL: tempStateRoot,
+      isTailscaleInstalledProvider: { true }
+    )
+    #expect(!reloadedOptOut.isSharingEnabled)
+
+    // Remote archive mode never enables local serving.
+    let remoteController = RemoteArchiveServerController(
+      runtimeConfiguration: TrawlRuntimeConfiguration(),
+      isRemoteArchiveMode: true,
+      defaults: isolatedUserDefaults(),
+      stateRootURL: tempStateRoot,
+      isTailscaleInstalledProvider: { true }
+    )
+    #expect(!remoteController.isSharingEnabled)
+    #expect(remoteController.state == .disabledInRemoteMode)
+
+    // Output parsing extracts the advertised Tailscale URL cleanly.
+    let parsedRemote = RemoteArchiveServerController.parseAdvertisedArchiveURL(
+      fromOutputLine: "remote archive  http://archive-mac.tailnet.ts.net:7391"
+    )
+    #expect(
+      parsedRemote
+        == .init(
+          address: "http://archive-mac.tailnet.ts.net:7391",
+          isPreferredRemoteArchiveLine: true
+        )
+    )
+
+    // Exit classification detects port conflicts and Tailscale offline cleanly.
+    #expect(
+      RemoteArchiveServerController.classifyUnexpectedExit(
+        output: "Cannot listen on 100.64.0.1:7391: listen tcp 100.64.0.1:7391: bind: address already in use",
+        exitCode: 1
+      ) == .portAlreadyInUse(listenAddress: "100.64.0.1:7391")
+    )
+    #expect(
+      RemoteArchiveServerController.classifyUnexpectedExit(
+        output: "Tailscale is not running on this machine; start Tailscale",
+        exitCode: 1
+      ) == .tailscaleUnavailable
     )
   }
 

@@ -8,6 +8,7 @@ struct TrawlerSpecificOpenedRecordPresentationView: View {
   let targetAnchor: RecordAnchorIdentifier
   var isRemoteArchive: Bool = false
   var loadPhotoImageData: ((GloballyRoutableTrawlLink) async throws -> Data?)?
+  var onRetryOpen: (() -> Void)?
   var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
 
   private var isPhotoRecord: Bool {
@@ -49,8 +50,12 @@ struct TrawlerSpecificOpenedRecordPresentationView: View {
               localCachedPictureFilePath: OpenedPhotoPreviewView.localCachedPictureFilePath(
                 from: openedRecord.detailPresentation.fieldsInDisplayOrder
               ),
+              pictureStatusFieldText: OpenedPhotoPreviewView.pictureFieldText(
+                from: openedRecord.detailPresentation.fieldsInDisplayOrder
+              ),
               isRemoteArchive: isRemoteArchive,
-              loadPhotoImageData: loadPhotoImageData
+              loadPhotoImageData: loadPhotoImageData,
+              onRetryLocalOpen: onRetryOpen
             )
           }
           RecordDetailsGrid {

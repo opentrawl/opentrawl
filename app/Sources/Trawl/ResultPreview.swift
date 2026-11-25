@@ -8,6 +8,7 @@ struct ResultPreview: View {
   var isRemoteArchive: Bool = false
   var highlightedTerms: [String] = []
   var loadPhotoImageData: ((GloballyRoutableTrawlLink) async throws -> Data?)?
+  var onRetryOpen: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
   var onOpenLink: ((GloballyRoutableTrawlLink, RecordAnchorIdentifier) -> Void)?
 
   @State private var copiedLink = false
@@ -56,6 +57,9 @@ struct ResultPreview: View {
                 targetAnchor: response.requestedRecordAnchor,
                 isRemoteArchive: isRemoteArchive,
                 loadPhotoImageData: loadPhotoImageData,
+                onRetryOpen: onRetryOpen.map { retryOpen in
+                  { retryOpen(response.requestedTrawlLink, response.requestedRecordAnchor) }
+                },
                 onOpenLink: onOpenLink)
             }
           }

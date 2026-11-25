@@ -605,6 +605,9 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
                   isRemoteArchive: isRemoteArchive,
                   highlightedTerms: highlightedTermsForOpenedRecord,
                   loadPhotoImageData: { try await model.photoImageData(for: $0) },
+                  onRetryOpen: { link, anchor in
+                    Task { await model.open(link: link, anchor: anchor) }
+                  },
                   onOpenLink: openLinkedRecord
                 )
               }
@@ -629,6 +632,9 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
                   isRemoteArchive: isRemoteArchive,
                   highlightedTerms: highlightedTermsForOpenedRecord,
                   loadPhotoImageData: { try await model.photoImageData(for: $0) },
+                  onRetryOpen: { link, anchor in
+                    Task { await model.open(link: link, anchor: anchor) }
+                  },
                   onOpenLink: openLinkedRecord
                 )
               }

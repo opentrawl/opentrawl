@@ -87,7 +87,7 @@ enum OperationalCopy {
     static let unencryptedHTTPWarning =
       "Plain HTTP is blocked outside Tailscale and localhost. Use Tailscale or https://."
     static let hostSetupHint =
-      "Binds only to Tailscale or localhost, never open Wi-Fi. On your archive Mac, run trawl token create macbook --sources all and trawl mcp --http --tailscale."
+      "Binds only to Tailscale or localhost, never open Wi-Fi. On your archive Mac, turn on sharing in Settings → Other Macs and run trawl token create macbook --sources all."
     static let staleStatusPrefix = "Showing earlier status because refresh failed:"
     static let changeArchiveHost = "Change archive host"
     static let connectAction = "Connect"

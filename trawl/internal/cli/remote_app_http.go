@@ -9,6 +9,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/proto"
 )
@@ -272,10 +273,12 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppPhoto(
 		writeMCPHTTPError(response, http.StatusNotFound, "photo record not found")
 		return
 	}
-	cachedPath := openResponse.GetRecord().GetOpenedPhotoRecord().GetCachedPictureFilePath()
+	openedPhoto := openResponse.GetRecord().GetOpenedPhotoRecord()
+	cachedPath := openedPhoto.GetCachedPictureFilePath()
 	photoFile, info, err := openVerifiedCachedPhoto(handler.service.stateRoot, cachedPath)
 	if err != nil {
-		writeMCPHTTPError(response, http.StatusNotFound, "photo image is unavailable")
+		statusCode, errorMessage := remoteAppPhotoUnavailableError(openedPhoto)
+		writeMCPHTTPError(response, statusCode, errorMessage)
 		return
 	}
 	defer func() { _ = photoFile.Close() }()
@@ -286,6 +289,44 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppPhoto(
 	response.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	response.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(response, io.LimitReader(photoFile, info.Size()))
+}
+
+func remoteAppPhotoUnavailableError(openedPhoto *photo.OpenedPhotoRecord) (int, string) {
+	if openedPhoto == nil {
+		return http.StatusNotFound, "Photo record was not found."
+	}
+	fetchResult := openedPhoto.GetPictureFetchResult()
+	if fetchResult.GetPictureFetchOutcome() == photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FAILED {
+		message := sanitizeRemotePhotoFailureMessage(fetchResult.GetPictureFetchFailureMessage())
+		if message == "" {
+			message = "The archive Mac could not fetch this photo."
+		}
+		if strings.Contains(strings.ToLower(message), "no photo with this uuid") {
+			return http.StatusNotFound, message
+		}
+		return http.StatusServiceUnavailable, message
+	}
+	if strings.TrimSpace(openedPhoto.GetCachedPictureFilePath()) == "" {
+		if fetchResult.GetPictureFetchOutcome() == photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FETCHED {
+			return http.StatusServiceUnavailable, "The photo is no longer in the archive Mac's picture cache."
+		}
+		return http.StatusNotFound, "The photo has not been fetched on the archive Mac yet."
+	}
+	return http.StatusServiceUnavailable, "The cached photo could not be read on the archive Mac."
+}
+
+func sanitizeRemotePhotoFailureMessage(rawMessage string) string {
+	trimmed := strings.TrimSpace(rawMessage)
+	if trimmed == "" {
+		return ""
+	}
+	lower := strings.ToLower(trimmed)
+	for _, pathMarker := range []string{"/users/", "/volumes/", "/private/", "/var/", "/tmp/", "/library/"} {
+		if strings.Contains(lower, pathMarker) {
+			return "The archive Mac could not read the photo file."
+		}
+	}
+	return trimmed
 }
 
 func (scope agentSourceScope) registeredTrawlerManifestSnapshotAllowed(

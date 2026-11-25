@@ -41,6 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   let trawlerIconStore = TrawlerIconStore()
   let runtimeConfiguration = TrawlRuntimeConfiguration()
   lazy var connectionStore = ArchiveConnectionStore(runtimeConfiguration: runtimeConfiguration)
+  lazy var remoteArchiveServer = RemoteArchiveServerController(
+    runtimeConfiguration: runtimeConfiguration,
+    isRemoteArchiveMode: connectionStore.isRemote
+  )
   lazy var client: any TrawlClient = connectionStore.switchableClient
   lazy var model = AppModel(
     client: client,
@@ -59,8 +63,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     BrowserXSessionImporter.cleanupStaleTemporaryCopies()
     _ = updates
     observeAutomaticArchiveRefresh()
+    observeRemoteArchiveServerMode()
     observeWindowCloseForMenuBarMode()
     Task { await model.refresh() }
+  }
+
+  func applicationWillTerminate(_ notification: Notification) {
+    remoteArchiveServer.stopSynchronouslyForTermination()
+  }
+
+  private func observeRemoteArchiveServerMode() {
+    let isRemote = withObservationTracking {
+      connectionStore.isRemote
+    } onChange: { [weak self] in
+      Task { @MainActor [weak self] in self?.observeRemoteArchiveServerMode() }
+    }
+    remoteArchiveServer.updateRemoteArchiveMode(isRemote)
   }
 
   private func observeWindowCloseForMenuBarMode() {
@@ -271,6 +289,7 @@ struct TrawlApp: App {
       OpenTrawlSettingsView(
         model: delegate.model,
         connectionStore: delegate.connectionStore,
+        remoteArchiveServer: delegate.remoteArchiveServer,
         runtimeConfiguration: delegate.runtimeConfiguration,
         appInstallations: delegate.appInstallations,
         buildIdentity: .current,

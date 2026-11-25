@@ -114,7 +114,7 @@ struct HTTPTrawlClientTests {
     }
   }
 
-  @Test func remotePhotoFetchSendsBearerTokenAndHandlesNotFound() async throws {
+  @Test func remotePhotoFetchSendsBearerTokenAndSurfacesServerErrors() async throws {
     let config = RemoteArchiveEndpointConfiguration(
       serverBaseURL: URL(string: "http://127.0.0.1:7391")!,
       bearerToken: "otk_photo_test"
@@ -130,9 +130,24 @@ struct HTTPTrawlClientTests {
     let data = try await client.photoImageData(for: foundLink)
     #expect(data == Data([0xFF, 0xD8, 0xFF, 0xE0]))
 
+    let permissionDeniedLink = GloballyRoutableTrawlLink(globallyRoutableTrawlLink: "photos:perm53")
+    do {
+      _ = try await client.photoImageData(for: permissionDeniedLink)
+      Issue.record("expected 503 photo fetch failure to throw remotePhotoUnavailable")
+    } catch let error as TrawlClientError {
+      #expect(
+        error == .remotePhotoUnavailable("OpenTrawl does not have full access to Apple Photos.")
+      )
+      #expect(error.localizedDescription == "OpenTrawl does not have full access to Apple Photos.")
+    }
+
     let missingLink = GloballyRoutableTrawlLink(globallyRoutableTrawlLink: "photos:mnprst")
-    let missing = try await client.photoImageData(for: missingLink)
-    #expect(missing == nil)
+    do {
+      _ = try await client.photoImageData(for: missingLink)
+      Issue.record("expected 404 photo fetch failure to surface server error message")
+    } catch let error as TrawlClientError {
+      #expect(error == .remotePhotoUnavailable("Apple Photos has no photo with this UUID"))
+    }
 
     let nonPhotoLink = GloballyRoutableTrawlLink(globallyRoutableTrawlLink: "gmail:abc234")
     do {
@@ -166,17 +181,31 @@ private final class StubPhotoURLProtocol: URLProtocol, @unchecked Sendable {
     }
     let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     let link = components?.queryItems?.first(where: { $0.name == "link" })?.value
-    let statusCode = link == "photos:abc234" ? 200 : 404
+    let statusCode: Int
+    let contentType: String
+    let body: Data
+    switch link {
+    case "photos:abc234":
+      statusCode = 200
+      contentType = "image/jpeg"
+      body = Data([0xFF, 0xD8, 0xFF, 0xE0])
+    case "photos:perm53":
+      statusCode = 503
+      contentType = "application/json"
+      body = Data(#"{"error":"OpenTrawl does not have full access to Apple Photos."}"#.utf8)
+    default:
+      statusCode = 404
+      contentType = "application/json"
+      body = Data(#"{"error":"Apple Photos has no photo with this UUID"}"#.utf8)
+    }
     let response = HTTPURLResponse(
       url: url,
       statusCode: statusCode,
       httpVersion: nil,
-      headerFields: statusCode == 200 ? ["Content-Type": "image/jpeg"] : nil
+      headerFields: ["Content-Type": contentType]
     )!
     client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    if statusCode == 200 {
-      client?.urlProtocol(self, didLoad: Data([0xFF, 0xD8, 0xFF, 0xE0]))
-    }
+    client?.urlProtocol(self, didLoad: body)
     client?.urlProtocolDidFinishLoading(self)
   }
 

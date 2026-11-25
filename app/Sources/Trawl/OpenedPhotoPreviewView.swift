@@ -4,40 +4,74 @@ import TrawlClient
 
 /// Renders the real picture for an opened Photos record, either from the local
 /// picture cache or over authenticated HTTP (`GET /app/photo?link=...`) when
-/// viewing a remote archive, with zoom and Preview handoff and text-only fallback.
+/// viewing a remote archive, with zoom and Preview handoff and an honest
+/// inline failure banner when the photo cannot be loaded.
 struct OpenedPhotoPreviewView: View {
   let trawlLink: GloballyRoutableTrawlLink
   let localCachedPictureFilePath: String?
+  var pictureStatusFieldText: String?
   let isRemoteArchive: Bool
   let loadPhotoImageData: ((GloballyRoutableTrawlLink) async throws -> Data?)?
+  var onRetryLocalOpen: (() -> Void)?
 
   @State private var loadState: PhotoLoadState = .loading
   @State private var isShowingZoomSheet = false
+  @State private var retryAttempt: UInt64 = 0
+
+  private static let failedFetchPrefix = "Fetching the picture failed:"
+  private static let remoteEndpointPlaceholder = "Available via remote photo endpoint."
 
   private struct PhotoLoadIdentity: Hashable {
     let trawlLink: GloballyRoutableTrawlLink
     let localCachedPictureFilePath: String?
+    let pictureStatusFieldText: String?
     let isRemoteArchive: Bool
+    let retryAttempt: UInt64
   }
 
   private enum PhotoLoadState {
     case loading
     case loaded(NSImage, Data)
-    case unavailable
+    case unavailable(reason: String)
   }
 
   static func localCachedPictureFilePath(
     from fields: [TrawlerSpecificCommandDetailPresentationField]
   ) -> String? {
+    guard let text = pictureFieldText(from: fields), text.hasPrefix("/") else {
+      return nil
+    }
+    return text
+  }
+
+  static func pictureFieldText(
+    from fields: [TrawlerSpecificCommandDetailPresentationField]
+  ) -> String? {
     for field in fields where field.fieldDisplayName == "Picture" {
       if case .text(let value) = field.fieldValue {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("/") {
+        if !trimmed.isEmpty {
           return trimmed
         }
       }
     }
     return nil
+  }
+
+  static func unavailableReason(fromPictureFieldText rawText: String?) -> String? {
+    guard let trimmed = rawText?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty
+    else {
+      return nil
+    }
+    if trimmed.hasPrefix("/") || trimmed == remoteEndpointPlaceholder {
+      return nil
+    }
+    if trimmed.hasPrefix(failedFetchPrefix) {
+      let detail = trimmed.dropFirst(failedFetchPrefix.count).trimmingCharacters(
+        in: .whitespacesAndNewlines)
+      return detail.isEmpty ? "Fetching the picture failed." : detail
+    }
+    return trimmed
   }
 
   static func shouldHideRawPicturePathField(
@@ -121,26 +155,76 @@ struct OpenedPhotoPreviewView: View {
           )
         }
 
-      case .unavailable:
-        EmptyView()
+      case .unavailable(let reason):
+        HStack(alignment: .center, spacing: TrawlDesign.Space.md) {
+          Image(systemName: "photo.badge.exclamationmark")
+            .font(TrawlDesign.Typography.symbolEmphasis)
+            .foregroundStyle(TrawlDesign.Colors.warningAmberText)
+            .accessibilityHidden(true)
+
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Photo could not be loaded")
+              .font(TrawlDesign.Typography.bodyEmphasis)
+              .foregroundStyle(TrawlDesign.Colors.ink)
+            Text(reason)
+              .font(TrawlDesign.Typography.meta)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+              .textSelection(.enabled)
+          }
+
+          Spacer(minLength: TrawlDesign.Space.sm)
+
+          Button("Retry") {
+            retryLoadPicture()
+          }
+          .buttonStyle(.bordered)
+          .controlSize(.small)
+          .fixedSize()
+        }
+        .padding(.horizontal, TrawlDesign.Space.md)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+          TrawlDesign.Colors.surface.opacity(0.6),
+          in: TrawlDesign.Shape.surface
+        )
+        .overlay {
+          TrawlDesign.Shape.surface
+            .stroke(TrawlDesign.Colors.hairline, lineWidth: 1)
+        }
       }
     }
     .task(
       id: PhotoLoadIdentity(
         trawlLink: trawlLink,
         localCachedPictureFilePath: localCachedPictureFilePath,
-        isRemoteArchive: isRemoteArchive
+        pictureStatusFieldText: pictureStatusFieldText,
+        isRemoteArchive: isRemoteArchive,
+        retryAttempt: retryAttempt
       )
     ) {
       await loadPicture()
     }
   }
 
+  private func retryLoadPicture() {
+    if !isRemoteArchive, let onRetryLocalOpen {
+      loadState = .loading
+      onRetryLocalOpen()
+      return
+    }
+    retryAttempt &+= 1
+  }
+
   @MainActor
   private func loadPicture() async {
     if !isRemoteArchive {
       guard let localPath = localCachedPictureFilePath else {
-        loadState = .unavailable
+        let reason =
+          Self.unavailableReason(fromPictureFieldText: pictureStatusFieldText)
+          ?? "The photo is not available in the local picture cache."
+        loadState = .unavailable(reason: reason)
         return
       }
       loadState = .loading
@@ -152,13 +236,20 @@ struct OpenedPhotoPreviewView: View {
       if let data = loadedData, let image = NSImage(data: data) {
         loadState = .loaded(image, data)
       } else {
-        loadState = .unavailable
+        loadState = .unavailable(reason: "The cached photo file could not be opened.")
       }
       return
     }
 
+    if retryAttempt == 0,
+      let alreadyFailedReason = Self.unavailableReason(fromPictureFieldText: pictureStatusFieldText)
+    {
+      loadState = .unavailable(reason: alreadyFailedReason)
+      return
+    }
+
     guard let loadPhotoImageData else {
-      loadState = .unavailable
+      loadState = .unavailable(reason: "This connection cannot fetch remote photo images.")
       return
     }
     loadState = .loading
@@ -168,11 +259,18 @@ struct OpenedPhotoPreviewView: View {
       if let data, let image = NSImage(data: data) {
         loadState = .loaded(image, data)
       } else {
-        loadState = .unavailable
+        loadState = .unavailable(reason: "The remote archive returned an unreadable photo.")
       }
+    } catch is CancellationError {
+      return
+    } catch let error as TrawlClientError where error == .cancelled {
+      return
     } catch {
       guard !Task.isCancelled else { return }
-      loadState = .unavailable
+      let detail = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+      loadState = .unavailable(
+        reason: detail.isEmpty ? "The remote archive could not deliver this photo." : detail
+      )
     }
   }
 

@@ -543,6 +543,9 @@ func (c *McpCmd) runHTTP(r *Runtime) error {
 		return err
 	}
 
+	serverCtx, stopSignals := signal.NotifyContext(r.ctx, os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
 	httpServer := &http.Server{
 		Handler: &agentMCPHTTPHandler{
 			service:              service,
@@ -554,6 +557,12 @@ func (c *McpCmd) runHTTP(r *Runtime) error {
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	go func() {
+		<-serverCtx.Done()
+		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancelShutdown()
+		_ = httpServer.Shutdown(shutdownCtx)
+	}()
 	var serveErr error
 	if useTLS {
 		serveErr = httpServer.ServeTLS(listener, tlsCertPath, tlsKeyPath)
