@@ -6,18 +6,20 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/directmtproto"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	command "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/command"
 	"github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	"rsc.io/qr"
 )
 
 type telegramConnectFlags struct {
-	phone, code, password, phoneCodeHash string
-	qr                                   bool
+	phone, code, password, passwordFile, phoneCodeHash string
+	qr                                                 bool
 }
 
 func (c *Crawler) bindConnectFlags(flags *flag.FlagSet) {
@@ -25,8 +27,34 @@ func (c *Crawler) bindConnectFlags(flags *flag.FlagSet) {
 	flags.StringVar(&c.connect.phone, "phone", "", "Phone number in international format")
 	flags.StringVar(&c.connect.code, "code", "", "Code from Telegram")
 	flags.StringVar(&c.connect.password, "password", "", "Telegram two-step verification password")
+	flags.StringVar(&c.connect.passwordFile, "password-file", "", "Read the Telegram two-step verification password from `FILE`")
 	flags.StringVar(&c.connect.phoneCodeHash, "phone-code-hash", "", "Use this pending Telegram phone-code hash")
 	flags.BoolVar(&c.connect.qr, "qr", false, "Sign in with a Telegram QR code")
+}
+
+func resolveTelegramConnectPassword(flags telegramConnectFlags) (string, error) {
+	if flags.password != "" && flags.passwordFile != "" {
+		return "", render.OptionsCannotBeUsedTogether("password", "password-file")
+	}
+	if flags.passwordFile == "" {
+		return flags.password, nil
+	}
+	rawPassword, err := os.ReadFile(flags.passwordFile)
+	if err != nil {
+		return "", render.OptionFileCouldNotBeRead("password-file")
+	}
+	trimmedPassword := strings.TrimSpace(string(rawPassword))
+	if trimmedPassword == "" {
+		return "", render.OptionFileMustNotBeEmpty("password-file")
+	}
+	return trimmedPassword, nil
+}
+
+func mapTelegramConnectError(err error) error {
+	if passwordHint, required := directmtproto.TwoStepVerificationPasswordHint(err); required {
+		return render.AccountProviderTwoStepVerificationPasswordRequired("Telegram", passwordHint)
+	}
+	return err
 }
 
 func telegramSessionPath(req *trawlkit.TrawlerCommandExecutionRequest) string {
@@ -41,8 +69,12 @@ func (c *Crawler) connectTelegram(ctx context.Context, req *trawlkit.TrawlerComm
 	flags := c.connect
 	sessionPath := telegramSessionPath(req)
 	if _, err := os.Stat(sessionPath); err == nil {
-		return nil, errors.New("telegram is already connected")
+		return nil, render.TrawlerIsAlreadyConnected("Telegram")
 	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	password, err := resolveTelegramConnectPassword(flags)
+	if err != nil {
 		return nil, err
 	}
 	hashPath := sessionPath + ".phone-code-hash"
@@ -54,7 +86,7 @@ func (c *Crawler) connectTelegram(ctx context.Context, req *trawlkit.TrawlerComm
 		defer cancel()
 		qrPath := sessionPath + ".qr.png"
 		defer func() { _ = os.Remove(qrPath) }()
-		err := directmtproto.StartQRLogin(ctx, sessionPath, flags.password, c.directClientOptions(req), func(qrURL string) error {
+		err := directmtproto.StartQRLogin(ctx, sessionPath, password, c.directClientOptions(req), func(qrURL string) error {
 			if req.ReportTrawlerCommandProgress != nil {
 				req.ReportTrawlerCommandProgress(trawlkit.Progress{Phase: "connect", Message: "Run trawl telegram login-qr in another terminal to find the QR image"})
 			}
@@ -65,7 +97,7 @@ func (c *Crawler) connectTelegram(ctx context.Context, req *trawlkit.TrawlerComm
 			return os.WriteFile(qrPath, code.PNG(), 0o600)
 		})
 		if err != nil {
-			return nil, err
+			return nil, mapTelegramConnectError(err)
 		}
 	} else {
 		if flags.phone == "" || flags.phone[0] != '+' {
@@ -74,7 +106,7 @@ func (c *Crawler) connectTelegram(ctx context.Context, req *trawlkit.TrawlerComm
 		if flags.code == "" {
 			hash, err := directmtproto.StartPhoneLogin(ctx, sessionPath, flags.phone, c.directClientOptions(req))
 			if err != nil {
-				return nil, err
+				return nil, mapTelegramConnectError(err)
 			}
 			if hash != "" {
 				if err := os.WriteFile(hashPath, []byte(hash), 0o600); err != nil {
@@ -90,8 +122,8 @@ func (c *Crawler) connectTelegram(ctx context.Context, req *trawlkit.TrawlerComm
 				}
 				flags.phoneCodeHash = string(hash)
 			}
-			if err := directmtproto.CompletePhoneLogin(ctx, sessionPath, flags.phone, flags.phoneCodeHash, flags.code, flags.password, c.directClientOptions(req)); err != nil {
-				return nil, err
+			if err := directmtproto.CompletePhoneLogin(ctx, sessionPath, flags.phone, flags.phoneCodeHash, flags.code, password, c.directClientOptions(req)); err != nil {
+				return nil, mapTelegramConnectError(err)
 			}
 		}
 	}
@@ -140,11 +172,12 @@ func telegramConnectionChange(kind command.AccountConnectionChangeKind) *command
 	return &command.TrawlerCommandResponse{
 		TypedTrawlerCommandResponse: &command.TrawlerCommandResponse_AccountConnectionChangeResponse{
 			AccountConnectionChangeResponse: &command.AccountConnectionChangeResponse{
-				AccountConnectionChangeKind: kind,
-				TrawlerCommandName:          appID,
-				TrawlerDisplayName:          "Telegram",
-				AccountProviderDisplayName:  "Telegram",
-				LocalArchiveKeptOnMac:       kind == command.AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED,
+				AccountConnectionChangeKind:     kind,
+				TrawlerCommandName:              appID,
+				TrawlerDisplayName:              "Telegram",
+				AccountProviderDisplayName:      "Telegram",
+				LocalArchiveKeptOnMac:           kind == command.AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED,
+				ConnectCommandRequiresArguments: true,
 			},
 		},
 	}

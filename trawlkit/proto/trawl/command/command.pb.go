@@ -164,15 +164,16 @@ func (*TrawlerSpecificCommandResponse_TrawlerSpecificCommandDetailPresentation) 
 }
 
 type AccountConnectionChangeResponse struct {
-	state                       protoimpl.MessageState      `protogen:"open.v1"`
-	AccountConnectionChangeKind AccountConnectionChangeKind `protobuf:"varint,1,opt,name=account_connection_change_kind,json=accountConnectionChangeKind,proto3,enum=trawl.command.AccountConnectionChangeKind" json:"account_connection_change_kind,omitempty"`
-	TrawlerCommandName          string                      `protobuf:"bytes,2,opt,name=trawler_command_name,json=trawlerCommandName,proto3" json:"trawler_command_name,omitempty"`
-	TrawlerDisplayName          string                      `protobuf:"bytes,3,opt,name=trawler_display_name,json=trawlerDisplayName,proto3" json:"trawler_display_name,omitempty"`
-	AccountProviderDisplayName  string                      `protobuf:"bytes,4,opt,name=account_provider_display_name,json=accountProviderDisplayName,proto3" json:"account_provider_display_name,omitempty"`
-	ConnectedAccountIdentifier  string                      `protobuf:"bytes,5,opt,name=connected_account_identifier,json=connectedAccountIdentifier,proto3" json:"connected_account_identifier,omitempty"`
-	LocalArchiveKeptOnMac       bool                        `protobuf:"varint,6,opt,name=local_archive_kept_on_mac,json=localArchiveKeptOnMac,proto3" json:"local_archive_kept_on_mac,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	state                           protoimpl.MessageState      `protogen:"open.v1"`
+	AccountConnectionChangeKind     AccountConnectionChangeKind `protobuf:"varint,1,opt,name=account_connection_change_kind,json=accountConnectionChangeKind,proto3,enum=trawl.command.AccountConnectionChangeKind" json:"account_connection_change_kind,omitempty"`
+	TrawlerCommandName              string                      `protobuf:"bytes,2,opt,name=trawler_command_name,json=trawlerCommandName,proto3" json:"trawler_command_name,omitempty"`
+	TrawlerDisplayName              string                      `protobuf:"bytes,3,opt,name=trawler_display_name,json=trawlerDisplayName,proto3" json:"trawler_display_name,omitempty"`
+	AccountProviderDisplayName      string                      `protobuf:"bytes,4,opt,name=account_provider_display_name,json=accountProviderDisplayName,proto3" json:"account_provider_display_name,omitempty"`
+	ConnectedAccountIdentifier      string                      `protobuf:"bytes,5,opt,name=connected_account_identifier,json=connectedAccountIdentifier,proto3" json:"connected_account_identifier,omitempty"`
+	LocalArchiveKeptOnMac           bool                        `protobuf:"varint,6,opt,name=local_archive_kept_on_mac,json=localArchiveKeptOnMac,proto3" json:"local_archive_kept_on_mac,omitempty"`
+	ConnectCommandRequiresArguments bool                        `protobuf:"varint,7,opt,name=connect_command_requires_arguments,json=connectCommandRequiresArguments,proto3" json:"connect_command_requires_arguments,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *AccountConnectionChangeResponse) Reset() {
@@ -243,6 +244,13 @@ func (x *AccountConnectionChangeResponse) GetConnectedAccountIdentifier() string
 func (x *AccountConnectionChangeResponse) GetLocalArchiveKeptOnMac() bool {
 	if x != nil {
 		return x.LocalArchiveKeptOnMac
+	}
+	return false
+}
+
+func (x *AccountConnectionChangeResponse) GetConnectCommandRequiresArguments() bool {
+	if x != nil {
+		return x.ConnectCommandRequiresArguments
 	}
 	return false
 }
@@ -559,14 +567,15 @@ const file_trawl_command_command_proto_rawDesc = "" +
 	"\x1eTrawlerSpecificCommandResponse\x12\x98\x01\n" +
 	"*trawler_specific_command_list_presentation\x18\x01 \x01(\v2:.trawl.presentation.TrawlerSpecificCommandListPresentationH\x00R&trawlerSpecificCommandListPresentation\x12\x9e\x01\n" +
 	",trawler_specific_command_detail_presentation\x18\x02 \x01(\v2<.trawl.presentation.TrawlerSpecificCommandDetailPresentationH\x00R(trawlerSpecificCommandDetailPresentationB'\n" +
-	"%trawler_specific_command_presentation\"\xb5\x03\n" +
+	"%trawler_specific_command_presentation\"\x82\x04\n" +
 	"\x1fAccountConnectionChangeResponse\x12o\n" +
 	"\x1eaccount_connection_change_kind\x18\x01 \x01(\x0e2*.trawl.command.AccountConnectionChangeKindR\x1baccountConnectionChangeKind\x120\n" +
 	"\x14trawler_command_name\x18\x02 \x01(\tR\x12trawlerCommandName\x120\n" +
 	"\x14trawler_display_name\x18\x03 \x01(\tR\x12trawlerDisplayName\x12A\n" +
 	"\x1daccount_provider_display_name\x18\x04 \x01(\tR\x1aaccountProviderDisplayName\x12@\n" +
 	"\x1cconnected_account_identifier\x18\x05 \x01(\tR\x1aconnectedAccountIdentifier\x128\n" +
-	"\x19local_archive_kept_on_mac\x18\x06 \x01(\bR\x15localArchiveKeptOnMac\"\x9e\f\n" +
+	"\x19local_archive_kept_on_mac\x18\x06 \x01(\bR\x15localArchiveKeptOnMac\x12K\n" +
+	"\"connect_command_requires_arguments\x18\a \x01(\bR\x1fconnectCommandRequiresArguments\"\x9e\f\n" +
 	"\x16TrawlerCommandResponse\x12X\n" +
 	"\x15message_list_response\x18\x01 \x01(\v2\".trawl.message.MessageListResponseH\x00R\x13messageListResponse\x12l\n" +
 	"\x1aconversation_list_response\x18\x02 \x01(\v2,.trawl.conversation.ConversationListResponseH\x00R\x18conversationListResponse\x12T\n" +

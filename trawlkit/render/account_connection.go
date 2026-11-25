@@ -54,6 +54,9 @@ func nextCommandForAccountConnectionChange(response *command.AccountConnectionCh
 	case command.AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_CONNECTED:
 		return nextCommandWithLabel(nextCommandLabelUpdateArchive, "update", trawlerCommandName)
 	case command.AccountConnectionChangeKind_ACCOUNT_CONNECTION_CHANGE_KIND_DISCONNECTED:
+		if response.GetConnectCommandRequiresArguments() {
+			return nextCommandWithLabel(nextCommandLabelHelp, trawlerCommandName, "connect", "--help")
+		}
 		return nextCommandWithLabel(nextCommandLabelConnectAccount, trawlerCommandName, "connect")
 	default:
 		return NextCommand{}
@@ -74,6 +77,18 @@ func AccountProviderSignInWasCancelled(accountProviderDisplayName string) Comman
 
 func AccountProviderSignInTimedOut(accountProviderDisplayName string) CommandFailure {
 	return archiveOrOperationFailed(accountProviderDisplayName + " sign-in timed out.")
+}
+
+func AccountProviderTwoStepVerificationPasswordRequired(
+	accountProviderDisplayName string,
+	passwordHint string,
+) CommandFailure {
+	sentence := accountProviderDisplayName + " Two-Step Verification is enabled on this account."
+	if trimmedHint := strings.TrimSpace(passwordHint); trimmedHint != "" {
+		sentence += " Password hint: " + quotedForSentence(trimmedHint) + "."
+	}
+	sentence += " Re-run connect with --password-file FILE (or --password) to finish signing in."
+	return archiveOrOperationFailed(sentence)
 }
 
 func AccountProviderDidNotGrantTrawlerAccess(accountProviderDisplayName string, trawlerDisplayName string) CommandFailure {

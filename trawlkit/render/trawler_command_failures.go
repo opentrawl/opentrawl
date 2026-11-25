@@ -50,6 +50,14 @@ func OptionMustNotBeNegative(optionName string) CommandFailure {
 	return commandIsWrong(optionForSentence(optionName) + " must not be negative.")
 }
 
+func OptionFileCouldNotBeRead(optionName string) CommandFailure {
+	return commandIsWrong("Could not read the file passed to " + optionForSentence(optionName) + ".")
+}
+
+func OptionFileMustNotBeEmpty(optionName string) CommandFailure {
+	return commandIsWrong("The file passed to " + optionForSentence(optionName) + " must not be empty.")
+}
+
 func DescriptionMustNotBeEmpty() CommandFailure {
 	return commandIsWrong("The description must not be empty.")
 }

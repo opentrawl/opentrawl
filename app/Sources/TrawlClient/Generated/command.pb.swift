@@ -109,6 +109,8 @@ public nonisolated struct Trawl_Command_AccountConnectionChangeResponse: Sendabl
 
   public var localArchiveKeptOnMac: Bool = false
 
+  public var connectCommandRequiresArguments: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -342,7 +344,7 @@ nonisolated extension Trawl_Command_TrawlerSpecificCommandResponse: SwiftProtobu
 
 nonisolated extension Trawl_Command_AccountConnectionChangeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AccountConnectionChangeResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_connection_change_kind\0\u{3}trawler_command_name\0\u{3}trawler_display_name\0\u{3}account_provider_display_name\0\u{3}connected_account_identifier\0\u{3}local_archive_kept_on_mac\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}account_connection_change_kind\0\u{3}trawler_command_name\0\u{3}trawler_display_name\0\u{3}account_provider_display_name\0\u{3}connected_account_identifier\0\u{3}local_archive_kept_on_mac\0\u{3}connect_command_requires_arguments\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -356,6 +358,7 @@ nonisolated extension Trawl_Command_AccountConnectionChangeResponse: SwiftProtob
       case 4: try { try decoder.decodeSingularStringField(value: &self.accountProviderDisplayName) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.connectedAccountIdentifier) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.localArchiveKeptOnMac) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.connectCommandRequiresArguments) }()
       default: break
       }
     }
@@ -380,6 +383,9 @@ nonisolated extension Trawl_Command_AccountConnectionChangeResponse: SwiftProtob
     if self.localArchiveKeptOnMac != false {
       try visitor.visitSingularBoolField(value: self.localArchiveKeptOnMac, fieldNumber: 6)
     }
+    if self.connectCommandRequiresArguments != false {
+      try visitor.visitSingularBoolField(value: self.connectCommandRequiresArguments, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -390,6 +396,7 @@ nonisolated extension Trawl_Command_AccountConnectionChangeResponse: SwiftProtob
     if lhs.accountProviderDisplayName != rhs.accountProviderDisplayName {return false}
     if lhs.connectedAccountIdentifier != rhs.connectedAccountIdentifier {return false}
     if lhs.localArchiveKeptOnMac != rhs.localArchiveKeptOnMac {return false}
+    if lhs.connectCommandRequiresArguments != rhs.connectCommandRequiresArguments {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

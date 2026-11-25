@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -22,6 +23,46 @@ import (
 )
 
 const SessionFilename = "mtproto-session.json"
+
+// TwoStepVerificationPasswordRequiredError reports that Telegram requires the
+// account's Two-Step Verification password to finish signing in.
+type TwoStepVerificationPasswordRequiredError struct {
+	PasswordHint string
+}
+
+func (err *TwoStepVerificationPasswordRequiredError) Error() string {
+	if err.PasswordHint != "" {
+		return "Telegram Two-Step Verification password required (hint: " + err.PasswordHint + ")"
+	}
+	return "Telegram Two-Step Verification password required"
+}
+
+// TwoStepVerificationPasswordHint reports whether err means Telegram requires
+// a Two-Step Verification password and returns any hint Telegram supplied.
+func TwoStepVerificationPasswordHint(err error) (string, bool) {
+	var required *TwoStepVerificationPasswordRequiredError
+	if errors.As(err, &required) {
+		return required.PasswordHint, true
+	}
+	if isSessionPasswordNeededError(err) {
+		return "", true
+	}
+	return "", false
+}
+
+func isSessionPasswordNeededError(err error) bool {
+	return errors.Is(err, auth.ErrPasswordAuthNeeded) || tgerr.Is(err, "SESSION_PASSWORD_NEEDED")
+}
+
+func passwordRequiredError(ctx context.Context, client *telegram.Client) error {
+	var passwordHint string
+	if accountPassword, err := client.API().AccountGetPassword(ctx); err == nil && accountPassword != nil {
+		if hint, ok := accountPassword.GetHint(); ok {
+			passwordHint = strings.TrimSpace(hint)
+		}
+	}
+	return &TwoStepVerificationPasswordRequiredError{PasswordHint: passwordHint}
+}
 
 type ClientOptions struct {
 	APIID      int
@@ -174,7 +215,10 @@ func CompletePhoneLogin(ctx context.Context, sessionPath, phone, phoneCodeHash, 
 	}
 	err = runTelegramSession(ctx, client, func(ctx context.Context) error {
 		_, err := client.Auth().SignIn(ctx, phone, code, phoneCodeHash)
-		if errors.Is(err, auth.ErrPasswordAuthNeeded) && password2FA != "" {
+		if isSessionPasswordNeededError(err) {
+			if password2FA == "" {
+				return passwordRequiredError(ctx, client)
+			}
 			_, err = client.Auth().Password(ctx, password2FA)
 		}
 		if err != nil {
@@ -201,7 +245,10 @@ func StartQRLogin(ctx context.Context, sessionPath, password2FA string, options 
 		_, err := client.QR().Auth(ctx, loggedIn, func(_ context.Context, token qrlogin.Token) error {
 			return show(token.URL())
 		})
-		if tgerr.Is(err, "SESSION_PASSWORD_NEEDED") && password2FA != "" {
+		if isSessionPasswordNeededError(err) {
+			if password2FA == "" {
+				return passwordRequiredError(ctx, client)
+			}
 			_, err = client.Auth().Password(ctx, password2FA)
 		}
 		if err != nil {

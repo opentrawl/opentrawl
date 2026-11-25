@@ -14,8 +14,9 @@ desktop app nor Full Disk Access.
 
 Run `trawl telegram connect --phone` with your number in international format.
 Run it again with the same number and `--code` after Telegram sends a code. Add
-`--password` if your account uses two-step verification. The command saves
-Telegram's pending code hash locally between steps.
+`--password-file FILE` (or `--password`) if your account uses two-step
+verification. The command saves Telegram's pending code hash locally between
+steps.
 
 For QR sign-in, run `trawl telegram connect --qr`, then run
 `trawl telegram login-qr` in another terminal. Open the indicated image and

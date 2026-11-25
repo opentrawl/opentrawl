@@ -34,6 +34,7 @@ message AccountConnectionChangeResponse {
   string account_provider_display_name = 4;
   string connected_account_identifier = 5;
   bool local_archive_kept_on_mac = 6;
+  bool connect_command_requires_arguments = 7;
 }
 
 message TrawlerCommandResponse {
