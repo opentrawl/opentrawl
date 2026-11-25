@@ -18,7 +18,7 @@ type TokenCmd struct {
 type TokenCreateCmd struct {
 	Agent   string `arg:"" name:"agent" help:"Name of the agent that will use the token"`
 	Sources string `name:"sources" default:"all" placeholder:"TRAWLERS" help:"Sources the token may read, separated by commas, or all"`
-	Relay   bool   `name:"relay" help:"Allow this manual token on the public --relay HTTPS endpoint (default: local and Tailscale only)"`
+	Relay   bool   `name:"relay" hidden:"" help:"Allow this manual token on the public --relay HTTPS endpoint (default: local and Tailscale only)"`
 }
 
 type TokenListCmd struct{}

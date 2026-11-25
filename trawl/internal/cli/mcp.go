@@ -29,11 +29,11 @@ type McpCmd struct {
 	Listen        string        `name:"listen" default:"127.0.0.1:7391" placeholder:"HOST:PORT" help:"Loopback or Tailscale IP address to listen on with --http"`
 	TLSCert       string        `name:"tls-cert" placeholder:"FILE" help:"PEM TLS certificate file for HTTPS with --http (pair with --tls-key)"`
 	TLSKey        string        `name:"tls-key" placeholder:"FILE" help:"PEM TLS private key file for HTTPS with --http (pair with --tls-cert)"`
-	Relay         bool          `name:"relay" help:"Expose HTTPS MCP over OpenTrawl's blind SNI-passthrough relay with Mac-side TLS and OAuth 2.1"`
-	Pair          bool          `name:"pair" help:"Open a one-time OAuth pairing window on startup and print the pairing code"`
-	PairWindow    time.Duration `name:"pair-window" default:"5m" help:"How long the one-time OAuth pairing window stays open"`
-	RelayServer   string        `name:"relay-server" default:"relay.mcp.opentrawl.sh:7000" placeholder:"HOST:PORT" help:"Relay frps control address for --relay"`
-	RelayDomain   string        `name:"relay-domain" default:"mcp.opentrawl.sh" placeholder:"DOMAIN" help:"Base relay domain for --relay"`
+	Relay         bool          `name:"relay" hidden:"" help:"Expose HTTPS MCP over OpenTrawl's blind SNI-passthrough relay with Mac-side TLS and OAuth 2.1"`
+	Pair          bool          `name:"pair" hidden:"" help:"Open a one-time OAuth pairing window on startup and print the pairing code"`
+	PairWindow    time.Duration `name:"pair-window" hidden:"" default:"5m" help:"How long the one-time OAuth pairing window stays open"`
+	RelayServer   string        `name:"relay-server" hidden:"" default:"relay.mcp.opentrawl.sh:7000" placeholder:"HOST:PORT" help:"Relay frps control address for --relay"`
+	RelayDomain   string        `name:"relay-domain" hidden:"" default:"mcp.opentrawl.sh" placeholder:"DOMAIN" help:"Base relay domain for --relay"`
 	RelayCAFile   string        `name:"relay-ca-file" hidden:"" help:"PEM CA bundle for verifying the relay control server certificate"`
 	ACMECA        string        `name:"acme-ca" hidden:"" help:"Override ACME directory URL for testing --relay"`
 	ACMECARoots   string        `name:"acme-ca-roots" hidden:"" help:"PEM root CA bundle for --acme-ca"`
@@ -604,7 +604,7 @@ func validatePlainHTTPListenAddress(listenAddress string, activeTailscaleIPv4 st
 	if activeTailscaleIPv4 != "" && trimmed == activeTailscaleIPv4 {
 		return nil
 	}
-	return errors.New("refusing to serve unencrypted HTTP on " + listenAddress + "; pass --tailscale to bind only to your Tailscale WireGuard IP, listen on 127.0.0.1, pass --tls-cert and --tls-key, or use --relay")
+	return errors.New("refusing to serve unencrypted HTTP on " + listenAddress + "; pass --tailscale to bind only to your Tailscale WireGuard IP, listen on 127.0.0.1, or pass --tls-cert and --tls-key")
 }
 
 type agentMCPHTTPHandler struct {
