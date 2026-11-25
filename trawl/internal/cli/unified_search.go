@@ -142,10 +142,16 @@ func (r *Runtime) runUnifiedAndFederatedSearch(
 	resolvedPersonDisplayName string,
 	resolvedPersonFacts []*person.PersonMatchFactsFromTrawler,
 ) *federationcontract.FederatedTrawlerSearchOperation {
+	serving, isAgentRequest := agentServingContextFrom(ctx)
+	bypassUnifiedIndexForContacts := isAgentRequest && !serving.agentSourceScope.allSourcesAllowed
 	var exporterTrawlers []InstalledTrawler
 	var fallbackTrawlers []InstalledTrawler
 	for _, t := range selectedTrawlers {
-		if trawlerExportsArchiveIndexChanges(t) {
+		useUnifiedIndex := trawlerExportsArchiveIndexChanges(t)
+		if bypassUnifiedIndexForContacts && installedTrawlerIdentityText(t) == "contacts" {
+			useUnifiedIndex = false
+		}
+		if useUnifiedIndex {
 			exporterTrawlers = append(exporterTrawlers, t)
 		} else {
 			fallbackTrawlers = append(fallbackTrawlers, t)

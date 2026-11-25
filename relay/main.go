@@ -30,11 +30,16 @@ import (
 )
 
 const (
-	relayDomainHashContext = "opentrawl-mcp-domain-v1|"
-	relayLoginSignContext  = "opentrawl-relay-login-v1|"
-	relayLoginSkewSeconds  = 60
-	relayACMEContactEmail  = "tls@opentrawl.sh"
-	relayProxyNamePrefix   = "opentrawl-"
+	relayDomainHashContext         = "opentrawl-mcp-domain-v1|"
+	relayLoginSignContext          = "opentrawl-relay-login-v1|"
+	relayLoginSkewSeconds          = 60
+	relayACMEContactEmail          = "tls@opentrawl.sh"
+	relayProxyNamePrefix           = "opentrawl-"
+	relayMaxConcurrentSNIConns     = 512
+	relayMaxConcurrentControlConns = 256
+	relaySpliceIdleTimeout         = 5 * time.Minute
+	relayTCPKeepAlivePeriod        = 30 * time.Second
+	relayAcceptTransientBackoff    = 50 * time.Millisecond
 )
 
 type relayPluginRequestEnvelope struct {
@@ -44,25 +49,27 @@ type relayPluginRequestEnvelope struct {
 }
 
 type relayAdmissionConfig struct {
-	domainSuffix      string
-	inlineAllowedKeys map[string]struct{}
-	allowedKeysFile   string
-	bandwidthLimit    string
+	domainSuffix                string
+	inlineAllowedKeys           map[string]struct{}
+	allowedKeysFile             string
+	allowUnrestrictedEnrollment bool
+	bandwidthLimit              string
 }
 
 type relayServerOptions struct {
-	bindAddr               string
-	bindPort               int
-	httpsPort              int
-	baseDomain             string
-	controlDomain          string
-	tlsStateDir            string
-	tlsCertFile            string
-	tlsKeyFile             string
-	allowedPubKeysCSV      string
-	allowedPubKeysFile     string
-	bandwidthLimit         string
-	allowInsecureControlTL bool
+	bindAddr                    string
+	bindPort                    int
+	httpsPort                   int
+	baseDomain                  string
+	controlDomain               string
+	tlsStateDir                 string
+	tlsCertFile                 string
+	tlsKeyFile                  string
+	allowedPubKeysCSV           string
+	allowedPubKeysFile          string
+	allowUnrestrictedEnrollment bool
+	bandwidthLimit              string
+	allowInsecureControlTL      bool
 }
 
 func deriveDeviceSubdomain(publicKey ed25519.PublicKey) string {
@@ -87,7 +94,7 @@ func parseAllowedPubKeysCSV(raw string) map[string]struct{} {
 func (cfg relayAdmissionConfig) isPubKeyAllowed(pubHexLower string) (bool, error) {
 	hasGate := len(cfg.inlineAllowedKeys) > 0 || strings.TrimSpace(cfg.allowedKeysFile) != ""
 	if !hasGate {
-		return true, nil
+		return cfg.allowUnrestrictedEnrollment, nil
 	}
 	if _, ok := cfg.inlineAllowedKeys[pubHexLower]; ok {
 		return true, nil
@@ -268,25 +275,54 @@ func peekTLSClientHelloSNI(conn net.Conn, timeout time.Duration) (string, net.Co
 	}
 }
 
+func configureRelayTCPKeepAlive(conn net.Conn) {
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.SetKeepAlive(true)
+		_ = tcp.SetKeepAlivePeriod(relayTCPKeepAlivePeriod)
+	}
+}
+
+func copyWithIdleDeadline(dst net.Conn, src net.Conn, idleTimeout time.Duration) {
+	buf := make([]byte, 32<<10)
+	for {
+		_ = src.SetReadDeadline(time.Now().Add(idleTimeout))
+		n, readErr := src.Read(buf)
+		if n > 0 {
+			_ = dst.SetWriteDeadline(time.Now().Add(idleTimeout))
+			if _, writeErr := dst.Write(buf[:n]); writeErr != nil {
+				return
+			}
+		}
+		if readErr != nil {
+			return
+		}
+	}
+}
+
 func spliceTCPConnections(clientConn net.Conn, targetAddr string) {
 	defer func() { _ = clientConn.Close() }()
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	configureRelayTCPKeepAlive(clientConn)
+	dialer := &net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: relayTCPKeepAlivePeriod,
+	}
 	backendConn, err := dialer.Dial("tcp", targetAddr)
 	if err != nil {
 		return
 	}
 	defer func() { _ = backendConn.Close() }()
+	configureRelayTCPKeepAlive(backendConn)
 
 	done := make(chan struct{}, 2)
 	go func() {
-		_, _ = io.Copy(backendConn, clientConn)
+		copyWithIdleDeadline(backendConn, clientConn, relaySpliceIdleTimeout)
 		if tcp, ok := backendConn.(*net.TCPConn); ok {
 			_ = tcp.CloseWrite()
 		}
 		done <- struct{}{}
 	}()
 	go func() {
-		_, _ = io.Copy(clientConn, backendConn)
+		copyWithIdleDeadline(clientConn, backendConn, relaySpliceIdleTimeout)
 		if closer, ok := clientConn.(interface{ CloseWrite() error }); ok {
 			_ = closer.CloseWrite()
 		}
@@ -308,6 +344,7 @@ func startSNIPassthroughMux(
 		return nil, err
 	}
 	normalizedControlDomain := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(controlDomain)), ".")
+	slots := make(chan struct{}, relayMaxConcurrentSNIConns)
 	go func() {
 		<-ctx.Done()
 		_ = listener.Close()
@@ -316,9 +353,24 @@ func startSNIPassthroughMux(
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				return
+				if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
+					return
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(relayAcceptTransientBackoff):
+				}
+				continue
+			}
+			select {
+			case slots <- struct{}{}:
+			default:
+				_ = conn.Close()
+				continue
 			}
 			go func(c net.Conn) {
+				defer func() { <-slots }()
 				sni, replayed := peekTLSClientHelloSNI(c, 5*time.Second)
 				target := frpsHTTPSAddr
 				if normalizedControlDomain != "" && sni == normalizedControlDomain && controlACMEAddr != "" {
@@ -342,6 +394,7 @@ func startTLSControlPlaneForwarder(
 		return nil, err
 	}
 	tlsListener := tls.NewListener(rawListener, tlsConfig)
+	slots := make(chan struct{}, relayMaxConcurrentControlConns)
 	go func() {
 		<-ctx.Done()
 		_ = tlsListener.Close()
@@ -350,9 +403,26 @@ func startTLSControlPlaneForwarder(
 		for {
 			conn, err := tlsListener.Accept()
 			if err != nil {
-				return
+				if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
+					return
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(relayAcceptTransientBackoff):
+				}
+				continue
 			}
-			go spliceTCPConnections(conn, frpsBindAddr)
+			select {
+			case slots <- struct{}{}:
+			default:
+				_ = conn.Close()
+				continue
+			}
+			go func(c net.Conn) {
+				defer func() { <-slots }()
+				spliceTCPConnections(c, frpsBindAddr)
+			}(conn)
 		}
 	}()
 	return func() { _ = tlsListener.Close() }, nil
@@ -360,11 +430,23 @@ func startTLSControlPlaneForwarder(
 
 func runRelayServer(ctx context.Context, opts relayServerOptions) error {
 	domainSuffix := "." + strings.TrimPrefix(strings.TrimSpace(opts.baseDomain), ".")
+	inlineKeys := parseAllowedPubKeysCSV(opts.allowedPubKeysCSV)
+	keysFile := strings.TrimSpace(opts.allowedPubKeysFile)
+	if len(inlineKeys) == 0 && keysFile == "" && !opts.allowUnrestrictedEnrollment {
+		return errors.New("enrollment gate required: pass --allowed-pubkeys or --allowed-pubkeys-file, or explicitly pass --allow-unrestricted-enrollment")
+	}
+	if keysFile != "" {
+		// #nosec G304 -- path comes from explicit operator CLI flag --allowed-pubkeys-file.
+		if _, err := os.ReadFile(keysFile); err != nil {
+			return errors.New("cannot read --allowed-pubkeys-file: " + err.Error())
+		}
+	}
 	admission := relayAdmissionConfig{
-		domainSuffix:      domainSuffix,
-		inlineAllowedKeys: parseAllowedPubKeysCSV(opts.allowedPubKeysCSV),
-		allowedKeysFile:   strings.TrimSpace(opts.allowedPubKeysFile),
-		bandwidthLimit:    strings.TrimSpace(opts.bandwidthLimit),
+		domainSuffix:                domainSuffix,
+		inlineAllowedKeys:           inlineKeys,
+		allowedKeysFile:             keysFile,
+		allowUnrestrictedEnrollment: opts.allowUnrestrictedEnrollment,
+		bandwidthLimit:              strings.TrimSpace(opts.bandwidthLimit),
 	}
 	pluginAddr, stopPlugin, err := startStatelessEd25519AuthPlugin(admission)
 	if err != nil {
@@ -545,8 +627,9 @@ func main() {
 	flag.StringVar(&opts.tlsStateDir, "tls-state-dir", "./relay-tls", "CertMagic storage directory for control-plane TLS")
 	flag.StringVar(&opts.tlsCertFile, "tls-cert", "", "Explicit PEM certificate for control-plane TLS (pair with --tls-key)")
 	flag.StringVar(&opts.tlsKeyFile, "tls-key", "", "Explicit PEM private key for control-plane TLS (pair with --tls-cert)")
-	flag.StringVar(&opts.allowedPubKeysCSV, "allowed-pubkeys", "", "Optional comma-separated 64-hex Ed25519 pubkeys permitted to connect")
-	flag.StringVar(&opts.allowedPubKeysFile, "allowed-pubkeys-file", "", "Optional file of enrolled 64-hex Ed25519 pubkeys (reloaded per login)")
+	flag.StringVar(&opts.allowedPubKeysCSV, "allowed-pubkeys", "", "Comma-separated 64-hex Ed25519 pubkeys permitted to connect")
+	flag.StringVar(&opts.allowedPubKeysFile, "allowed-pubkeys-file", "", "File of enrolled 64-hex Ed25519 pubkeys (reloaded per login)")
+	flag.BoolVar(&opts.allowUnrestrictedEnrollment, "allow-unrestricted-enrollment", false, "Allow any Ed25519 key to enroll without an allowlist (unsafe for public relays)")
 	flag.StringVar(&opts.bandwidthLimit, "bandwidth-limit", "10MB", "Per-proxy bandwidth limit enforced server-side")
 	flag.BoolVar(&opts.allowInsecureControlTL, "allow-insecure-control-tls", false, "Disable mandatory TLS on control plane (local testing only)")
 	flag.Parse()

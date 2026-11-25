@@ -20,45 +20,59 @@ const (
 	mcpPhotoTargetMaxByteCount     = 350 * 1024
 	mcpPhotoHardMaxByteCount       = 400 * 1024
 	mcpPhotoMaximumSourceFileBytes = 32 << 20
+	mcpPhotoMaximumDecodedPixels   = 64_000_000
 	mcpPhotoDefaultJPEGQuality     = 80
-	mcpPhotoCompactJPEGQuality     = 68
+	mcpPhotoCompactJPEGQuality     = 65
+	mcpPhotoMinimumJPEGQuality     = 45
 )
 
-// verifiedCachedPhotoFilePath resolves cachedPhotoPath and confirms it is a
-// regular JPEG file directly inside <stateRoot>/photos/picture-cache.
-func verifiedCachedPhotoFilePath(stateRoot string, cachedPhotoPath string) (string, bool) {
+// openVerifiedCachedPhoto opens cachedPhotoPath using os.OpenRoot confined to
+// <stateRoot>/photos/picture-cache so symlinks or directory traversal cannot
+// escape the picture cache between verification and open.
+func openVerifiedCachedPhoto(stateRoot string, cachedPhotoPath string) (*os.File, os.FileInfo, error) {
 	trimmedPath := strings.TrimSpace(cachedPhotoPath)
 	if trimmedPath == "" || strings.TrimSpace(stateRoot) == "" {
-		return "", false
+		return nil, nil, errors.New("cached photo path is empty")
 	}
 	expectedCacheDir := filepath.Join(stateRoot, "photos", "picture-cache")
 	resolvedCacheDir, err := filepath.EvalSymlinks(expectedCacheDir)
 	if err != nil {
-		return "", false
+		return nil, nil, err
 	}
 	resolvedPhotoPath, err := filepath.EvalSymlinks(trimmedPath)
 	if err != nil {
-		return "", false
+		return nil, nil, err
 	}
 	if filepath.Dir(resolvedPhotoPath) != resolvedCacheDir {
-		return "", false
+		return nil, nil, errors.New("cached photo path is outside picture-cache")
 	}
-	if !strings.EqualFold(filepath.Ext(resolvedPhotoPath), ".jpg") {
-		return "", false
+	fileName := filepath.Base(resolvedPhotoPath)
+	if !strings.EqualFold(filepath.Ext(fileName), ".jpg") || strings.ContainsAny(fileName, `/\`) {
+		return nil, nil, errors.New("cached photo filename is not a JPEG")
 	}
-	info, err := os.Stat(resolvedPhotoPath)
-	if err != nil || !info.Mode().IsRegular() {
-		return "", false
+	cacheRoot, err := os.OpenRoot(resolvedCacheDir)
+	if err != nil {
+		return nil, nil, err
 	}
-	return resolvedPhotoPath, true
+	defer func() { _ = cacheRoot.Close() }()
+
+	file, err := cacheRoot.Open(fileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > mcpPhotoMaximumSourceFileBytes {
+		_ = file.Close()
+		return nil, nil, errors.New("cached photo file is unavailable or out of bounds")
+	}
+	return file, info, nil
 }
 
-// encodePhotoForMCPImageBlock reads a verified cached JPEG, downscales it to at
-// most 1024px on the longest edge so base64 payloads stay fast and within MCP
-// client limits, and returns base64-encoded JPEG bytes.
-func encodePhotoForMCPImageBlock(verifiedPhotoFilePath string) (string, error) {
-	// #nosec G304 -- path is already confined to <stateRoot>/photos/picture-cache/*.jpg by verifiedCachedPhotoFilePath.
-	file, err := os.Open(verifiedPhotoFilePath)
+// encodePhotoForMCPImageBlock reads a verified cached JPEG, validates image
+// header dimensions before full decode, downscales it so the resulting JPEG is
+// strictly within mcpPhotoHardMaxByteCount, and returns base64-encoded bytes.
+func encodePhotoForMCPImageBlock(stateRoot string, cachedPhotoPath string) (string, error) {
+	file, _, err := openVerifiedCachedPhoto(stateRoot, cachedPhotoPath)
 	if err != nil {
 		return "", err
 	}
@@ -72,6 +86,20 @@ func encodePhotoForMCPImageBlock(verifiedPhotoFilePath string) (string, error) {
 		return "", errors.New("cached photo file size is out of bounds")
 	}
 
+	cfg, err := jpeg.DecodeConfig(bytes.NewReader(rawBytes))
+	if err != nil {
+		return "", err
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > mcpPhotoMaximumDecodedPixels {
+		return "", errors.New("cached photo dimensions are out of bounds")
+	}
+
+	if cfg.Width <= mcpPhotoMaximumDimensionPixels &&
+		cfg.Height <= mcpPhotoMaximumDimensionPixels &&
+		len(rawBytes) <= mcpPhotoTargetMaxByteCount {
+		return base64.StdEncoding.EncodeToString(rawBytes), nil
+	}
+
 	decoded, err := jpeg.Decode(bytes.NewReader(rawBytes))
 	if err != nil {
 		return "", err
@@ -83,29 +111,37 @@ func encodePhotoForMCPImageBlock(verifiedPhotoFilePath string) (string, error) {
 		return "", errors.New("cached photo has empty dimensions")
 	}
 
-	if srcWidth <= mcpPhotoMaximumDimensionPixels &&
-		srcHeight <= mcpPhotoMaximumDimensionPixels &&
-		len(rawBytes) <= mcpPhotoTargetMaxByteCount {
-		return base64.StdEncoding.EncodeToString(rawBytes), nil
-	}
-
+	maxEdge := mcpPhotoMaximumDimensionPixels
 	outputImage := decoded
-	if srcWidth > mcpPhotoMaximumDimensionPixels || srcHeight > mcpPhotoMaximumDimensionPixels {
-		dstWidth, dstHeight := scaledPhotoDimensions(srcWidth, srcHeight, mcpPhotoMaximumDimensionPixels)
+	if srcWidth > maxEdge || srcHeight > maxEdge {
+		dstWidth, dstHeight := scaledPhotoDimensions(srcWidth, srcHeight, maxEdge)
 		outputImage = downscaleImageBilinear(decoded, dstWidth, dstHeight)
 	}
 
-	encoded, err := encodeJPEGBytes(outputImage, mcpPhotoDefaultJPEGQuality)
-	if err != nil {
-		return "", err
-	}
-	if len(encoded) > mcpPhotoHardMaxByteCount {
-		compact, compactErr := encodeJPEGBytes(outputImage, mcpPhotoCompactJPEGQuality)
-		if compactErr == nil && len(compact) < len(encoded) {
-			encoded = compact
+	for _, attempt := range []struct {
+		maxEdge int
+		quality int
+	}{
+		{maxEdge: mcpPhotoMaximumDimensionPixels, quality: mcpPhotoDefaultJPEGQuality},
+		{maxEdge: mcpPhotoMaximumDimensionPixels, quality: mcpPhotoCompactJPEGQuality},
+		{maxEdge: 768, quality: mcpPhotoCompactJPEGQuality},
+		{maxEdge: 640, quality: mcpPhotoMinimumJPEGQuality},
+	} {
+		candidate := outputImage
+		candBounds := candidate.Bounds()
+		if candBounds.Dx() > attempt.maxEdge || candBounds.Dy() > attempt.maxEdge {
+			dstWidth, dstHeight := scaledPhotoDimensions(candBounds.Dx(), candBounds.Dy(), attempt.maxEdge)
+			candidate = downscaleImageBilinear(candidate, dstWidth, dstHeight)
+		}
+		encoded, encErr := encodeJPEGBytes(candidate, attempt.quality)
+		if encErr != nil {
+			return "", encErr
+		}
+		if len(encoded) <= mcpPhotoHardMaxByteCount {
+			return base64.StdEncoding.EncodeToString(encoded), nil
 		}
 	}
-	return base64.StdEncoding.EncodeToString(encoded), nil
+	return "", errors.New("cached photo exceeded MCP payload size limit after downscaling")
 }
 
 func scaledPhotoDimensions(width int, height int, maxEdge int) (int, int) {

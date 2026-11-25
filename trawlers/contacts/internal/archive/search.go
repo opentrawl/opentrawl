@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"golang.org/x/text/unicode/norm"
 )
@@ -33,6 +34,17 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	people, err := s.People(ctx)
 	if err != nil {
 		return nil, 0, err
+	}
+	allowedSources, scoped := trawlkit.AllowedSourceIdentitiesFromContext(ctx)
+	if scoped {
+		projectedPeople := make([]model.Person, 0, len(people))
+		for _, person := range people {
+			projected, allowed := projectPersonForAllowedSources(person, allowedSources)
+			if allowed {
+				projectedPeople = append(projectedPeople, projected)
+			}
+		}
+		people = projectedPeople
 	}
 	byID := map[string]model.Person{}
 	for _, person := range people {
@@ -68,6 +80,9 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 			return nil, 0, err
 		}
 		for _, note := range notes {
+			if scoped && !noteAllowedBySources(note, allowedSources) {
+				continue
+			}
 			text := strings.ToLower(strings.Join(append([]string{note.Kind, note.Source, note.Body}, note.Topics...), " "))
 			if score := scoreText(text, query); score > 0 {
 				hits = append(hits, scoredHit{AnchorID: NoteAnchorID(note.ID), PersonID: person.ID, Who: person.Name, AccountProviderName: note.Source, Score: score, Snippet: noteSnippet(note, query), Time: note.OccurredAt, Matches: noteSearchMatches(note, query)})

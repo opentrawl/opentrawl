@@ -99,10 +99,23 @@ type mcpToolDefinition struct {
 }
 
 type mcpInitializeCapabilities struct {
-	Tools mcpInitializeToolsCapability `json:"tools"`
+	Tools      mcpInitializeToolsCapability     `json:"tools"`
+	Resources  mcpInitializeResourcesCapability `json:"resources"`
+	Extensions *mcpInitializeExtensions         `json:"extensions,omitempty"`
+}
+
+type mcpInitializeSkillsExtension struct{}
+
+type mcpInitializeExtensions struct {
+	Skills *mcpInitializeSkillsExtension `json:"io.modelcontextprotocol/skills,omitempty"`
 }
 
 type mcpInitializeToolsCapability struct {
+	ListChanged bool `json:"listChanged"`
+}
+
+type mcpInitializeResourcesCapability struct {
+	Subscribe   bool `json:"subscribe"`
 	ListChanged bool `json:"listChanged"`
 }
 
@@ -286,9 +299,13 @@ func (service *agentArchiveService) handleMCPMessage(ctx context.Context, resolv
 		}
 		encoded, err := json.Marshal(mcpInitializeResult{
 			ProtocolVersion: protocolVersion,
-			Capabilities:    mcpInitializeCapabilities{Tools: mcpInitializeToolsCapability{ListChanged: false}},
-			ServerInfo:      mcpServerImplementationInfo{Name: mcpServerName, Version: Version},
-			Instructions:    "OpenTrawl searches the user's own archives locally and read-only. Start with trawl_search, then trawl_open a result's link. This connection can read only the sources trawl_status lists.",
+			Capabilities: mcpInitializeCapabilities{
+				Tools:      mcpInitializeToolsCapability{ListChanged: false},
+				Resources:  mcpInitializeResourcesCapability{Subscribe: false, ListChanged: false},
+				Extensions: &mcpInitializeExtensions{Skills: &mcpInitializeSkillsExtension{}},
+			},
+			ServerInfo:   mcpServerImplementationInfo{Name: mcpServerName, Version: Version},
+			Instructions: "OpenTrawl searches the user's own archives locally and read-only. Start with trawl_search, then trawl_open a result's link. This connection can read only the sources trawl_status lists. Read skill://opentrawl/SKILL.md for archive usage guidance and skill://personal-wiki/SKILL.md when building or refreshing a personal wiki.",
 		})
 		if err != nil {
 			return mcpErrorResponse(request.ID, mcpErrorCodeInvalidRequest, "result could not be encoded: "+err.Error())
@@ -302,6 +319,14 @@ func (service *agentArchiveService) handleMCPMessage(ctx context.Context, resolv
 			return mcpErrorResponse(request.ID, mcpErrorCodeInvalidRequest, "result could not be encoded: "+err.Error())
 		}
 		return mcpResultResponse(request.ID, encoded)
+	case "skills/list":
+		return handleMCPSkillsList(request.ID)
+	case "skills/get":
+		return handleMCPSkillsGet(request.ID, request.Params)
+	case "resources/list":
+		return handleMCPResourcesList(request.ID)
+	case "resources/read":
+		return handleMCPResourcesRead(request.ID, request.Params)
 	case "tools/call":
 		scope, err := resolveScope()
 		if err != nil {
@@ -656,23 +681,53 @@ func (handler *agentMCPHTTPHandler) isAllowedMCPRequestOrigin(request *http.Requ
 		return true
 	}
 	parsedOrigin, err := url.Parse(origin)
-	if err != nil || parsedOrigin.Host == "" {
+	if err != nil || parsedOrigin.Host == "" || parsedOrigin.Path != "" || parsedOrigin.RawQuery != "" || parsedOrigin.Fragment != "" {
 		return false
 	}
+	if parsedOrigin.Scheme != "http" && parsedOrigin.Scheme != "https" {
+		return false
+	}
+	normalizedOrigin := strings.ToLower(parsedOrigin.Scheme) + "://" + strings.ToLower(parsedOrigin.Host)
 	if handler.oauth != nil {
-		expectedOrigin := strings.TrimRight(handler.oauth.publicOriginForRequest(request), "/")
-		if strings.EqualFold(strings.TrimRight(origin, "/"), expectedOrigin) {
+		expectedOrigin := strings.ToLower(strings.TrimRight(handler.oauth.publicOriginForRequest(request), "/"))
+		if normalizedOrigin == expectedOrigin {
 			return true
 		}
 	}
-	host := parsedOrigin.Hostname()
-	if strings.EqualFold(host, "localhost") {
-		return true
+	// On the local HTTP listener only, also allow exact same-scheme, same-port
+	// loopback origins (e.g., localhost vs 127.0.0.1 on the same listen port).
+	if handler.surface == agentAccessTokenSurfaceRelay {
+		return false
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		return true
+	expectedScheme := "http"
+	if request.TLS != nil {
+		expectedScheme = "https"
 	}
-	return false
+	if !strings.EqualFold(parsedOrigin.Scheme, expectedScheme) {
+		return false
+	}
+	originHost := parsedOrigin.Hostname()
+	originIsLoopback := strings.EqualFold(originHost, "localhost")
+	if !originIsLoopback {
+		if ip := net.ParseIP(originHost); ip != nil && ip.IsLoopback() {
+			originIsLoopback = true
+		}
+	}
+	if !originIsLoopback {
+		return false
+	}
+	reqHost, reqPort, splitErr := net.SplitHostPort(request.Host)
+	if splitErr != nil {
+		reqHost = request.Host
+		reqPort = ""
+	}
+	reqIsLoopback := strings.EqualFold(reqHost, "localhost")
+	if !reqIsLoopback {
+		if ip := net.ParseIP(reqHost); ip != nil && ip.IsLoopback() {
+			reqIsLoopback = true
+		}
+	}
+	return reqIsLoopback && parsedOrigin.Port() == reqPort
 }
 
 func (handler *agentMCPHTTPHandler) authenticateRequest(

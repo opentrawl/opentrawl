@@ -97,14 +97,12 @@ func (service *agentArchiveService) executeMCPToolCall(
 		failed := response.GetFailure() != nil || response.GetRecord() == nil
 		result := mcpToolResultFromOutcome(encoded, failed, marshalErr)
 		if !result.IsError && cachedPhotoPath != "" {
-			if verifiedPath, ok := verifiedCachedPhotoFilePath(service.stateRoot, cachedPhotoPath); ok {
-				if encodedJPEG, encodeErr := encodePhotoForMCPImageBlock(verifiedPath); encodeErr == nil {
-					result.Content = append(result.Content, mcpToolContentBlock{
-						Type:     "image",
-						Data:     encodedJPEG,
-						MIMEType: remotePhotoMIMETypeJPEG,
-					})
-				}
+			if encodedJPEG, encodeErr := encodePhotoForMCPImageBlock(service.stateRoot, cachedPhotoPath); encodeErr == nil {
+				result.Content = append(result.Content, mcpToolContentBlock{
+					Type:     "image",
+					Data:     encodedJPEG,
+					MIMEType: remotePhotoMIMETypeJPEG,
+				})
 			}
 		}
 		return result, true

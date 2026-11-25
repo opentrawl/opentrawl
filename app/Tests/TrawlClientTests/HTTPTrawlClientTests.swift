@@ -49,14 +49,37 @@ struct HTTPTrawlClientTests {
 
     let tsURL = URL(string: "http://archive-mac.tailnet.ts.net:7391")!
     let lanHTTPURL = URL(string: "http://archive-mac.local:7391")!
+    let spoofedCGNATURL = URL(string: "http://evil.100.64.1.2.example.com:7391")!
+    let bareSuffixURL = URL(string: "http://.ts.net:7391")!
     let httpsURL = URL(string: "https://archive.example.com:8443/opentrawl")!
     #expect(RemoteArchiveEndpointConfiguration.usesEncryptedOrLoopbackTransport(for: tsURL))
     #expect(!RemoteArchiveEndpointConfiguration.usesEncryptedOrLoopbackTransport(for: lanHTTPURL))
+    #expect(!RemoteArchiveEndpointConfiguration.usesEncryptedOrLoopbackTransport(for: spoofedCGNATURL))
+    #expect(!RemoteArchiveEndpointConfiguration.usesEncryptedOrLoopbackTransport(for: bareSuffixURL))
     #expect(RemoteArchiveEndpointConfiguration.usesEncryptedOrLoopbackTransport(for: httpsURL))
     #expect(
       RemoteArchiveEndpointConfiguration.originKey(for: httpsURL)
         == "https://archive.example.com:8443"
     )
+  }
+
+  @Test func remoteClientRejectsPlainHTTPToUnverifiedTailscaleHost() async {
+    let config = RemoteArchiveEndpointConfiguration(
+      serverBaseURL: URL(string: "http://unverified.tailnet.ts.net:7391")!,
+      bearerToken: "otk_test"
+    )
+    let client = HTTPTrawlClient(
+      configuration: config,
+      activeTailscalePeerHostsProvider: { ["archive-mac.tailnet.ts.net", "100.64.0.1"] }
+    )
+    do {
+      _ = try await client.status()
+      Issue.record("expected status() to unverified .ts.net host over plain HTTP to fail")
+    } catch let error as TrawlClientError {
+      #expect(error == .remoteInsecureTransportRejected)
+    } catch {
+      Issue.record("unexpected error: \(error)")
+    }
   }
 
   @Test func remoteClientRejectsLocalUpdateAsReadOnly() async {

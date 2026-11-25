@@ -72,11 +72,19 @@ func (s *Store) PeopleMatchingQuery(ctx context.Context, query string) ([]model.
 	if err != nil {
 		return nil, err
 	}
+	allowedSources, scoped := trawlkit.AllowedSourceIdentitiesFromContext(ctx)
 	matchingPeople := make([]model.Person, 0, len(matchingPersonIdentifiers))
 	for _, personIdentifier := range matchingPersonIdentifiers {
 		person, err := s.Person(ctx, personIdentifier)
 		if err != nil {
 			return nil, err
+		}
+		if scoped {
+			projected, allowed := projectPersonForAllowedSources(person, allowedSources)
+			if !allowed {
+				continue
+			}
+			person = projected
 		}
 		matchingPeople = append(matchingPeople, person)
 	}
@@ -84,6 +92,7 @@ func (s *Store) PeopleMatchingQuery(ctx context.Context, query string) ([]model.
 }
 
 func (s *Store) personIdentifiersMatchingResolverQuery(ctx context.Context, query string) ([]string, error) {
+	allowedSources, scoped := trawlkit.AllowedSourceIdentitiesFromContext(ctx)
 	rows, err := s.database().QueryContext(ctx, `
 select id, name, sort_name, aka_json, tags_json, accounts_json, sources_json, apple_json, google_json
 from people
@@ -133,6 +142,13 @@ order by lower(name), id`)
 			_ = rows.Close()
 			return nil, err
 		}
+		if scoped {
+			projected, allowed := projectPersonForAllowedSources(person, allowedSources)
+			if !allowed {
+				continue
+			}
+			person = projected
+		}
 		if _, matches := resolverMatchCandidate(person).MatchRank(query); matches {
 			matchingPersonIdentifiers = append(matchingPersonIdentifiers, person.ID)
 		}
@@ -159,6 +175,13 @@ func (s *Store) ResolveCanonicalPersonRecordReference(ctx context.Context, canon
 	person, err := s.Person(ctx, personID)
 	if err != nil {
 		return nil, err
+	}
+	if allowedSources, scoped := trawlkit.AllowedSourceIdentitiesFromContext(ctx); scoped {
+		projected, allowed := projectPersonForAllowedSources(person, allowedSources)
+		if !allowed {
+			return nil, nil
+		}
+		person = projected
 	}
 	return []ResolvedPersonMatchCandidate{personMatchCandidateForPerson(person)}, nil
 }

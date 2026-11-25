@@ -46,16 +46,7 @@ type agentAccessTokenRecord struct {
 }
 
 func (token agentAccessTokenRecord) allowsSurface(surface agentAccessTokenSurface) bool {
-	if token.AllowedSurface != "" {
-		return token.AllowedSurface == surface
-	}
-	// Pre-existing tokens written before allowed_surface was stored:
-	// short-lived OAuth tokens (ExpiresTime != nil) belong to the relay surface;
-	// non-expiring manual tokens belong to the local/Tailscale surface only.
-	if token.ExpiresTime != nil {
-		return surface == agentAccessTokenSurfaceRelay
-	}
-	return surface == agentAccessTokenSurfaceLocal
+	return token.AllowedSurface != "" && token.AllowedSurface == surface
 }
 
 type agentAccessTokenFile struct {

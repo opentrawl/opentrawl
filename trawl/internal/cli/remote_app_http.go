@@ -3,12 +3,13 @@ package cli
 import (
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
+	open "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open"
+	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -183,8 +184,32 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppOpen(
 		writeMCPHTTPError(response, http.StatusForbidden, "source is not allowed by this access token")
 		return
 	}
+	stripServerLocalPicturePathFromRemoteAppOpenResponse(openResponse)
 	openResponse.RequestedTrawlLink = requestedTrawlLink
 	writeAppProtobufHTTPResponse(response, openResponse)
+}
+
+func stripServerLocalPicturePathFromRemoteAppOpenResponse(openResponse *open.OpenResponse) {
+	record := openResponse.GetRecord()
+	if record == nil {
+		return
+	}
+	if photoRecord := record.GetOpenedPhotoRecord(); photoRecord != nil {
+		photoRecord.CachedPictureFilePath = ""
+	}
+	detail := record.GetTrawlerSpecificOpenedRecordPresentation().GetDetailPresentation()
+	if detail == nil || trawlkit.RegisteredTrawlerIdentityText(record.GetRecordTrawler()) != "photos" {
+		return
+	}
+	for _, field := range detail.GetFieldsInDisplayOrder() {
+		if field == nil || field.GetFieldDisplayName() != "Picture" {
+			continue
+		}
+		textValue, isText := field.GetFieldValue().GetTypedValue().(*presentation.TrawlerSpecificCommandPresentationValue_Text)
+		if isText && strings.HasPrefix(strings.TrimSpace(textValue.Text), "/") {
+			textValue.Text = "Available via remote photo endpoint."
+		}
+	}
 }
 
 func (handler *agentMCPHTTPHandler) handleRemoteAppPhoto(
@@ -248,32 +273,19 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppPhoto(
 		return
 	}
 	cachedPath := openResponse.GetRecord().GetOpenedPhotoRecord().GetCachedPictureFilePath()
-	verifiedPath, ok := verifiedCachedPhotoFilePath(handler.service.stateRoot, cachedPath)
-	if !ok {
-		writeMCPHTTPError(response, http.StatusNotFound, "photo image is unavailable")
-		return
-	}
-
-	// #nosec G304 -- path is verified to be a regular JPEG inside <stateRoot>/photos/picture-cache.
-	photoFile, err := os.Open(verifiedPath)
+	photoFile, info, err := openVerifiedCachedPhoto(handler.service.stateRoot, cachedPath)
 	if err != nil {
 		writeMCPHTTPError(response, http.StatusNotFound, "photo image is unavailable")
 		return
 	}
 	defer func() { _ = photoFile.Close() }()
 
-	info, err := photoFile.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		writeMCPHTTPError(response, http.StatusNotFound, "photo image is unavailable")
-		return
-	}
-
 	response.Header().Set("Content-Type", remotePhotoMIMETypeJPEG)
 	response.Header().Set("Cache-Control", "private, max-age=3600")
 	response.Header().Set("X-Content-Type-Options", "nosniff")
 	response.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	response.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(response, photoFile)
+	_, _ = io.Copy(response, io.LimitReader(photoFile, info.Size()))
 }
 
 func (scope agentSourceScope) registeredTrawlerManifestSnapshotAllowed(

@@ -56,7 +56,8 @@ func (c *AroundCmd) execute(r *Runtime) (unifiedindex.AroundResult, error) {
 	defer func() { _ = indexStore.Close() }()
 
 	var trawlerFilter []string
-	_, isAgentRequest := agentServingContextFrom(r.ctx)
+	serving, isAgentRequest := agentServingContextFrom(r.ctx)
+	restrictPreMergedContactsIndex := isAgentRequest && !serving.agentSourceScope.allSourcesAllowed
 	if isAgentRequest {
 		if limit > mcpMaximumRemoteQueryLimit {
 			limit = mcpMaximumRemoteQueryLimit
@@ -64,9 +65,16 @@ func (c *AroundCmd) execute(r *Runtime) (unifiedindex.AroundResult, error) {
 		if err := refuseAroundTargetOutsideAgentScope(installed, c.Target); err != nil {
 			return unifiedindex.AroundResult{}, err
 		}
+		if restrictPreMergedContactsIndex && strings.HasPrefix(strings.ToLower(strings.TrimSpace(c.Target)), "contacts:") {
+			return unifiedindex.AroundResult{}, render.AgentAccessSourceNotAllowed("contacts", installedTrawlerCommandNames(installed))
+		}
 		if strings.TrimSpace(c.Trawler) == "" {
 			for _, t := range installed {
-				trawlerFilter = append(trawlerFilter, installedTrawlerIdentityText(t))
+				id := installedTrawlerIdentityText(t)
+				if restrictPreMergedContactsIndex && id == "contacts" {
+					continue
+				}
+				trawlerFilter = append(trawlerFilter, id)
 			}
 		}
 	}
@@ -76,7 +84,11 @@ func (c *AroundCmd) execute(r *Runtime) (unifiedindex.AroundResult, error) {
 			return unifiedindex.AroundResult{}, selErr
 		}
 		for _, t := range selected {
-			trawlerFilter = append(trawlerFilter, installedTrawlerIdentityText(t))
+			id := installedTrawlerIdentityText(t)
+			if restrictPreMergedContactsIndex && id == "contacts" {
+				continue
+			}
+			trawlerFilter = append(trawlerFilter, id)
 		}
 	}
 

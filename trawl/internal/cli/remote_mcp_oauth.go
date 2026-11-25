@@ -22,31 +22,43 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
-	remoteMCPOAuthProtectedResourcePath     = "/.well-known/oauth-protected-resource"
-	remoteMCPOAuthProtectedResourceMCPPath  = "/.well-known/oauth-protected-resource/mcp"
-	remoteMCPOAuthAuthorizationServerPath   = "/.well-known/oauth-authorization-server"
-	remoteMCPOAuthOpenIDConfigurationPath   = "/.well-known/openid-configuration"
-	remoteMCPOAuthRegisterPath              = "/oauth/register"
-	remoteMCPOAuthAuthorizePath             = "/oauth/authorize"
-	remoteMCPOAuthTokenPath                 = "/oauth/token"
-	remoteMCPOAuthReadScope                 = "opentrawl:read"
-	remoteMCPOAuthClientsFileName           = "oauth-clients.json"
-	remoteMCPOAuthRefreshTokensFileName     = "oauth-refresh-tokens.json"
-	remoteMCPOAuthRefreshTokenPrefix        = "otr_"
-	remoteMCPOAuthAccessTokenLifetime       = time.Hour
-	remoteMCPOAuthRefreshTokenLifetime      = 30 * 24 * time.Hour
-	remoteMCPOAuthAuthorizationCodeLifetime = 60 * time.Second
-	remoteMCPOAuthPendingConsentLifetime    = 5 * time.Minute
-	remoteMCPOAuthDefaultPairingDuration    = 5 * time.Minute
-	remoteMCPOAuthMaxPairingCodeAttempts    = 5
-	remoteMCPOAuthMaxPendingConsents        = 64
-	remoteMCPOAuthMaxCIMDResponseBytes      = 64 << 10
-	remoteMCPOAuthMaxRegisterBodyBytes      = 64 << 10
-	remoteMCPOAuthMaxTokenFormBodyBytes     = 64 << 10
+	remoteMCPOAuthProtectedResourcePath         = "/.well-known/oauth-protected-resource"
+	remoteMCPOAuthProtectedResourceMCPPath      = "/.well-known/oauth-protected-resource/mcp"
+	remoteMCPOAuthAuthorizationServerPath       = "/.well-known/oauth-authorization-server"
+	remoteMCPOAuthOpenIDConfigurationPath       = "/.well-known/openid-configuration"
+	remoteMCPOAuthRegisterPath                  = "/oauth/register"
+	remoteMCPOAuthAuthorizePath                 = "/oauth/authorize"
+	remoteMCPOAuthTokenPath                     = "/oauth/token"
+	remoteMCPOAuthReadScope                     = "opentrawl:read"
+	remoteMCPOAuthClientsFileName               = "oauth-clients.json"
+	remoteMCPOAuthRefreshTokensFileName         = "oauth-refresh-tokens.json"
+	remoteMCPOAuthRefreshTokenPrefix            = "otr_"
+	remoteMCPOAuthAccessTokenLifetime           = time.Hour
+	remoteMCPOAuthRefreshTokenLifetime          = 30 * 24 * time.Hour
+	remoteMCPOAuthAuthorizationCodeLifetime     = 60 * time.Second
+	remoteMCPOAuthPendingConsentLifetime        = 5 * time.Minute
+	remoteMCPOAuthPendingClientLifetime         = 10 * time.Minute
+	remoteMCPOAuthDefaultPairingDuration        = 5 * time.Minute
+	remoteMCPOAuthMaxPairingCodeSessionAttempts = 5
+	remoteMCPOAuthMaxPairingFailuresPerIPPerMin = 20
+	remoteMCPOAuthMaxTrackedFailureIPs          = 256
+	remoteMCPOAuthMaxPendingConsents            = 64
+	remoteMCPOAuthMaxPendingConsentsPerIP       = 16
+	remoteMCPOAuthMaxPendingClients             = 32
+	remoteMCPOAuthMaxDurableClients             = 64
+	remoteMCPOAuthMaxClientNameRunes            = 128
+	remoteMCPOAuthMaxRedirectURIs               = 10
+	remoteMCPOAuthMaxRedirectURIBytes           = 2048
+	remoteMCPOAuthMaxCIMDResponseBytes          = 64 << 10
+	remoteMCPOAuthMaxRegisterBodyBytes          = 64 << 10
+	remoteMCPOAuthMaxTokenFormBodyBytes         = 64 << 10
 )
+
+var errCIMDBlockedNonPublicHost = errors.New("client_id metadata URL resolves to a blocked non-public address")
 
 type remoteMCPOAuthClientRecord struct {
 	ClientIdentifier string    `json:"client_id"`
@@ -81,15 +93,24 @@ type remoteMCPOAuthRefreshTokenStoreFile struct {
 	RefreshTokens []remoteMCPOAuthRefreshTokenRecord `json:"refresh_tokens"`
 }
 
+type remoteMCPOAuthPendingClient struct {
+	Record      remoteMCPOAuthClientRecord
+	CreatedTime time.Time
+	ExpiresTime time.Time
+}
+
 type remoteMCPOAuthPendingConsent struct {
 	CSRFToken        string
 	ClientIdentifier string
 	ClientName       string
+	ClientIP         string
 	RedirectURI      string
 	RedirectHost     string
 	State            string
 	CodeChallenge    string
 	ResourceURI      string
+	FailedGuessCount int
+	CreatedTime      time.Time
 	ExpiresTime      time.Time
 }
 
@@ -106,18 +127,16 @@ type remoteMCPOAuthAuthorizationCode struct {
 type remoteMCPOAuthPairingWindowState string
 
 const (
-	remoteMCPOAuthPairingWindowStateClosed    remoteMCPOAuthPairingWindowState = "closed"
-	remoteMCPOAuthPairingWindowStateOpen      remoteMCPOAuthPairingWindowState = "open"
-	remoteMCPOAuthPairingWindowStateConsumed  remoteMCPOAuthPairingWindowState = "consumed"
-	remoteMCPOAuthPairingWindowStateLockedOut remoteMCPOAuthPairingWindowState = "locked_out"
-	remoteMCPOAuthPairingWindowStateExpired   remoteMCPOAuthPairingWindowState = "expired"
+	remoteMCPOAuthPairingWindowStateClosed   remoteMCPOAuthPairingWindowState = "closed"
+	remoteMCPOAuthPairingWindowStateOpen     remoteMCPOAuthPairingWindowState = "open"
+	remoteMCPOAuthPairingWindowStateConsumed remoteMCPOAuthPairingWindowState = "consumed"
+	remoteMCPOAuthPairingWindowStateExpired  remoteMCPOAuthPairingWindowState = "expired"
 )
 
 type remoteMCPOAuthPairingWindow struct {
-	OneTimeCode      string
-	ExpiresTime      time.Time
-	FailedGuessCount int
-	State            remoteMCPOAuthPairingWindowState
+	OneTimeCode string
+	ExpiresTime time.Time
+	State       remoteMCPOAuthPairingWindowState
 }
 
 func (window *remoteMCPOAuthPairingWindow) currentState(now time.Time) remoteMCPOAuthPairingWindowState {
@@ -130,19 +149,12 @@ func (window *remoteMCPOAuthPairingWindow) currentState(now time.Time) remoteMCP
 	return window.State
 }
 
-func (window *remoteMCPOAuthPairingWindow) verifyCode(enteredCode string, now time.Time) (bool, remoteMCPOAuthPairingWindowState) {
+func (window *remoteMCPOAuthPairingWindow) matchesCode(enteredCode string, now time.Time) (bool, remoteMCPOAuthPairingWindowState) {
 	if state := window.currentState(now); state != remoteMCPOAuthPairingWindowStateOpen {
 		return false, state
 	}
 	expectedCode := normalizePairingCodeInput(window.OneTimeCode)
-	if subtle.ConstantTimeCompare([]byte(enteredCode), []byte(expectedCode)) == 1 {
-		return true, remoteMCPOAuthPairingWindowStateOpen
-	}
-	window.FailedGuessCount++
-	if window.FailedGuessCount >= remoteMCPOAuthMaxPairingCodeAttempts {
-		window.State = remoteMCPOAuthPairingWindowStateLockedOut
-	}
-	return false, window.State
+	return subtle.ConstantTimeCompare([]byte(enteredCode), []byte(expectedCode)) == 1, remoteMCPOAuthPairingWindowStateOpen
 }
 
 func (window *remoteMCPOAuthPairingWindow) markConsumed() {
@@ -265,10 +277,12 @@ type remoteMCPOAuthServer struct {
 	now               func() time.Time
 	cimdHTTPClient    *http.Client
 
-	mu                 sync.Mutex
-	pairing            *remoteMCPOAuthPairingWindow
-	pendingConsents    map[string]remoteMCPOAuthPendingConsent
-	authorizationCodes map[string]remoteMCPOAuthAuthorizationCode
+	mu                  sync.Mutex
+	pairing             *remoteMCPOAuthPairingWindow
+	pendingClients      map[string]remoteMCPOAuthPendingClient
+	pendingConsents     map[string]remoteMCPOAuthPendingConsent
+	authorizationCodes  map[string]remoteMCPOAuthAuthorizationCode
+	pairingFailuresByIP map[string][]time.Time
 }
 
 func newRemoteMCPOAuthServer(stateRoot, fixedPublicOrigin string, surface agentAccessTokenSurface, availableSources []string) *remoteMCPOAuthServer {
@@ -278,14 +292,16 @@ func newRemoteMCPOAuthServer(stateRoot, fixedPublicOrigin string, surface agentA
 		surface = agentAccessTokenSurfaceLocal
 	}
 	return &remoteMCPOAuthServer{
-		stateRoot:          stateRoot,
-		fixedPublicOrigin:  strings.TrimRight(strings.TrimSpace(fixedPublicOrigin), "/"),
-		surface:            surface,
-		availableSources:   sortedSources,
-		now:                time.Now,
-		cimdHTTPClient:     newSSRFProtectedCIMDHTTPClient(),
-		pendingConsents:    map[string]remoteMCPOAuthPendingConsent{},
-		authorizationCodes: map[string]remoteMCPOAuthAuthorizationCode{},
+		stateRoot:           stateRoot,
+		fixedPublicOrigin:   strings.TrimRight(strings.TrimSpace(fixedPublicOrigin), "/"),
+		surface:             surface,
+		availableSources:    sortedSources,
+		now:                 time.Now,
+		cimdHTTPClient:      newSSRFProtectedCIMDHTTPClient(),
+		pendingClients:      map[string]remoteMCPOAuthPendingClient{},
+		pendingConsents:     map[string]remoteMCPOAuthPendingConsent{},
+		authorizationCodes:  map[string]remoteMCPOAuthAuthorizationCode{},
+		pairingFailuresByIP: map[string][]time.Time{},
 	}
 }
 
@@ -435,6 +451,10 @@ func (server *remoteMCPOAuthServer) handleClientRegistration(response http.Respo
 		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_redirect_uri", "redirect_uris must contain at least one URI")
 		return
 	}
+	if len(registration.RedirectURIs) > remoteMCPOAuthMaxRedirectURIs {
+		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_redirect_uri", "redirect_uris exceeds maximum allowed entries")
+		return
+	}
 	cleanedURIs := make([]string, 0, len(registration.RedirectURIs))
 	for _, rawURI := range registration.RedirectURIs {
 		if err := validateOAuthRedirectURI(rawURI); err != nil {
@@ -443,30 +463,24 @@ func (server *remoteMCPOAuthServer) handleClientRegistration(response http.Respo
 		}
 		cleanedURIs = append(cleanedURIs, strings.TrimSpace(rawURI))
 	}
-	clientName := strings.TrimSpace(registration.ClientName)
-	if clientName == "" {
-		parsed, _ := url.Parse(cleanedURIs[0])
-		if parsed != nil && parsed.Host != "" {
-			clientName = parsed.Host
-		} else {
-			clientName = "MCP Client"
-		}
+	clientName, err := validateOAuthClientName(registration.ClientName, cleanedURIs[0])
+	if err != nil {
+		writeOAuthJSONError(response, http.StatusBadRequest, "invalid_client_metadata", err.Error())
+		return
 	}
 	clientIDBytes := make([]byte, 12)
 	if _, err := rand.Read(clientIDBytes); err != nil {
 		writeOAuthJSONError(response, http.StatusInternalServerError, "server_error", "could not allocate client identifier")
 		return
 	}
+	now := server.now().UTC()
 	record := remoteMCPOAuthClientRecord{
 		ClientIdentifier: "otc_" + hex.EncodeToString(clientIDBytes),
 		ClientName:       clientName,
 		RedirectURIs:     cleanedURIs,
-		CreatedTime:      server.now().UTC(),
+		CreatedTime:      now,
 	}
-	if err := server.saveRegisteredClient(record); err != nil {
-		writeOAuthJSONError(response, http.StatusInternalServerError, "server_error", "could not store registered client")
-		return
-	}
+	server.storePendingClient(record, now)
 	writeOAuthJSON(response, http.StatusCreated, remoteMCPOAuthRegistrationResponse{
 		ClientID:                record.ClientIdentifier,
 		ClientName:              record.ClientName,
@@ -542,22 +556,21 @@ func (server *remoteMCPOAuthServer) handleAuthorizeGet(response http.ResponseWri
 	}
 
 	now := server.now().UTC()
+	clientIP := requestRemoteIP(request)
 	server.mu.Lock()
 	server.pruneExpiredEphemeralStateLocked(now)
-	if len(server.pendingConsents) >= remoteMCPOAuthMaxPendingConsents {
-		server.mu.Unlock()
-		writeOAuthJSONError(response, http.StatusTooManyRequests, "temporarily_unavailable", "too many pending consent sessions; try again shortly")
-		return
-	}
+	server.evictPendingConsentSlotIfNeededLocked(clientIP)
 	server.pendingConsents[csrfToken] = remoteMCPOAuthPendingConsent{
 		CSRFToken:        csrfToken,
 		ClientIdentifier: clientRecord.ClientIdentifier,
 		ClientName:       clientRecord.ClientName,
+		ClientIP:         clientIP,
 		RedirectURI:      redirectURI,
 		RedirectHost:     redirectHost,
 		State:            state,
 		CodeChallenge:    codeChallenge,
 		ResourceURI:      resourceURI,
+		CreatedTime:      now,
 		ExpiresTime:      now.Add(remoteMCPOAuthPendingConsentLifetime),
 	}
 	server.mu.Unlock()
@@ -591,6 +604,7 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 	selectedSources := request.PostForm["source"]
 
 	now := server.now().UTC()
+	clientIP := requestRemoteIP(request)
 	server.mu.Lock()
 	server.pruneExpiredEphemeralStateLocked(now)
 	pending, exists := server.pendingConsents[csrfToken]
@@ -611,15 +625,29 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 		renderConsentHTML(response, http.StatusOK, remoteMCPOAuthConsentView{PairingWindowOff: true})
 		return
 	}
-	matched, nextState := server.pairing.verifyCode(enteredCode, now)
+	if server.isPairingIPRateLimitedLocked(clientIP, now) {
+		server.mu.Unlock()
+		writeOAuthJSONError(response, http.StatusTooManyRequests, "temporarily_unavailable", "too many incorrect pairing code attempts; try again shortly")
+		return
+	}
+	matched, nextState := server.pairing.matchesCode(enteredCode, now)
 	if !matched {
 		windowClosed := nextState != remoteMCPOAuthPairingWindowStateOpen
-		if windowClosed {
+		server.recordPairingFailureForIPLocked(clientIP, now)
+		pending.FailedGuessCount++
+		sessionExhausted := pending.FailedGuessCount >= remoteMCPOAuthMaxPairingCodeSessionAttempts
+		if windowClosed || sessionExhausted {
 			delete(server.pendingConsents, csrfToken)
+		} else {
+			server.pendingConsents[csrfToken] = pending
 		}
 		server.mu.Unlock()
 		if windowClosed {
 			renderConsentHTML(response, http.StatusOK, remoteMCPOAuthConsentView{PairingWindowOff: true})
+			return
+		}
+		if sessionExhausted {
+			writeOAuthJSONError(response, http.StatusBadRequest, "invalid_request", "too many incorrect pairing attempts for this consent session; restart sign-in from your agent")
 			return
 		}
 		renderConsentHTML(response, http.StatusOK, remoteMCPOAuthConsentView{
@@ -656,6 +684,13 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 	server.pairing.markConsumed()
 	delete(server.pendingConsents, csrfToken)
 
+	// If this client was registered via DCR in-memory during pairing, promote
+	// it to the durable registered-clients store now that the owner approved it.
+	pendingClient, wasPendingClient := server.pendingClients[pending.ClientIdentifier]
+	if wasPendingClient {
+		delete(server.pendingClients, pending.ClientIdentifier)
+	}
+
 	// Persist the exact consented source list so newly installed sources later
 	// are never silently exposed without fresh user consent.
 	allowedSourcesText := strings.Join(allowedSources, ",")
@@ -676,6 +711,13 @@ func (server *remoteMCPOAuthServer) handleAuthorizePost(response http.ResponseWr
 		ExpiresTime:        now.Add(remoteMCPOAuthAuthorizationCodeLifetime),
 	}
 	server.mu.Unlock()
+
+	if wasPendingClient {
+		if err := server.saveRegisteredClient(pendingClient.Record); err != nil {
+			writeOAuthJSONError(response, http.StatusInternalServerError, "server_error", "could not store approved client")
+			return
+		}
+	}
 
 	targetURL, err := url.Parse(pending.RedirectURI)
 	if err != nil {
@@ -818,39 +860,10 @@ func (server *remoteMCPOAuthServer) handleRefreshTokenGrant(response http.Respon
 			return nil
 		}
 		matched := records[matchIndex]
-		switch matched.State {
-		case remoteMCPOAuthRefreshTokenStateRotated:
-			// Reuse of an already-rotated refresh token: revoke the underlying grant.
-			records[matchIndex].State = remoteMCPOAuthRefreshTokenStateRevoked
-			if saveErr := server.saveRefreshTokensLocked(records); saveErr != nil {
-				oauthErrStatus = http.StatusInternalServerError
-				oauthErrCode = "server_error"
-				oauthErrDesc = "could not persist refresh token revocation"
-				return nil
-			}
-			if _, revokeErr := revokeAgentAccessTokenLocked(server.stateRoot, matched.AgentAccessTokenIdentifier, now); revokeErr != nil {
-				oauthErrStatus = http.StatusInternalServerError
-				oauthErrCode = "server_error"
-				oauthErrDesc = "could not revoke compromised grant"
-				return nil
-			}
+		expectedResource := server.publicOriginForRequest(request) + "/mcp"
+		if matched.ResourceURI != expectedResource {
 			oauthErrCode = "invalid_grant"
-			oauthErrDesc = "refresh token was already used; grant revoked"
-			return nil
-		case remoteMCPOAuthRefreshTokenStateRevoked:
-			oauthErrCode = "invalid_grant"
-			oauthErrDesc = "refresh token was revoked"
-			return nil
-		case remoteMCPOAuthRefreshTokenStateActive:
-			// Active token; continue validating expiry, binding, and grant liveness.
-		default:
-			oauthErrCode = "invalid_grant"
-			oauthErrDesc = "refresh token state is invalid"
-			return nil
-		}
-		if now.After(matched.ExpiresTime) {
-			oauthErrCode = "invalid_grant"
-			oauthErrDesc = "refresh token has expired"
+			oauthErrDesc = "refresh token is not valid for this server"
 			return nil
 		}
 		if clientID != "" && clientID != matched.ClientIdentifier {
@@ -861,6 +874,43 @@ func (server *remoteMCPOAuthServer) handleRefreshTokenGrant(response http.Respon
 		if resourceURI != "" && resourceURI != matched.ResourceURI {
 			oauthErrCode = "invalid_target"
 			oauthErrDesc = "resource does not match refresh token"
+			return nil
+		}
+		switch matched.State {
+		case remoteMCPOAuthRefreshTokenStateRotated:
+			// Reuse of an already-rotated refresh token: revoke the underlying
+			// access grant FIRST so a write failure cannot leave the grant live
+			// while suppressing future reuse detection.
+			if _, revokeErr := revokeAgentAccessTokenLocked(server.stateRoot, matched.AgentAccessTokenIdentifier, now); revokeErr != nil {
+				oauthErrStatus = http.StatusInternalServerError
+				oauthErrCode = "server_error"
+				oauthErrDesc = "could not revoke compromised grant"
+				return nil
+			}
+			records[matchIndex].State = remoteMCPOAuthRefreshTokenStateRevoked
+			if saveErr := server.saveRefreshTokensLocked(records); saveErr != nil {
+				oauthErrStatus = http.StatusInternalServerError
+				oauthErrCode = "server_error"
+				oauthErrDesc = "could not persist refresh token revocation"
+				return nil
+			}
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token was already used; grant revoked"
+			return nil
+		case remoteMCPOAuthRefreshTokenStateRevoked:
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token was revoked"
+			return nil
+		case remoteMCPOAuthRefreshTokenStateActive:
+			// Active token; continue validating expiry and grant liveness.
+		default:
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token state is invalid"
+			return nil
+		}
+		if now.After(matched.ExpiresTime) {
+			oauthErrCode = "invalid_grant"
+			oauthErrDesc = "refresh token has expired"
 			return nil
 		}
 		active, err := isAgentAccessTokenIdentifierActive(server.stateRoot, matched.AgentAccessTokenIdentifier)
@@ -931,6 +981,11 @@ func (server *remoteMCPOAuthServer) isPairingWindowActive() bool {
 }
 
 func (server *remoteMCPOAuthServer) pruneExpiredEphemeralStateLocked(now time.Time) {
+	for id, client := range server.pendingClients {
+		if now.After(client.ExpiresTime) {
+			delete(server.pendingClients, id)
+		}
+	}
 	for token, pending := range server.pendingConsents {
 		if now.After(pending.ExpiresTime) {
 			delete(server.pendingConsents, token)
@@ -941,6 +996,141 @@ func (server *remoteMCPOAuthServer) pruneExpiredEphemeralStateLocked(now time.Ti
 			delete(server.authorizationCodes, code)
 		}
 	}
+	cutoff := now.Add(-time.Minute)
+	for ip, failures := range server.pairingFailuresByIP {
+		kept := failures[:0]
+		for _, ts := range failures {
+			if ts.After(cutoff) {
+				kept = append(kept, ts)
+			}
+		}
+		if len(kept) == 0 {
+			delete(server.pairingFailuresByIP, ip)
+		} else {
+			server.pairingFailuresByIP[ip] = kept
+		}
+	}
+}
+
+func (server *remoteMCPOAuthServer) storePendingClient(record remoteMCPOAuthClientRecord, now time.Time) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	server.pruneExpiredEphemeralStateLocked(now)
+	for len(server.pendingClients) >= remoteMCPOAuthMaxPendingClients {
+		oldestID := ""
+		var oldestTime time.Time
+		for id, entry := range server.pendingClients {
+			if oldestID == "" || entry.CreatedTime.Before(oldestTime) {
+				oldestID = id
+				oldestTime = entry.CreatedTime
+			}
+		}
+		if oldestID == "" {
+			break
+		}
+		delete(server.pendingClients, oldestID)
+	}
+	server.pendingClients[record.ClientIdentifier] = remoteMCPOAuthPendingClient{
+		Record:      record,
+		CreatedTime: now,
+		ExpiresTime: now.Add(remoteMCPOAuthPendingClientLifetime),
+	}
+}
+
+func (server *remoteMCPOAuthServer) evictPendingConsentSlotIfNeededLocked(clientIP string) {
+	sameIPCount := 0
+	oldestSameIPToken := ""
+	var oldestSameIPTime time.Time
+	oldestAnyToken := ""
+	var oldestAnyTime time.Time
+	for token, entry := range server.pendingConsents {
+		if oldestAnyToken == "" || entry.CreatedTime.Before(oldestAnyTime) {
+			oldestAnyToken = token
+			oldestAnyTime = entry.CreatedTime
+		}
+		if clientIP != "" && entry.ClientIP == clientIP {
+			sameIPCount++
+			if oldestSameIPToken == "" || entry.CreatedTime.Before(oldestSameIPTime) {
+				oldestSameIPToken = token
+				oldestSameIPTime = entry.CreatedTime
+			}
+		}
+	}
+	if sameIPCount >= remoteMCPOAuthMaxPendingConsentsPerIP && oldestSameIPToken != "" {
+		delete(server.pendingConsents, oldestSameIPToken)
+		return
+	}
+	if len(server.pendingConsents) >= remoteMCPOAuthMaxPendingConsents && oldestAnyToken != "" {
+		delete(server.pendingConsents, oldestAnyToken)
+	}
+}
+
+func (server *remoteMCPOAuthServer) isPairingIPRateLimitedLocked(clientIP string, now time.Time) bool {
+	if clientIP == "" {
+		return false
+	}
+	cutoff := now.Add(-time.Minute)
+	count := 0
+	for _, ts := range server.pairingFailuresByIP[clientIP] {
+		if ts.After(cutoff) {
+			count++
+		}
+	}
+	return count >= remoteMCPOAuthMaxPairingFailuresPerIPPerMin
+}
+
+func (server *remoteMCPOAuthServer) recordPairingFailureForIPLocked(clientIP string, now time.Time) {
+	if clientIP == "" {
+		return
+	}
+	if _, exists := server.pairingFailuresByIP[clientIP]; !exists && len(server.pairingFailuresByIP) >= remoteMCPOAuthMaxTrackedFailureIPs {
+		oldestIP := ""
+		var oldestTime time.Time
+		for ip, timestamps := range server.pairingFailuresByIP {
+			if len(timestamps) == 0 {
+				oldestIP = ip
+				break
+			}
+			last := timestamps[len(timestamps)-1]
+			if oldestIP == "" || last.Before(oldestTime) {
+				oldestIP = ip
+				oldestTime = last
+			}
+		}
+		if oldestIP != "" {
+			delete(server.pairingFailuresByIP, oldestIP)
+		}
+	}
+	server.pairingFailuresByIP[clientIP] = append(server.pairingFailuresByIP[clientIP], now)
+}
+
+func requestRemoteIP(request *http.Request) string {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(request.RemoteAddr))
+	if err == nil && host != "" {
+		return host
+	}
+	return strings.TrimSpace(request.RemoteAddr)
+}
+
+func validateOAuthClientName(rawName string, fallbackURI string) (string, error) {
+	clientName := strings.TrimSpace(rawName)
+	if utf8.RuneCountInString(clientName) > remoteMCPOAuthMaxClientNameRunes {
+		return "", errors.New("client_name must be at most 128 characters")
+	}
+	for _, r := range clientName {
+		if r < 0x20 || r == 0x7f {
+			return "", errors.New("client_name must not contain control characters")
+		}
+	}
+	if clientName == "" {
+		parsed, _ := url.Parse(fallbackURI)
+		if parsed != nil && parsed.Host != "" {
+			clientName = parsed.Host
+		} else {
+			clientName = "MCP Client"
+		}
+	}
+	return clientName, nil
 }
 
 func (server *remoteMCPOAuthServer) resolveOAuthClient(ctx context.Context, clientID string) (remoteMCPOAuthClientRecord, error) {
@@ -950,9 +1140,18 @@ func (server *remoteMCPOAuthServer) resolveOAuthClient(ctx context.Context, clie
 	if strings.HasPrefix(clientID, "https://") {
 		return server.fetchClientIDMetadataDocument(ctx, clientID)
 	}
+	now := server.now().UTC()
+	server.mu.Lock()
+	server.pruneExpiredEphemeralStateLocked(now)
+	if pending, ok := server.pendingClients[clientID]; ok {
+		server.mu.Unlock()
+		return pending.Record, nil
+	}
+	server.mu.Unlock()
+
 	clients, err := server.loadRegisteredClients()
 	if err != nil {
-		return remoteMCPOAuthClientRecord{}, err
+		return remoteMCPOAuthClientRecord{}, errors.New("could not load registered OAuth clients")
 	}
 	for _, client := range clients {
 		if client.ClientIdentifier == clientID {
@@ -969,11 +1168,14 @@ func (server *remoteMCPOAuthServer) fetchClientIDMetadataDocument(ctx context.Co
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, clientIDURL, nil)
 	if err != nil {
-		return remoteMCPOAuthClientRecord{}, err
+		return remoteMCPOAuthClientRecord{}, errors.New("client_id metadata URL is invalid")
 	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := server.cimdHTTPClient.Do(req)
 	if err != nil {
+		if errors.Is(err, errCIMDBlockedNonPublicHost) {
+			return remoteMCPOAuthClientRecord{}, errCIMDBlockedNonPublicHost
+		}
 		return remoteMCPOAuthClientRecord{}, errors.New("could not fetch client_id metadata document")
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -982,7 +1184,7 @@ func (server *remoteMCPOAuthServer) fetchClientIDMetadataDocument(ctx context.Co
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, remoteMCPOAuthMaxCIMDResponseBytes))
 	if err != nil {
-		return remoteMCPOAuthClientRecord{}, err
+		return remoteMCPOAuthClientRecord{}, errors.New("could not read client_id metadata document")
 	}
 	var document struct {
 		ClientID     string   `json:"client_id"`
@@ -995,17 +1197,17 @@ func (server *remoteMCPOAuthServer) fetchClientIDMetadataDocument(ctx context.Co
 	if document.ClientID != clientIDURL {
 		return remoteMCPOAuthClientRecord{}, errors.New("client_id metadata document client_id does not match URL")
 	}
-	if len(document.RedirectURIs) == 0 {
-		return remoteMCPOAuthClientRecord{}, errors.New("client_id metadata document has no redirect_uris")
+	if len(document.RedirectURIs) == 0 || len(document.RedirectURIs) > remoteMCPOAuthMaxRedirectURIs {
+		return remoteMCPOAuthClientRecord{}, errors.New("client_id metadata document has invalid redirect_uris")
 	}
 	for _, uri := range document.RedirectURIs {
 		if err := validateOAuthRedirectURI(uri); err != nil {
 			return remoteMCPOAuthClientRecord{}, err
 		}
 	}
-	name := strings.TrimSpace(document.ClientName)
-	if name == "" {
-		name = parsed.Host
+	name, err := validateOAuthClientName(document.ClientName, clientIDURL)
+	if err != nil {
+		return remoteMCPOAuthClientRecord{}, err
 	}
 	return remoteMCPOAuthClientRecord{
 		ClientIdentifier: document.ClientID,
@@ -1028,7 +1230,7 @@ func newSSRFProtectedCIMDHTTPClient() *http.Client {
 			}
 			for _, ipAddr := range ips {
 				if isDisallowedCIMDIP(ipAddr.IP) {
-					return nil, errors.New("client_id metadata host resolves to non-public address")
+					return nil, errCIMDBlockedNonPublicHost
 				}
 			}
 			if len(ips) == 0 {
@@ -1092,6 +1294,9 @@ func isDisallowedCIMDIP(ip net.IP) bool {
 
 func validateOAuthRedirectURI(rawURI string) error {
 	trimmed := strings.TrimSpace(rawURI)
+	if len(trimmed) == 0 || len(trimmed) > remoteMCPOAuthMaxRedirectURIBytes {
+		return errors.New("redirect_uri is empty or exceeds maximum length")
+	}
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed.Host == "" || parsed.Fragment != "" {
 		return errors.New("redirect_uri must be an absolute URL without fragment")
@@ -1169,6 +1374,9 @@ func (server *remoteMCPOAuthServer) saveRegisteredClient(record remoteMCPOAuthCl
 			existing = store.RegisteredClients
 		}
 		existing = append(existing, record)
+		if len(existing) > remoteMCPOAuthMaxDurableClients {
+			existing = existing[len(existing)-remoteMCPOAuthMaxDurableClients:]
+		}
 		encoded, err := json.MarshalIndent(remoteMCPOAuthClientStoreFile{RegisteredClients: existing}, "", "  ")
 		if err != nil {
 			return err

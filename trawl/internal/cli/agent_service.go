@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -37,11 +38,19 @@ func newAgentArchiveService(ctx context.Context, stateRoot string) *agentArchive
 // newAgentRequestRuntime builds a scoped Runtime for one MCP or remote archive
 // request.
 func (service *agentArchiveService) newAgentRequestRuntime(ctx context.Context, scope agentSourceScope) *Runtime {
+	requestCtx := withAgentServingContext(ctx, agentServingContext{
+		installedTrawlersDiscoveredAtServerStart: service.installedTrawlersDiscoveredAtServerStart,
+		agentSourceScope:                         scope,
+	})
+	if !scope.allSourcesAllowed {
+		allowedSources := make([]string, 0, len(scope.allowedSourceIdentities))
+		for sourceIdentity := range scope.allowedSourceIdentities {
+			allowedSources = append(allowedSources, sourceIdentity)
+		}
+		requestCtx = trawlkit.WithAllowedSourceIdentities(requestCtx, allowedSources)
+	}
 	return &Runtime{
-		ctx: withAgentServingContext(ctx, agentServingContext{
-			installedTrawlersDiscoveredAtServerStart: service.installedTrawlersDiscoveredAtServerStart,
-			agentSourceScope:                         scope,
-		}),
+		ctx:       requestCtx,
 		output:    render.NewTrawlCommandOutput(&bytes.Buffer{}, &bytes.Buffer{}, "trawl"),
 		root:      &CLI{},
 		now:       time.Now,

@@ -45,18 +45,41 @@ public struct RemoteArchiveEndpointConfiguration: Sendable, Equatable {
     return "\(scheme)://\(host)"
   }
 
-  /// True when transport is encrypted (HTTPS or Tailscale WireGuard) or stays
-  /// on loopback. False for plain HTTP on a local LAN or external network.
+  /// True when transport is HTTPS, loopback, or a syntactically valid
+  /// Tailscale MagicDNS/CGNAT host. Plain HTTP to a Tailscale host is
+  /// additionally verified against active local Tailscale peers by
+  /// `HTTPTrawlClient` before sending a bearer token.
   public static func usesEncryptedOrLoopbackTransport(for serverBaseURL: URL) -> Bool {
     if serverBaseURL.scheme?.lowercased() == "https" {
       return true
     }
-    let host = (serverBaseURL.host ?? "").lowercased()
-    return host == "localhost"
-      || host == "127.0.0.1"
-      || host == "::1"
-      || host.hasSuffix(".ts.net")
+    guard serverBaseURL.scheme?.lowercased() == "http" else {
+      return false
+    }
+    let host = Self.normalizedHost(for: serverBaseURL)
+    return Self.isLoopbackHost(host)
+      || Self.isTailscaleMagicDNSHost(host)
       || Self.isTailscaleCGNATIPv4(host)
+  }
+
+  static func normalizedHost(for url: URL) -> String {
+    let raw = (url.host ?? "").lowercased()
+    if raw.hasSuffix(".") {
+      return String(raw.dropLast())
+    }
+    return raw
+  }
+
+  static func isLoopbackHost(_ host: String) -> Bool {
+    host == "localhost" || host == "127.0.0.1" || host == "::1"
+  }
+
+  static func isTailscaleMagicDNSHost(_ host: String) -> Bool {
+    guard host.hasSuffix(".ts.net"), host.count > ".ts.net".count else {
+      return false
+    }
+    let prefix = host.dropLast(".ts.net".count)
+    return !prefix.isEmpty && !prefix.hasPrefix(".") && !prefix.hasSuffix(".")
   }
 
   public static func fromEnvironment(
@@ -127,11 +150,130 @@ public struct RemoteArchiveEndpointConfiguration: Sendable, Equatable {
   }
 
   private static func isTailscaleCGNATIPv4(_ host: String) -> Bool {
-    let octets = host.split(separator: ".").compactMap { Int($0) }
-    guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else {
+    let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+    guard parts.count == 4 else {
       return false
     }
+    var octets: [Int] = []
+    octets.reserveCapacity(4)
+    for part in parts {
+      guard !part.isEmpty, part.count <= 3,
+        part.allSatisfy({ $0.isASCII && $0.isNumber }),
+        let value = Int(part),
+        (0...255).contains(value)
+      else {
+        return false
+      }
+      octets.append(value)
+    }
     return octets[0] == 100 && (64...127).contains(octets[1])
+  }
+}
+
+private final class LocalTailscalePeerCache: @unchecked Sendable {
+  static let shared = LocalTailscalePeerCache()
+
+  private let lock = NSLock()
+  private var cachedHosts: Set<String> = []
+  private var cachedAt: Date = .distantPast
+  private let ttl: TimeInterval = 30
+
+  func activePeerHosts() -> Set<String> {
+    lock.lock()
+    if Date().timeIntervalSince(cachedAt) < ttl {
+      let current = cachedHosts
+      lock.unlock()
+      return current
+    }
+    lock.unlock()
+
+    let resolved = Self.queryLocalTailscaleStatus()
+    lock.lock()
+    cachedHosts = resolved
+    cachedAt = Date()
+    lock.unlock()
+    return resolved
+  }
+
+  private static func queryLocalTailscaleStatus() -> Set<String> {
+    let candidates = [
+      "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+      "/opt/homebrew/bin/tailscale",
+      "/usr/local/bin/tailscale",
+      "/usr/bin/tailscale",
+    ]
+    for executablePath in candidates {
+      guard FileManager.default.isExecutableFile(atPath: executablePath) else {
+        continue
+      }
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: executablePath)
+      process.arguments = ["status", "--json"]
+      let stdoutPipe = Pipe()
+      process.standardOutput = stdoutPipe
+      process.standardError = FileHandle.nullDevice
+      do {
+        try process.run()
+      } catch {
+        continue
+      }
+      let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+      process.waitUntilExit()
+      guard process.terminationStatus == 0, !data.isEmpty else {
+        continue
+      }
+      if let hosts = Self.parsePeerHosts(from: data) {
+        return hosts
+      }
+    }
+    return []
+  }
+
+  static func parsePeerHosts(from jsonData: Data) -> Set<String>? {
+    struct NodeStatus: Decodable {
+      let DNSName: String?
+      let TailscaleIPs: [String]?
+    }
+    struct TailscaleStatus: Decodable {
+      let BackendState: String?
+      let SelfNode: NodeStatus?
+      let Peer: [String: NodeStatus]?
+
+      enum CodingKeys: String, CodingKey {
+        case BackendState
+        case SelfNode = "Self"
+        case Peer
+      }
+    }
+    guard let status = try? JSONDecoder().decode(TailscaleStatus.self, from: jsonData) else {
+      return nil
+    }
+    if let state = status.BackendState, state != "Running" {
+      return []
+    }
+    var hosts: Set<String> = []
+    func collect(_ node: NodeStatus?) {
+      guard let node else { return }
+      if let dns = node.DNSName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+        !dns.isEmpty
+      {
+        let normalized = dns.hasSuffix(".") ? String(dns.dropLast()) : dns
+        if !normalized.isEmpty {
+          hosts.insert(normalized)
+        }
+      }
+      for rawIP in node.TailscaleIPs ?? [] {
+        let normalized = rawIP.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !normalized.isEmpty {
+          hosts.insert(normalized)
+        }
+      }
+    }
+    collect(status.SelfNode)
+    for node in status.Peer?.values ?? Dictionary<String, NodeStatus>().values {
+      collect(node)
+    }
+    return hosts
   }
 }
 
@@ -139,15 +281,30 @@ public struct HTTPTrawlClient: TrawlClient {
   static let defaultStatusTimeout: TimeInterval = 15
   static let defaultSearchTimeout: TimeInterval = 15
   static let defaultOpenTimeout: TimeInterval = 20
+  static let maximumPhotoResponseBytes: Int = 32 * 1024 * 1024
 
   public let configuration: RemoteArchiveEndpointConfiguration
   private let session: URLSession
+  private let activeTailscalePeerHostsProvider: @Sendable () -> Set<String>
 
   public init(
     configuration: RemoteArchiveEndpointConfiguration,
     session: URLSession? = nil
   ) {
+    self.init(
+      configuration: configuration,
+      session: session,
+      activeTailscalePeerHostsProvider: { LocalTailscalePeerCache.shared.activePeerHosts() }
+    )
+  }
+
+  init(
+    configuration: RemoteArchiveEndpointConfiguration,
+    session: URLSession? = nil,
+    activeTailscalePeerHostsProvider: @escaping @Sendable () -> Set<String>
+  ) {
     self.configuration = configuration
+    self.activeTailscalePeerHostsProvider = activeTailscalePeerHostsProvider
     if let session {
       self.session = session
     } else {
@@ -261,7 +418,8 @@ public struct HTTPTrawlClient: TrawlClient {
       queryItems: [URLQueryItem(name: "link", value: link.globallyRoutableTrawlLink)],
       accept: "image/jpeg, image/*",
       timeout: Self.defaultOpenTimeout,
-      allowNotFoundAsNil: true
+      allowNotFoundAsNil: true,
+      maximumResponseBytes: Self.maximumPhotoResponseBytes
     )
     guard let data = response, !data.isEmpty else { return nil }
     return data
@@ -278,7 +436,8 @@ public struct HTTPTrawlClient: TrawlClient {
         queryItems: queryItems,
         accept: "application/x-protobuf",
         timeout: timeout,
-        allowNotFoundAsNil: false
+        allowNotFoundAsNil: false,
+        maximumResponseBytes: DelimitedFrames.maximumFrameBytes
       )
     else {
       throw TrawlClientError.invalidFrame
@@ -290,19 +449,36 @@ public struct HTTPTrawlClient: TrawlClient {
     }
   }
 
+  private func isVerifiedTransport(for serverBaseURL: URL) -> Bool {
+    guard RemoteArchiveEndpointConfiguration.usesEncryptedOrLoopbackTransport(for: serverBaseURL) else {
+      return false
+    }
+    if serverBaseURL.scheme?.lowercased() == "https" {
+      return true
+    }
+    let host = RemoteArchiveEndpointConfiguration.normalizedHost(for: serverBaseURL)
+    if RemoteArchiveEndpointConfiguration.isLoopbackHost(host) {
+      return true
+    }
+    // Plain HTTP to a Tailscale MagicDNS name or CGNAT IP is only permitted
+    // when the local Tailscale daemon confirms the host is an active peer on
+    // this device's WireGuard tailnet.
+    let activePeers = activeTailscalePeerHostsProvider()
+    return activePeers.contains(host)
+  }
+
   private func fetchAuthenticatedGET(
     path: String,
     queryItems: [URLQueryItem],
     accept: String,
     timeout: TimeInterval,
-    allowNotFoundAsNil: Bool
+    allowNotFoundAsNil: Bool,
+    maximumResponseBytes: Int
   ) async throws -> Data? {
     guard !configuration.bearerToken.isEmpty else {
       throw TrawlClientError.remoteAuthenticationRequired
     }
-    guard RemoteArchiveEndpointConfiguration.usesEncryptedOrLoopbackTransport(
-      for: configuration.serverBaseURL)
-    else {
+    guard isVerifiedTransport(for: configuration.serverBaseURL) else {
       throw TrawlClientError.remoteInsecureTransportRejected
     }
     guard var components = URLComponents(url: configuration.serverBaseURL, resolvingAgainstBaseURL: false) else {
@@ -323,10 +499,10 @@ public struct HTTPTrawlClient: TrawlClient {
     request.setValue("Bearer \(configuration.bearerToken)", forHTTPHeaderField: "Authorization")
     request.setValue(accept, forHTTPHeaderField: "Accept")
 
-    let data: Data
+    let asyncBytes: URLSession.AsyncBytes
     let urlResponse: URLResponse
     do {
-      (data, urlResponse) = try await session.data(for: request)
+      (asyncBytes, urlResponse) = try await session.bytes(for: request)
     } catch is CancellationError {
       throw TrawlClientError.cancelled
     } catch let error as URLError {
@@ -345,11 +521,46 @@ public struct HTTPTrawlClient: TrawlClient {
     guard let httpResponse = urlResponse as? HTTPURLResponse else {
       throw TrawlClientError.invalidFrame
     }
+    if httpResponse.statusCode == 404 && allowNotFoundAsNil {
+      return nil
+    }
+
+    let readLimit = httpResponse.statusCode == 200 ? maximumResponseBytes : 64 * 1024
+    if httpResponse.expectedContentLength > Int64(readLimit) {
+      throw TrawlClientError.oversizedFrame
+    }
+
+    var data = Data()
+    if httpResponse.expectedContentLength > 0 {
+      data.reserveCapacity(min(Int(httpResponse.expectedContentLength), readLimit))
+    }
+    do {
+      for try await byte in asyncBytes {
+        if data.count >= readLimit {
+          throw TrawlClientError.oversizedFrame
+        }
+        data.append(byte)
+      }
+    } catch let error as TrawlClientError {
+      throw error
+    } catch is CancellationError {
+      throw TrawlClientError.cancelled
+    } catch let error as URLError {
+      switch error.code {
+      case .cancelled:
+        throw TrawlClientError.cancelled
+      case .timedOut:
+        throw TrawlClientError.timedOut
+      default:
+        throw TrawlClientError.remoteServerUnreachable(error.localizedDescription)
+      }
+    } catch {
+      throw TrawlClientError.remoteServerUnreachable(error.localizedDescription)
+    }
+
     switch httpResponse.statusCode {
     case 200:
       break
-    case 404 where allowNotFoundAsNil:
-      return nil
     case 401:
       throw TrawlClientError.remoteAuthenticationRequired
     case 403:
@@ -362,9 +573,6 @@ public struct HTTPTrawlClient: TrawlClient {
       throw TrawlClientError.remoteServerUnreachable(message)
     }
 
-    guard data.count <= DelimitedFrames.maximumFrameBytes else {
-      throw TrawlClientError.oversizedFrame
-    }
     return data
   }
 
