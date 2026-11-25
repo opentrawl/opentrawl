@@ -10,6 +10,7 @@ private enum ConstellationAnchorID: Hashable {
 
 private enum ConstellationDestinationKind: Hashable {
   case localAI
+  case personalWiki
   case cloudAI
   case otherMacs
 }
@@ -40,7 +41,9 @@ struct ArchiveOverviewView: View {
   let freshnessLine: String
   let isRemoteArchive: Bool
   let hasCopiedAIPrompt: Bool
+  let hasCopiedPersonalWikiPrompt: Bool
   let onCopyAIPrompt: () -> Void
+  let onCopyPersonalWikiPrompt: () -> Void
   let onOpenAIAppsSettings: () -> Void
   let onOpenOtherMacsSettings: () -> Void
   let onOpenHostSwitcher: () -> Void
@@ -177,6 +180,15 @@ struct ArchiveOverviewView: View {
             action: onCopyAIPrompt
           )
           destinationCard(
+            kind: .personalWiki,
+            symbol: "book.closed",
+            title: "Build personal wiki",
+            subtitle: "Copy a prompt for your AI to build a wiki about you",
+            buttonTitle: hasCopiedPersonalWikiPrompt ? "Copied" : "Copy prompt",
+            isProminent: false,
+            action: onCopyPersonalWikiPrompt
+          )
+          destinationCard(
             kind: .cloudAI,
             symbol: "globe",
             title: "AI on web or phone",
@@ -217,7 +229,7 @@ struct ArchiveOverviewView: View {
           [.hub: $0]
         }
 
-      HStack(alignment: .top, spacing: TrawlDesign.Space.md) {
+      HStack(alignment: .top, spacing: TrawlDesign.Space.sm) {
         if !isRemoteArchive {
           compactDestinationColumn(
             kind: .localAI,
@@ -227,6 +239,15 @@ struct ArchiveOverviewView: View {
             buttonTitle: hasCopiedAIPrompt ? "Copied" : HumanCopy.ConnectAI.copyAction,
             isProminent: true,
             action: onCopyAIPrompt
+          )
+          compactDestinationColumn(
+            kind: .personalWiki,
+            symbol: "book.closed",
+            title: "Personal wiki",
+            subtitle: "Wiki about you for your AI",
+            buttonTitle: hasCopiedPersonalWikiPrompt ? "Copied" : "Copy prompt",
+            isProminent: false,
+            action: onCopyPersonalWikiPrompt
           )
           compactDestinationColumn(
             kind: .cloudAI,
@@ -248,6 +269,7 @@ struct ArchiveOverviewView: View {
           action: onOpenOtherMacsSettings
         )
       }
+      .fixedSize(horizontal: false, vertical: true)
       .frame(maxWidth: .infinity)
     }
     .frame(maxWidth: .infinity)
@@ -425,10 +447,12 @@ struct ArchiveOverviewView: View {
         Button(buttonTitle, action: action)
           .buttonStyle(.borderedProminent)
           .controlSize(.small)
+          .fixedSize()
       } else {
         Button(buttonTitle, action: action)
           .buttonStyle(.bordered)
           .controlSize(.small)
+          .fixedSize()
       }
     }
     .padding(12)
@@ -462,23 +486,27 @@ struct ArchiveOverviewView: View {
         .font(TrawlDesign.Typography.bodyEmphasis)
         .foregroundStyle(.primary)
         .multilineTextAlignment(.center)
-        .lineLimit(1)
+        .lineLimit(2)
+        .fixedSize(horizontal: false, vertical: true)
       Text(subtitle)
         .font(TrawlDesign.Typography.meta)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
         .lineLimit(2)
+      Spacer(minLength: 0)
       if isProminent {
         Button(buttonTitle, action: action)
           .buttonStyle(.borderedProminent)
           .controlSize(.small)
+          .fixedSize()
       } else {
         Button(buttonTitle, action: action)
           .buttonStyle(.bordered)
           .controlSize(.small)
+          .fixedSize()
       }
     }
-    .frame(maxWidth: .infinity)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     .padding(.top, 6)
     .anchorPreference(key: ConstellationAnchorPreferenceKey.self, value: .bounds) {
       [.destination(kind): $0]
@@ -495,7 +523,7 @@ struct ArchiveOverviewView: View {
     let hubRect = proxy[hubAnchor]
 
     let destinationKinds: [ConstellationDestinationKind] =
-      isRemoteArchive ? [.otherMacs] : [.localAI, .cloudAI, .otherMacs]
+      isRemoteArchive ? [.otherMacs] : [.localAI, .personalWiki, .cloudAI, .otherMacs]
 
     if isHorizontalFlow {
       drawHubRings(in: &context, around: hubRect)

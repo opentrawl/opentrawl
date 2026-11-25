@@ -107,14 +107,16 @@ Bad, because it is padded, vague and uncited:
 ## How to work
 
 Start with `trawl_status` (or `trawl status` and `trawl --help` when using the
-CLI) to see what is archived and how fresh it is. Use `trawl_search`,
-`trawl_open`, `trawl_around`, and `trawl_who` over MCP — or the matching `trawl`
-CLI commands locally — to read my archive the way a new chief of staff would on
-their first day: find the people I talk to most, read enough of those
-conversations to understand each relationship, and follow threads across mail,
-messages, calendar, notes, money and photos. Search works best with concrete
-words, so try names, places and alternative spellings. Use your own judgement
-about what matters; don't write scripts to classify my records for you.
+CLI; if `trawl` is not on your PATH, use
+`/Applications/OpenTrawl.app/Contents/Helpers/trawl`) to see what is archived
+and how fresh it is. Use `trawl_search`, `trawl_open`, `trawl_around`, and
+`trawl_who` over MCP — or the matching `trawl` CLI commands locally — to read
+my archive the way a new chief of staff would on their first day: find the
+people I talk to most, read enough of those conversations to understand each
+relationship, and follow threads across mail, messages, calendar, notes, money
+and photos. Search works best with concrete words, so try names, places and
+alternative spellings. Use your own judgement about what matters; don't write
+scripts to classify my records for you.
 
 I'm waiting for this, so aim for a strong first version within about an hour
 rather than an exhaustive one tomorrow. The wiki can be refreshed later.

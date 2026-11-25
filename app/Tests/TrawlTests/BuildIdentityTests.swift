@@ -14,6 +14,16 @@ struct BuildIdentityTests {
     #expect(prompt.contains("/Applications/OpenTrawl.app/Contents/Helpers/trawl"))
   }
 
+  @Test func personalWikiPromptNamesIntentPrivacyDefaultAndOutputLocation() {
+    let prompt = AgentPrompts.personalWiki
+
+    #expect(prompt.hasPrefix("# Build my personal wiki from OpenTrawl"))
+    #expect(prompt.contains("## First, ask me one question"))
+    #expect(prompt.contains("providers, accounts and\ncontacts go in; the sensitive details stay out"))
+    #expect(prompt.contains("/Applications/OpenTrawl.app/Contents/Helpers/trawl"))
+    #expect(prompt.contains("~/.opentrawl/wiki/"))
+  }
+
   @Test func buildIdentityPresentsTheVersionAndPinnedSource() throws {
     let identity = BuildIdentity(version: "0.1.0", gitCommit: commit)
 

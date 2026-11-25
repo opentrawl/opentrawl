@@ -15,6 +15,7 @@ struct RootView: View {
   let featureFlags: AppFeatureFlags
   let buildIdentity: BuildIdentity
   let aiInstruction: String
+  let personalWikiPrompt: String
   let openFullDiskAccess: @MainActor () -> Void
   let onOpenSettingsPane: @MainActor (SettingsPane) -> Void
 
@@ -28,6 +29,8 @@ struct RootView: View {
   @State private var accountConnectionError: String?
   @State private var hasCopiedAIInstructions = false
   @State private var aiPromptCopyResetTask: Task<Void, Never>?
+  @State private var hasCopiedPersonalWikiPrompt = false
+  @State private var personalWikiPromptCopyResetTask: Task<Void, Never>?
   @State private var isShowingRecentUpdateCompletion = false
   @State private var updateCompletionLingerTask: Task<Void, Never>?
 
@@ -43,6 +46,7 @@ struct RootView: View {
     trawlerIconStore: TrawlerIconStore = TrawlerIconStore(),
     buildIdentity: BuildIdentity = .current,
     aiInstruction: String = AgentPrompts.connectAI,
+    personalWikiPrompt: String = AgentPrompts.personalWiki,
     openFullDiskAccess: @escaping @MainActor () -> Void =
       PermissionGuideController.openSystemSettings,
     onOpenSettingsPane: @escaping @MainActor (SettingsPane) -> Void = { _ in }
@@ -54,6 +58,7 @@ struct RootView: View {
     self.featureFlags = featureFlags
     self.buildIdentity = buildIdentity
     self.aiInstruction = aiInstruction
+    self.personalWikiPrompt = personalWikiPrompt
     self.openFullDiskAccess = openFullDiskAccess
     self.onOpenSettingsPane = onOpenSettingsPane
     _onboarding = State(initialValue: onboarding)
@@ -368,12 +373,18 @@ struct RootView: View {
         freshnessLine: freshnessLine,
         isRemoteArchive: connectionStore.isRemote,
         hasCopiedAIPrompt: hasCopiedAIInstructions,
+        hasCopiedPersonalWikiPrompt: hasCopiedPersonalWikiPrompt,
         focusRequestToken: searchFocusRequestToken,
         destination: $destination,
         onCopyAIPrompt: {
           NSPasteboard.general.clearContents()
           NSPasteboard.general.setString(aiInstruction, forType: .string)
           confirmAIPromptCopied()
+        },
+        onCopyPersonalWikiPrompt: {
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(personalWikiPrompt, forType: .string)
+          confirmPersonalWikiPromptCopied()
         },
         onOpenAIAppsSettings: { openSettingsPane(.aiApps) },
         onOpenOtherMacsSettings: { openSettingsPane(.otherMacs) },
@@ -509,6 +520,16 @@ struct RootView: View {
       try? await Task.sleep(for: .seconds(5))
       guard !Task.isCancelled else { return }
       hasCopiedAIInstructions = false
+    }
+  }
+
+  private func confirmPersonalWikiPromptCopied() {
+    hasCopiedPersonalWikiPrompt = true
+    personalWikiPromptCopyResetTask?.cancel()
+    personalWikiPromptCopyResetTask = Task { @MainActor in
+      try? await Task.sleep(for: .seconds(5))
+      guard !Task.isCancelled else { return }
+      hasCopiedPersonalWikiPrompt = false
     }
   }
 }

@@ -57,10 +57,12 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
   let freshnessLine: String
   let isRemoteArchive: Bool
   let hasCopiedAIPrompt: Bool
+  let hasCopiedPersonalWikiPrompt: Bool
   let focusRequestToken: Int
   @Binding var destination: WorkspaceDestination
 
   let onCopyAIPrompt: () -> Void
+  let onCopyPersonalWikiPrompt: () -> Void
   let onOpenAIAppsSettings: () -> Void
   let onOpenOtherMacsSettings: () -> Void
   let onOpenPluginsSettings: () -> Void
@@ -95,9 +97,11 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
     freshnessLine: String,
     isRemoteArchive: Bool,
     hasCopiedAIPrompt: Bool,
+    hasCopiedPersonalWikiPrompt: Bool,
     focusRequestToken: Int = 0,
     destination: Binding<WorkspaceDestination>,
     onCopyAIPrompt: @escaping () -> Void,
+    onCopyPersonalWikiPrompt: @escaping () -> Void,
     onOpenAIAppsSettings: @escaping () -> Void,
     onOpenOtherMacsSettings: @escaping () -> Void,
     onOpenPluginsSettings: @escaping () -> Void,
@@ -114,9 +118,11 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
     self.freshnessLine = freshnessLine
     self.isRemoteArchive = isRemoteArchive
     self.hasCopiedAIPrompt = hasCopiedAIPrompt
+    self.hasCopiedPersonalWikiPrompt = hasCopiedPersonalWikiPrompt
     self.focusRequestToken = focusRequestToken
     self._destination = destination
     self.onCopyAIPrompt = onCopyAIPrompt
+    self.onCopyPersonalWikiPrompt = onCopyPersonalWikiPrompt
     self.onOpenAIAppsSettings = onOpenAIAppsSettings
     self.onOpenOtherMacsSettings = onOpenOtherMacsSettings
     self.onOpenPluginsSettings = onOpenPluginsSettings
@@ -290,7 +296,9 @@ struct ArchiveWorkspaceView<DetailBanners: View>: View {
                 freshnessLine: freshnessLine,
                 isRemoteArchive: isRemoteArchive,
                 hasCopiedAIPrompt: hasCopiedAIPrompt,
+                hasCopiedPersonalWikiPrompt: hasCopiedPersonalWikiPrompt,
                 onCopyAIPrompt: onCopyAIPrompt,
+                onCopyPersonalWikiPrompt: onCopyPersonalWikiPrompt,
                 onOpenAIAppsSettings: onOpenAIAppsSettings,
                 onOpenOtherMacsSettings: onOpenOtherMacsSettings,
                 onOpenHostSwitcher: onOpenHostSwitcher,

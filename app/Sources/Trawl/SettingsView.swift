@@ -36,6 +36,7 @@ struct OpenTrawlSettingsView: View {
   let appInstallations: MacAppInstallations
   let buildIdentity: BuildIdentity
   let aiInstruction: String
+  let personalWikiPrompt: String
   @Binding var selectedPane: SettingsPane
   @Binding var keepRunningInMenuBar: Bool
   let onConnectionChanged: () -> Void
@@ -47,6 +48,7 @@ struct OpenTrawlSettingsView: View {
   let onOpenSourceApp: (String) -> Void
 
   @State private var copiedAIPrompt = false
+  @State private var copiedPersonalWikiPrompt = false
   @State private var copiedMCPCommand = false
   @State private var copiedRemoteArchiveAddress = false
   @State private var copiedTokenCommand = false
@@ -320,6 +322,19 @@ struct OpenTrawlSettingsView: View {
           Text("Connect local AI apps")
             .font(TrawlDesign.Typography.body)
           Text("For Claude Code, Codex, Cursor, and other AI apps on this Mac.")
+            .font(TrawlDesign.Typography.meta)
+        }
+
+        LabeledContent {
+          Button(copiedPersonalWikiPrompt ? "Copied" : "Copy prompt") {
+            copyToPasteboard(personalWikiPrompt) { copiedPersonalWikiPrompt = $0 }
+          }
+          .buttonStyle(.bordered)
+          .fixedSize()
+        } label: {
+          Text("Build personal wiki")
+            .font(TrawlDesign.Typography.body)
+          Text("Copy a prompt for your AI to build a Markdown wiki in ~/.opentrawl/wiki/.")
             .font(TrawlDesign.Typography.meta)
         }
       }

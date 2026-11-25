@@ -254,6 +254,7 @@ struct TrawlApp: App {
         appInstallations: delegate.appInstallations,
         trawlerIconStore: delegate.trawlerIconStore,
         aiInstruction: AgentPrompts.connectAI,
+        personalWikiPrompt: AgentPrompts.personalWiki,
         openFullDiskAccess: delegate.requestFullDiskAccess,
         onOpenSettingsPane: { pane in
           delegate.shellState.selectedSettingsPane = pane
@@ -294,6 +295,7 @@ struct TrawlApp: App {
         appInstallations: delegate.appInstallations,
         buildIdentity: .current,
         aiInstruction: AgentPrompts.connectAI,
+        personalWikiPrompt: AgentPrompts.personalWiki,
         selectedPane: Binding(
           get: { delegate.shellState.selectedSettingsPane },
           set: { delegate.shellState.selectedSettingsPane = $0 }

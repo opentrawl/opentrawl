@@ -158,6 +158,7 @@ struct RootViewTests {
           appInstallations: MacAppInstallations(),
           buildIdentity: BuildIdentity(version: "0.1.0", gitCommit: nil, isDevelopmentBuild: true),
           aiInstruction: AgentPrompts.connectAI,
+          personalWikiPrompt: AgentPrompts.personalWiki,
           selectedPane: .constant(pane),
           keepRunningInMenuBar: .constant(true),
           onConnectionChanged: {},
