@@ -444,22 +444,59 @@ func selectNewStableRecordReferences(records []shortReferenceAssignmentIndexReco
 	return newStableRecordReferences
 }
 
-// SetReadOnlyShortReferenceCatalog builds the shared links for a source-native
-// archive whose records are read without storing a derived link index.
-func (r *TrawlerCommandExecutionRequest) SetReadOnlyShortReferenceCatalog(canonicalRecordReferences []*CanonicalArchiveRecordReference) error {
+// BuildReadOnlyShortReferenceCatalog compiles the shared links for a
+// source-native archive whose records are read without storing a derived link
+// index. Callers may cache the returned immutable slice across requests while
+// the archive snapshot is unchanged.
+func BuildReadOnlyShortReferenceCatalog(
+	canonicalRecordReferences []*CanonicalArchiveRecordReference,
+) ([]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, error) {
 	references := make([]string, 0, len(canonicalRecordReferences))
 	for _, reference := range canonicalRecordReferences {
 		references = append(references, CanonicalArchiveRecordReferenceText(reference))
 	}
 	entries, err := shortref.BuildSlice(references)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	r.readOnlyShortReferenceCatalog = make([]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, 0, len(entries))
+	catalog := make([]CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference, 0, len(entries))
 	for _, entry := range entries {
-		r.readOnlyShortReferenceCatalog = append(r.readOnlyShortReferenceCatalog, CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference{
-			CanonicalArchiveRecordReference: NewCanonicalArchiveRecordReference(entry.FullRef), LocalTrawlerShortReference: NewLocalTrawlerShortReference(entry.Alias),
+		catalog = append(catalog, CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference{
+			CanonicalArchiveRecordReference: NewCanonicalArchiveRecordReference(entry.FullRef),
+			LocalTrawlerShortReference:      NewLocalTrawlerShortReference(entry.Alias),
 		})
 	}
+	return catalog, nil
+}
+
+// HasReadOnlyShortReferenceCatalog reports whether a read-only short-reference
+// catalog has already been attached to this command request.
+func (r *TrawlerCommandExecutionRequest) HasReadOnlyShortReferenceCatalog() bool {
+	return r != nil && r.readOnlyShortReferenceCatalog != nil
+}
+
+// SetPrecomputedReadOnlyShortReferenceCatalog attaches an immutable catalog
+// produced by BuildReadOnlyShortReferenceCatalog without rebuilding it.
+func (r *TrawlerCommandExecutionRequest) SetPrecomputedReadOnlyShortReferenceCatalog(
+	catalog []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference,
+) {
+	if r == nil {
+		return
+	}
+	if catalog == nil {
+		r.readOnlyShortReferenceCatalog = []CanonicalArchiveRecordReferenceWithLocalTrawlerShortReference{}
+		return
+	}
+	r.readOnlyShortReferenceCatalog = catalog
+}
+
+// SetReadOnlyShortReferenceCatalog builds the shared links for a source-native
+// archive whose records are read without storing a derived link index.
+func (r *TrawlerCommandExecutionRequest) SetReadOnlyShortReferenceCatalog(canonicalRecordReferences []*CanonicalArchiveRecordReference) error {
+	catalog, err := BuildReadOnlyShortReferenceCatalog(canonicalRecordReferences)
+	if err != nil {
+		return err
+	}
+	r.SetPrecomputedReadOnlyShortReferenceCatalog(catalog)
 	return nil
 }

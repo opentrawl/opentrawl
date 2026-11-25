@@ -14,7 +14,7 @@
 
 static const int32_t defaultPictureLongEdgePixelLimit = 2576;
 static const double pictureJPEGQuality = 0.85;
-static const int64_t applePhotosDeliveryTimeoutSeconds = 120;
+static const int64_t applePhotosDeliveryTimeoutSeconds = 30;
 static const int64_t applePhotosAuthorizationTimeoutSeconds = 60;
 
 static NSInteger resolvedPictureLongEdgePixelLimit(int32_t requestedLimit) {
@@ -219,7 +219,7 @@ static NativeFetchedPicture fetchedPictureFromVideoMiddleFrame(AVAsset *video,
       CGImageRelease(frameToRelease);
     }
     return failedPictureFetch(NATIVE_PICTURE_FETCH_OUTCOME_FAILED_TRY_AGAIN_LATER,
-                              @"AVFoundation did not make a video frame within 2 minutes");
+                              @"AVFoundation did not make a video frame within 30 seconds");
   }
   CGImageRef deliveredFrame = NULL;
   NSError *deliveredError = nil;
@@ -246,7 +246,7 @@ NativeFetchedPicture fetchUprightPictureFromFile(const char *pictureFilePath,
     NSInteger pixelLimit = resolvedPictureLongEdgePixelLimit(pictureLongEdgePixelLimit);
     return runPictureFetchWithHardTimeout(
         applePhotosDeliveryTimeoutSeconds,
-        @"Reading the picture file did not finish within 2 minutes",
+        @"Reading the picture file did not finish within 30 seconds",
         ^NativeFetchedPicture {
           NSURL *pictureFileURL = [NSURL fileURLWithPath:pathCopy];
           if (pictureFileIsVideo) {
@@ -269,23 +269,39 @@ static PHAuthorizationStatus ensureApplePhotosAuthorization(void) {
   if (status != PHAuthorizationStatusNotDetermined) {
     return status;
   }
+  NSObject *authorizationLock = [[NSObject alloc] init];
+  __block BOOL authorizationTimedOut = NO;
   __block PHAuthorizationStatus grantedStatus = status;
   dispatch_semaphore_t authorizationDone = dispatch_semaphore_create(0);
   [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelReadWrite
                                              handler:^(PHAuthorizationStatus updatedStatus) {
-                                               grantedStatus = updatedStatus;
+                                               @synchronized(authorizationLock) {
+                                                 if (!authorizationTimedOut) {
+                                                   grantedStatus = updatedStatus;
+                                                 }
+                                               }
                                                dispatch_semaphore_signal(authorizationDone);
                                              }];
   if (dispatch_semaphore_wait(authorizationDone,
                               dispatch_time(DISPATCH_TIME_NOW, applePhotosAuthorizationTimeoutSeconds * NSEC_PER_SEC)) != 0) {
+    @synchronized(authorizationLock) {
+      authorizationTimedOut = YES;
+    }
     return [PHPhotoLibrary authorizationStatusForAccessLevel:PHAccessLevelReadWrite];
   }
-  return grantedStatus;
+  PHAuthorizationStatus resolvedStatus = status;
+  @synchronized(authorizationLock) {
+    resolvedStatus = grantedStatus;
+  }
+  return resolvedStatus;
 }
 
-// Requests run on Photos' own queue with a semaphore wait: the Go process does
-// not run the main dispatch queue, so a handler sent there would never run.
-// The outer timeout guarantees a blocked PhotoKit XPC call cannot wedge the run.
+// Still-image requests MUST set synchronous = YES because Go CLI processes do
+// not pump the main dispatch queue or CFRunLoop, and PHImageManager dispatches
+// asynchronous image resultHandlers to the main thread where they never run.
+// Running the whole fetch inside runPictureFetchWithHardTimeout on a background
+// GCD worker queue keeps synchronous PhotoKit/iCloud calls bounded. Video
+// requests use requestAVAssetForVideo, whose handler runs on an arbitrary queue.
 NativeFetchedPicture fetchUprightPictureFromApplePhotos(const char *applePhotoUUID,
                                                         int32_t pictureLongEdgePixelLimit) {
   @autoreleasepool {
@@ -293,7 +309,7 @@ NativeFetchedPicture fetchUprightPictureFromApplePhotos(const char *applePhotoUU
     NSInteger pixelLimit = resolvedPictureLongEdgePixelLimit(pictureLongEdgePixelLimit);
     return runPictureFetchWithHardTimeout(
         applePhotosDeliveryTimeoutSeconds,
-        @"Apple Photos did not deliver the picture within 2 minutes",
+        @"Apple Photos did not deliver the picture within 30 seconds",
         ^NativeFetchedPicture {
           if (ensureApplePhotosAuthorization() != PHAuthorizationStatusAuthorized) {
             return failedPictureFetch(NATIVE_PICTURE_FETCH_OUTCOME_APPLE_PHOTOS_ACCESS_NOT_GRANTED,
@@ -338,7 +354,7 @@ NativeFetchedPicture fetchUprightPictureFromApplePhotos(const char *applePhotoUU
               }
               [[PHImageManager defaultManager] cancelImageRequest:videoRequest];
               return failedPictureFetch(NATIVE_PICTURE_FETCH_OUTCOME_FAILED_TRY_AGAIN_LATER,
-                                        @"Apple Photos did not deliver the video within 2 minutes");
+                                        @"Apple Photos did not deliver the video within 30 seconds");
             }
             AVAsset *deliveredVideo = nil;
             NSDictionary *deliveredVideoInfo = nil;
@@ -356,42 +372,19 @@ NativeFetchedPicture fetchUprightPictureFromApplePhotos(const char *applePhotoUU
           imageRequestOptions.version = PHImageRequestOptionsVersionCurrent;
           imageRequestOptions.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
           imageRequestOptions.networkAccessAllowed = YES;
-          imageRequestOptions.synchronous = NO;
-          NSObject *imageLock = [[NSObject alloc] init];
-          __block BOOL imageTimedOut = NO;
-          __block NSData *pictureData = nil;
-          __block NSDictionary *imageRequestInfo = nil;
-          dispatch_semaphore_t imageWasDelivered = dispatch_semaphore_create(0);
-          PHImageRequestID imageRequest = [[PHImageManager defaultManager]
+          imageRequestOptions.synchronous = YES;
+          __block NSData *deliveredPictureData = nil;
+          __block NSDictionary *deliveredImageInfo = nil;
+          [[PHImageManager defaultManager]
               requestImageDataAndOrientationForAsset:asset
                                              options:imageRequestOptions
                                        resultHandler:^(NSData *deliveredData, NSString *dataUTI,
                                                        CGImagePropertyOrientation orientation, NSDictionary *requestInfo) {
                                          (void)dataUTI;
                                          (void)orientation;
-                                         @synchronized(imageLock) {
-                                           if (!imageTimedOut) {
-                                             pictureData = deliveredData;
-                                             imageRequestInfo = requestInfo;
-                                           }
-                                         }
-                                         dispatch_semaphore_signal(imageWasDelivered);
+                                         deliveredPictureData = deliveredData;
+                                         deliveredImageInfo = requestInfo;
                                        }];
-          if (dispatch_semaphore_wait(imageWasDelivered,
-                                      dispatch_time(DISPATCH_TIME_NOW, applePhotosDeliveryTimeoutSeconds * NSEC_PER_SEC)) != 0) {
-            @synchronized(imageLock) {
-              imageTimedOut = YES;
-            }
-            [[PHImageManager defaultManager] cancelImageRequest:imageRequest];
-            return failedPictureFetch(NATIVE_PICTURE_FETCH_OUTCOME_FAILED_TRY_AGAIN_LATER,
-                                      @"Apple Photos did not deliver the picture within 2 minutes");
-          }
-          NSData *deliveredPictureData = nil;
-          NSDictionary *deliveredImageInfo = nil;
-          @synchronized(imageLock) {
-            deliveredPictureData = pictureData;
-            deliveredImageInfo = imageRequestInfo;
-          }
           if (deliveredPictureData == nil) {
             return failedPictureFetch(NATIVE_PICTURE_FETCH_OUTCOME_FAILED_TRY_AGAIN_LATER,
                                       applePhotosErrorDescription(deliveredImageInfo, @"Apple Photos did not deliver the picture"));

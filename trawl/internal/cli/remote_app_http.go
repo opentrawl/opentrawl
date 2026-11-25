@@ -170,8 +170,9 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppOpen(
 			return
 		}
 	}
+	openCtx := trawlkit.WithSkipOnDemandPhotoPictureHydration(agentRuntime.ctx)
 	openResponse := agentRuntime.appOpenResponse(
-		agentRuntime.ctx,
+		openCtx,
 		route.RegisteredTrawler,
 		route.LocalShortReference,
 		trawlkit.NewRecordAnchorIdentifier(anchor),
@@ -207,7 +208,7 @@ func stripServerLocalPicturePathFromRemoteAppOpenResponse(openResponse *open.Ope
 			continue
 		}
 		textValue, isText := field.GetFieldValue().GetTypedValue().(*presentation.TrawlerSpecificCommandPresentationValue_Text)
-		if isText && strings.HasPrefix(strings.TrimSpace(textValue.Text), "/") {
+		if isText {
 			textValue.Text = "Available via remote photo endpoint."
 		}
 	}
@@ -269,8 +270,9 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppPhoto(
 		route.LocalShortReference,
 		requestedTrawlLink,
 	)
-	if openResponse.GetFailure() != nil {
-		writeMCPHTTPError(response, http.StatusNotFound, "photo record not found")
+	if failure := openResponse.GetFailure(); failure != nil {
+		statusCode, errorMessage := remoteAppPhotoOpenFailureError(failure)
+		writeMCPHTTPError(response, statusCode, errorMessage)
 		return
 	}
 	openedPhoto := openResponse.GetRecord().GetOpenedPhotoRecord()
@@ -289,6 +291,58 @@ func (handler *agentMCPHTTPHandler) handleRemoteAppPhoto(
 	response.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	response.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(response, io.LimitReader(photoFile, info.Size()))
+}
+
+func remoteAppPhotoOpenFailureError(failure *federation.TrawlerOperationFailure) (int, string) {
+	if failure == nil {
+		return http.StatusServiceUnavailable, "The archive Mac could not open this photo."
+	}
+	sanitizedMessage := sanitizeRemotePhotoFailureMessage(failure.GetFailureMessage())
+	lowerMessage := strings.ToLower(sanitizedMessage)
+	switch failure.GetFailureCode() {
+	case federation.FailureCode_FAILURE_CODE_TIMEOUT:
+		return http.StatusGatewayTimeout, "Fetching the photo timed out on the archive Mac."
+	case federation.FailureCode_FAILURE_CODE_CANCELLED:
+		return http.StatusServiceUnavailable, "Fetching the photo was cancelled on the archive Mac."
+	case federation.FailureCode_FAILURE_CODE_NOT_FOUND:
+		return http.StatusNotFound, "Photo record was not found."
+	case federation.FailureCode_FAILURE_CODE_INVALID_INPUT:
+		if sanitizedMessage != "" {
+			return http.StatusBadRequest, sanitizedMessage
+		}
+		return http.StatusBadRequest, "Photo link is not valid."
+	case federation.FailureCode_FAILURE_CODE_PERMISSION,
+		federation.FailureCode_FAILURE_CODE_AUTHENTICATION:
+		if sanitizedMessage != "" {
+			return http.StatusServiceUnavailable, sanitizedMessage
+		}
+		return http.StatusServiceUnavailable, "The archive Mac does not have permission to read this photo."
+	case federation.FailureCode_FAILURE_CODE_UNAVAILABLE,
+		federation.FailureCode_FAILURE_CODE_ALREADY_UPDATING:
+		if sanitizedMessage != "" {
+			return http.StatusServiceUnavailable, sanitizedMessage
+		}
+		return http.StatusServiceUnavailable, "The photos archive is temporarily unavailable on the archive Mac."
+	case federation.FailureCode_FAILURE_CODE_LIBRARY_WORDED_OPERATION_FAILURE:
+		if strings.Contains(lowerMessage, "no photo has") || strings.Contains(lowerMessage, "not found") {
+			if sanitizedMessage != "" {
+				return http.StatusNotFound, sanitizedMessage
+			}
+			return http.StatusNotFound, "Photo record was not found."
+		}
+		if strings.Contains(lowerMessage, "timed out") || strings.Contains(lowerMessage, "deadline exceeded") {
+			return http.StatusGatewayTimeout, "Fetching the photo timed out on the archive Mac."
+		}
+		if sanitizedMessage != "" {
+			return http.StatusServiceUnavailable, sanitizedMessage
+		}
+		return http.StatusServiceUnavailable, "The archive Mac could not open this photo."
+	default:
+		if strings.Contains(lowerMessage, "timed out") || strings.Contains(lowerMessage, "deadline exceeded") {
+			return http.StatusGatewayTimeout, "Fetching the photo timed out on the archive Mac."
+		}
+		return http.StatusServiceUnavailable, "The archive Mac could not open this photo."
+	}
 }
 
 func remoteAppPhotoUnavailableError(openedPhoto *photo.OpenedPhotoRecord) (int, string) {

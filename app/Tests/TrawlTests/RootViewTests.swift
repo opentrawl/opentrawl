@@ -342,6 +342,19 @@ struct RootViewTests {
         == "Not fetched yet."
     )
     #expect(
+      OpenedPhotoPreviewView.shouldHideRawPicturePathField(
+        notFetchedField,
+        isPhotoRecord: true,
+        isRemoteArchive: true
+      )
+    )
+    #expect(
+      OpenedPhotoPreviewView.unavailableReason(
+        fromPictureFieldText: "Not fetched yet.",
+        isRemoteArchive: true
+      ) == nil
+    )
+    #expect(
       OpenedPhotoPreviewView.unavailableReason(
         fromPictureFieldText: "Available via remote photo endpoint."
       ) == nil

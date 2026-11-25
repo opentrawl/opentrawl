@@ -565,7 +565,8 @@ public struct HTTPTrawlClient: TrawlClient {
       throw TrawlClientError.remoteAccessDenied(Self.decodedServerErrorMessage(from: data))
     case 404 where unavailableErrorOnMissingOrServiceUnavailable,
       422 where unavailableErrorOnMissingOrServiceUnavailable,
-      503 where unavailableErrorOnMissingOrServiceUnavailable:
+      503 where unavailableErrorOnMissingOrServiceUnavailable,
+      504 where unavailableErrorOnMissingOrServiceUnavailable:
       throw TrawlClientError.remotePhotoUnavailable(Self.decodedServerErrorMessage(from: data))
     case 400, 404, 405:
       throw TrawlClientError.remoteRequestRejected(Self.decodedServerErrorMessage(from: data))

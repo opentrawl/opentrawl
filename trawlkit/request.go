@@ -25,6 +25,27 @@ func IsInternalAppRequest(ctx context.Context) bool {
 	return marked
 }
 
+type skipOnDemandPhotoPictureHydrationContextKey struct{}
+
+// WithSkipOnDemandPhotoPictureHydration tells the Photos trawler to return
+// stored photo facts and any already-cached picture path without downloading an
+// uncached picture from Apple Photos during OpenRecord. Remote app metadata
+// opens use this so the record opens immediately while the photo endpoint loads
+// the image bytes asynchronously.
+func WithSkipOnDemandPhotoPictureHydration(ctx context.Context) context.Context {
+	return context.WithValue(ctx, skipOnDemandPhotoPictureHydrationContextKey{}, true)
+}
+
+// ShouldSkipOnDemandPhotoPictureHydration reports whether OpenRecord should
+// skip on-demand picture downloads for uncached photos.
+func ShouldSkipOnDemandPhotoPictureHydration(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	skip, _ := ctx.Value(skipOnDemandPhotoPictureHydrationContextKey{}).(bool)
+	return skip
+}
+
 type RegisteredTrawlerDeclaration struct {
 	SearchMatchesResolvedPersonDisplayNames bool
 	RegisteredTrawler                       *RegisteredTrawlerIdentity

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/knownplacesfile"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photocard"
@@ -22,6 +23,8 @@ import (
 	presentation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation"
 	search "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/search"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -147,7 +150,9 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	if err != nil {
 		return nil, err
 	}
-	c.hydrateOpenedPhotoPictureIntoCache(ctx, req.TrawlerArchivePaths.TrawlerArchivePath, openedPhoto)
+	if !trawlkit.ShouldSkipOnDemandPhotoPictureHydration(ctx) {
+		c.hydrateOpenedPhotoPictureIntoCache(ctx, req.TrawlerArchivePaths.TrawlerArchivePath, openedPhoto)
+	}
 	photoReferences, err := req.LocalShortReferencesForCanonicalArchiveRecordReferences(ctx, []*trawlkit.CanonicalArchiveRecordReference{openedPhoto.GetCanonicalRecordReference()})
 	if err != nil {
 		return nil, err
@@ -166,12 +171,26 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.TrawlerCommandEx
 	return record, nil
 }
 
+const onDemandPictureFetchPersistTimeout = 5 * time.Second
+
+type onDemandPictureFetchKey struct {
+	photosArchivePath string
+	applePhotoUUID    string
+}
+
+type inFlightOnDemandPictureFetch struct {
+	done   chan struct{}
+	result *photo.PictureFetchResult
+	err    error
+}
+
 // hydrateOpenedPhotoPictureIntoCache restores an evicted or unfetched picture
-// into the local picture cache when a photo is opened, so CLI users, the Mac
-// app and remote MCP receive a real JPEG path on disk. A missing mirror folder
-// falls back to Apple Photos for this single photo; any fetch failure is
-// recorded on openedPhoto.PictureFetchResult so callers can show an honest
-// reason while leaving the text record intact.
+// into the local picture cache when a photo is opened, persists a newly fetched
+// result into photos.db so future opens hit the picture cache immediately, and
+// deduplicates concurrent fetches for the same Apple photo UUID. A missing
+// mirror folder falls back to Apple Photos for this single photo; any fetch
+// failure is recorded on openedPhoto.PictureFetchResult so callers can show an
+// honest reason while leaving the text record intact.
 func (c *Crawler) hydrateOpenedPhotoPictureIntoCache(ctx context.Context, photosArchivePath string, openedPhoto *photo.OpenedPhotoRecord) {
 	if openedPhoto == nil || openedPhoto.GetCachedPictureFilePath() != "" {
 		return
@@ -181,22 +200,110 @@ func (c *Crawler) hydrateOpenedPhotoPictureIntoCache(ctx context.Context, photos
 		return
 	}
 	fetchStep := c.fetchPictureStep(photosArchivePath, true)
-	hydrateOpenedPhotoPicture(
-		ctx,
-		openedPhoto,
-		func(ctx context.Context, request *photosstep.FetchPictureRequest) (*photo.PictureFetchResult, error) {
-			fetchedResult, err := fetchStep.RunPhotosStepOnOneInput(ctx, request)
+	cachedPicturePath := func(pictureSHA256 string) (string, bool) {
+		return fetchStep.PictureCache.CachedPictureFilePath(pictureSHA256)
+	}
+	fetchAndPersistOnce := func(fetchCtx context.Context, request *photosstep.FetchPictureRequest) (*photo.PictureFetchResult, error) {
+		var fetchedResult *photo.PictureFetchResult
+		var err error
+		if c.onDemandPictureFetchOverrideFunc != nil {
+			fetchedResult, err = c.onDemandPictureFetchOverrideFunc(fetchCtx, photosArchivePath, request)
+		} else {
+			fetchedResult, err = fetchStep.RunPhotosStepOnOneInput(fetchCtx, request)
 			var mirrorMissing *picturefetch.PictureMirrorFolderIsMissingError
 			if errors.As(err, &mirrorMissing) {
 				fetchStep.PictureMirrorFolder = nil
-				return fetchStep.RunPhotosStepOnOneInput(ctx, request)
+				fetchedResult, err = fetchStep.RunPhotosStepOnOneInput(fetchCtx, request)
 			}
-			return fetchedResult, err
+		}
+		if err == nil &&
+			fetchedResult.GetPictureFetchOutcome() == photo.PictureFetchOutcome_PICTURE_FETCH_OUTCOME_FETCHED {
+			if _, ok := cachedPicturePath(fetchedResult.GetPictureSha256()); ok {
+				_ = c.persistOnDemandPictureFetchResult(fetchCtx, photosArchivePath, fetchedResult)
+			}
+		}
+		return fetchedResult, err
+	}
+	hydrateOpenedPhotoPicture(
+		ctx,
+		openedPhoto,
+		func(callCtx context.Context, request *photosstep.FetchPictureRequest) (*photo.PictureFetchResult, error) {
+			return c.runDeduplicatedOnDemandPictureFetch(callCtx, photosArchivePath, request.GetApplePhotoUuid(), func(leaderCtx context.Context) (*photo.PictureFetchResult, error) {
+				return fetchAndPersistOnce(leaderCtx, request)
+			})
 		},
-		func(pictureSHA256 string) (string, bool) {
-			return fetchStep.PictureCache.CachedPictureFilePath(pictureSHA256)
-		},
+		cachedPicturePath,
+		nil,
 	)
+}
+
+func (c *Crawler) runDeduplicatedOnDemandPictureFetch(
+	ctx context.Context,
+	photosArchivePath string,
+	applePhotoUUID string,
+	fetchPicture func(context.Context) (*photo.PictureFetchResult, error),
+) (*photo.PictureFetchResult, error) {
+	key := onDemandPictureFetchKey{
+		photosArchivePath: photosArchivePath,
+		applePhotoUUID:    applePhotoUUID,
+	}
+	c.onDemandPictureFetchesMu.Lock()
+	if c.inFlightOnDemandPictureFetches == nil {
+		c.inFlightOnDemandPictureFetches = make(map[onDemandPictureFetchKey]*inFlightOnDemandPictureFetch)
+	}
+	call, alreadyInFlight := c.inFlightOnDemandPictureFetches[key]
+	if !alreadyInFlight {
+		call = &inFlightOnDemandPictureFetch{done: make(chan struct{})}
+		c.inFlightOnDemandPictureFetches[key] = call
+		go func(leaderCtx context.Context) {
+			defer func() {
+				c.onDemandPictureFetchesMu.Lock()
+				delete(c.inFlightOnDemandPictureFetches, key)
+				c.onDemandPictureFetchesMu.Unlock()
+				close(call.done)
+			}()
+			call.result, call.err = fetchPicture(leaderCtx)
+		}(context.WithoutCancel(ctx))
+	}
+	c.onDemandPictureFetchesMu.Unlock()
+
+	select {
+	case <-call.done:
+		if call.result == nil {
+			return nil, call.err
+		}
+		return proto.Clone(call.result).(*photo.PictureFetchResult), call.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (c *Crawler) persistOnDemandPictureFetchResult(
+	ctx context.Context,
+	photosArchivePath string,
+	fetchedResult *photo.PictureFetchResult,
+) error {
+	trimmedArchivePath := strings.TrimSpace(photosArchivePath)
+	if trimmedArchivePath == "" || fetchedResult == nil {
+		return nil
+	}
+	c.onDemandPictureFetchPersistMu.Lock()
+	defer c.onDemandPictureFetchPersistMu.Unlock()
+
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), onDemandPictureFetchPersistTimeout)
+	defer cancel()
+
+	writableStore, err := store.Open(writeCtx, store.Options{Path: trimmedArchivePath})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = writableStore.Close() }()
+
+	writableArchive, exists, err := photosarchive.UseExistingPhotosArchive(writeCtx, writableStore)
+	if err != nil || !exists {
+		return err
+	}
+	return writableArchive.StorePictureFetchResult(writeCtx, fetchedResult, time.Now().UTC())
 }
 
 func hydrateOpenedPhotoPicture(
@@ -204,6 +311,7 @@ func hydrateOpenedPhotoPicture(
 	openedPhoto *photo.OpenedPhotoRecord,
 	fetchPicture func(context.Context, *photosstep.FetchPictureRequest) (*photo.PictureFetchResult, error),
 	cachedPicturePath func(pictureSHA256 string) (string, bool),
+	persistPictureFetchResult func(context.Context, *photo.PictureFetchResult) error,
 ) {
 	if openedPhoto == nil || openedPhoto.GetCachedPictureFilePath() != "" {
 		return
@@ -228,6 +336,9 @@ func hydrateOpenedPhotoPicture(
 		if cachedPath, ok := cachedPicturePath(fetchedResult.GetPictureSha256()); ok {
 			openedPhoto.CachedPictureFilePath = cachedPath
 			openedPhoto.PictureFetchResult = fetchedResult
+			if persistPictureFetchResult != nil {
+				_ = persistPictureFetchResult(ctx, fetchedResult)
+			}
 			return
 		}
 		openedPhoto.PictureFetchResult = &photo.PictureFetchResult{

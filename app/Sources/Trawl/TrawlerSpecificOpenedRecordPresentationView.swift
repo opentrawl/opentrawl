@@ -17,7 +17,11 @@ struct TrawlerSpecificOpenedRecordPresentationView: View {
 
   private var visibleFieldsInDisplayOrder: [TrawlerSpecificCommandDetailPresentationField] {
     openedRecord.detailPresentation.fieldsInDisplayOrder.filter { field in
-      !OpenedPhotoPreviewView.shouldHideRawPicturePathField(field, isPhotoRecord: isPhotoRecord)
+      !OpenedPhotoPreviewView.shouldHideRawPicturePathField(
+        field,
+        isPhotoRecord: isPhotoRecord,
+        isRemoteArchive: isRemoteArchive
+      )
     }
   }
 

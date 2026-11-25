@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/applelibrary"
@@ -23,6 +24,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	federation "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation"
 	indexcontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/index"
+	photo "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photo"
 	photosstep "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/photos/step"
 	plugincontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/plugin"
 	updatecontract "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/update"
@@ -34,6 +36,14 @@ type Crawler struct {
 	photosConfiguration PhotosConfiguration
 	runCommandFlags     photosStepRunCommandFlags
 	photoListFlags      photoFieldListCommandFlags
+
+	readOnlyShortReferenceCatalogMu     sync.Mutex
+	cachedReadOnlyShortReferenceCatalog cachedPhotoReadOnlyShortReferenceCatalog
+
+	onDemandPictureFetchesMu         sync.Mutex
+	inFlightOnDemandPictureFetches   map[onDemandPictureFetchKey]*inFlightOnDemandPictureFetch
+	onDemandPictureFetchPersistMu    sync.Mutex
+	onDemandPictureFetchOverrideFunc func(context.Context, string, *photosstep.FetchPictureRequest) (*photo.PictureFetchResult, error)
 }
 
 type PhotosConfiguration struct {

@@ -2,10 +2,12 @@ package shortref
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"iter"
 	"math"
 	"math/big"
+	"math/bits"
 	"sort"
 	"strings"
 )
@@ -141,20 +143,26 @@ func buildWithAliasAvoidingAliases(fullRefs []string, startLength int, alias ali
 		startLength = MinLength
 	}
 
-	lengths := make(map[string]int, len(refs))
-	for _, ref := range refs {
-		lengths[ref] = startLength
+	lengths := make([]int, len(refs))
+	currentAliases := make([]string, len(refs))
+	needsAlias := make([]bool, len(refs))
+	for i := range refs {
+		lengths[i] = startLength
+		needsAlias[i] = true
 	}
 
 	for {
-		groups := make(map[string][]string, len(refs))
-		for _, ref := range refs {
-			length := lengths[ref]
+		groups := make(map[string][]int, len(refs))
+		for i, ref := range refs {
+			length := lengths[i]
 			if length > maxEncodedAliasLength {
 				return nil, fmt.Errorf("short ref collision did not resolve by %d characters", maxEncodedAliasLength)
 			}
-			currentAlias := alias(ref, length)
-			groups[currentAlias] = append(groups[currentAlias], ref)
+			if needsAlias[i] {
+				currentAliases[i] = alias(ref, length)
+				needsAlias[i] = false
+			}
+			groups[currentAliases[i]] = append(groups[currentAliases[i]], i)
 		}
 
 		extended := false
@@ -163,8 +171,9 @@ func buildWithAliasAvoidingAliases(fullRefs []string, startLength int, alias ali
 			if len(group) < 2 && !reserved {
 				continue
 			}
-			for _, ref := range group {
-				lengths[ref]++
+			for _, idx := range group {
+				lengths[idx]++
+				needsAlias[idx] = true
 			}
 			extended = true
 		}
@@ -174,9 +183,8 @@ func buildWithAliasAvoidingAliases(fullRefs []string, startLength int, alias ali
 	}
 
 	entries := make([]ShortReferenceEntry, 0, len(refs))
-	for _, ref := range refs {
-		length := lengths[ref]
-		entries = append(entries, ShortReferenceEntry{FullRef: ref, Alias: alias(ref, length)})
+	for i, ref := range refs {
+		entries = append(entries, ShortReferenceEntry{FullRef: ref, Alias: currentAliases[i]})
 	}
 	return entries, nil
 }
@@ -200,6 +208,27 @@ func encodedAlias(fullRef string) string {
 }
 
 func encodeBase31(raw []byte) string {
+	if len(raw) == sha256.Size {
+		w0 := binary.BigEndian.Uint64(raw[0:8])
+		w1 := binary.BigEndian.Uint64(raw[8:16])
+		w2 := binary.BigEndian.Uint64(raw[16:24])
+		w3 := binary.BigEndian.Uint64(raw[24:32])
+		const base = uint64(len(Alphabet))
+		var encoded [maxEncodedAliasLength]byte
+		for i := range encoded {
+			if (w0 | w1 | w2 | w3) == 0 {
+				encoded[i] = Alphabet[0]
+				continue
+			}
+			var rem uint64
+			w0, rem = bits.Div64(rem, w0, base)
+			w1, rem = bits.Div64(rem, w1, base)
+			w2, rem = bits.Div64(rem, w2, base)
+			w3, rem = bits.Div64(rem, w3, base)
+			encoded[i] = Alphabet[rem]
+		}
+		return string(encoded[:])
+	}
 	value := new(big.Int).SetBytes(raw)
 
 	base := big.NewInt(int64(len(Alphabet)))

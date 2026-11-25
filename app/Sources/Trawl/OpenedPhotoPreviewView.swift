@@ -20,6 +20,8 @@ struct OpenedPhotoPreviewView: View {
 
   private static let failedFetchPrefix = "Fetching the picture failed:"
   private static let remoteEndpointPlaceholder = "Available via remote photo endpoint."
+  private static let notFetchedYetText = "Not fetched yet."
+  private static let evictedFromCacheText = "Fetched; no longer in the picture cache."
 
   private struct PhotoLoadIdentity: Hashable {
     let trawlLink: GloballyRoutableTrawlLink
@@ -58,12 +60,18 @@ struct OpenedPhotoPreviewView: View {
     return nil
   }
 
-  static func unavailableReason(fromPictureFieldText rawText: String?) -> String? {
+  static func unavailableReason(
+    fromPictureFieldText rawText: String?,
+    isRemoteArchive: Bool = false
+  ) -> String? {
     guard let trimmed = rawText?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty
     else {
       return nil
     }
     if trimmed.hasPrefix("/") || trimmed == remoteEndpointPlaceholder {
+      return nil
+    }
+    if isRemoteArchive, trimmed == notFetchedYetText || trimmed == evictedFromCacheText {
       return nil
     }
     if trimmed.hasPrefix(failedFetchPrefix) {
@@ -76,11 +84,16 @@ struct OpenedPhotoPreviewView: View {
 
   static func shouldHideRawPicturePathField(
     _ field: TrawlerSpecificCommandDetailPresentationField,
-    isPhotoRecord: Bool
+    isPhotoRecord: Bool,
+    isRemoteArchive: Bool = false
   ) -> Bool {
     guard isPhotoRecord, field.fieldDisplayName == "Picture" else { return false }
+    if isRemoteArchive {
+      return true
+    }
     if case .text(let value) = field.fieldValue {
-      return value.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("/")
+      let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+      return trimmed.hasPrefix("/") || trimmed == remoteEndpointPlaceholder
     }
     return false
   }
@@ -242,7 +255,10 @@ struct OpenedPhotoPreviewView: View {
     }
 
     if retryAttempt == 0,
-      let alreadyFailedReason = Self.unavailableReason(fromPictureFieldText: pictureStatusFieldText)
+      let alreadyFailedReason = Self.unavailableReason(
+        fromPictureFieldText: pictureStatusFieldText,
+        isRemoteArchive: true
+      )
     {
       loadState = .unavailable(reason: alreadyFailedReason)
       return

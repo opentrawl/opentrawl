@@ -1,8 +1,10 @@
 package shortref
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
 	"strings"
 	"testing"
@@ -138,6 +140,41 @@ func TestBuildIsDeterministicAcrossInputOrder(t *testing.T) {
 	}
 	if !reflect.DeepEqual(forward, reverse) {
 		t.Fatalf("entries differ by input order: %#v != %#v", forward, reverse)
+	}
+}
+
+func TestEncodeBase31FastPathMatchesBigIntReference(t *testing.T) {
+	referenceEncode := func(raw []byte) string {
+		value := new(big.Int).SetBytes(raw)
+		base := big.NewInt(int64(len(Alphabet)))
+		mod := new(big.Int)
+		zero := big.NewInt(0)
+		encoded := make([]byte, maxEncodedAliasLength)
+		for i := range encoded {
+			if value.Cmp(zero) == 0 {
+				encoded[i] = Alphabet[0]
+				continue
+			}
+			value.DivMod(value, base, mod)
+			encoded[i] = Alphabet[mod.Int64()]
+		}
+		return string(encoded)
+	}
+
+	var allZeros [sha256.Size]byte
+	var allOnes [sha256.Size]byte
+	for i := range allOnes {
+		allOnes[i] = 0xff
+	}
+	inputs := [][]byte{allZeros[:], allOnes[:]}
+	for i := range 250 {
+		sum := sha256.Sum256([]byte(fmt.Sprintf("photos:00000000-0000-0000-0000-%012d", i)))
+		inputs = append(inputs, sum[:])
+	}
+	for _, raw := range inputs {
+		if got, want := encodeBase31(raw), referenceEncode(raw); got != want {
+			t.Fatalf("encodeBase31(%x) = %q, want %q", raw, got, want)
+		}
 	}
 }
 
