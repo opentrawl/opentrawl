@@ -132,8 +132,7 @@ func (c *Client) VerifyAccount(ctx context.Context) (AuthenticatedWebAccount, er
 func (c *Client) verifyAccountAttempt(ctx context.Context, forceRefresh bool) (AuthenticatedWebAccount, error) {
 	meta, _ := c.ensureWebMetadata(ctx, forceRefresh)
 	if strings.TrimSpace(meta.ViewerQueryID) == "" {
-		// Fallback to v1.1 account/settings.json if viewerQueryId was not found in bundles.
-		return c.verifyAccountViaSettings(ctx)
+		return AuthenticatedWebAccount{}, errors.New("web client bundles did not include viewerQuery")
 	}
 	varsMap := make(map[string]bool, len(meta.ViewerProvidedVariables))
 	for _, name := range meta.ViewerProvidedVariables {
@@ -150,8 +149,8 @@ func (c *Client) verifyAccountAttempt(ctx context.Context, forceRefresh bool) (A
 	if err != nil {
 		return AuthenticatedWebAccount{}, err
 	}
-	if statusCode == http.StatusNotFound || statusCode == http.StatusUnprocessableEntity {
-		return c.verifyAccountViaSettings(ctx)
+	if statusCode < 200 || statusCode >= 300 {
+		return AuthenticatedWebAccount{}, fmt.Errorf("web viewerQuery failed with HTTP %d", statusCode)
 	}
 	var payload struct {
 		Data struct {
@@ -204,76 +203,6 @@ type viewerContainer struct {
 	UserResults *struct {
 		Result *rawGraphQLUserResult `json:"result"`
 	} `json:"user_results"`
-}
-
-func (c *Client) verifyAccountViaSettings(ctx context.Context) (AuthenticatedWebAccount, error) {
-	paths := []string{
-		"/i/api/account/verify_credentials.json?skip_status=true&include_entities=false",
-		"/i/api/account/settings.json",
-	}
-	var lastErr error
-	for _, p := range paths {
-		body, obs, statusCode, err := c.doWebRequest(ctx, WebEndpointViewer, http.MethodGet, p, nil, "")
-		if err != nil {
-			var authErr *WebSessionAuthError
-			var rlErr *WebRateLimitedError
-			if errors.As(err, &authErr) || errors.As(err, &rlErr) {
-				return AuthenticatedWebAccount{}, err
-			}
-			lastErr = err
-			continue
-		}
-		if statusCode < 200 || statusCode >= 300 {
-			lastErr = fmt.Errorf("HTTP %d from %s", statusCode, p)
-			continue
-		}
-		var payload struct {
-			IDStr      string `json:"id_str"`
-			UserID     string `json:"user_id"`
-			UserIDStr  string `json:"user_id_str"`
-			ScreenName string `json:"screen_name"`
-			Name       string `json:"name"`
-			User       *struct {
-				IDStr      string `json:"id_str"`
-				ScreenName string `json:"screen_name"`
-				Name       string `json:"name"`
-			} `json:"user"`
-		}
-		if err := json.Unmarshal(body, &payload); err != nil {
-			lastErr = fmt.Errorf("decode %s: %w", p, err)
-			continue
-		}
-		userID := firstNonEmptyString(payload.IDStr, payload.UserID, payload.UserIDStr)
-		username := strings.TrimPrefix(strings.TrimSpace(payload.ScreenName), "@")
-		displayName := strings.TrimSpace(payload.Name)
-		if payload.User != nil {
-			if userID == "" {
-				userID = strings.TrimSpace(payload.User.IDStr)
-			}
-			if username == "" {
-				username = strings.TrimPrefix(strings.TrimSpace(payload.User.ScreenName), "@")
-			}
-			if displayName == "" {
-				displayName = strings.TrimSpace(payload.User.Name)
-			}
-		}
-		if isDigits(userID) && username != "" {
-			c.mu.Lock()
-			c.verifiedUserID = userID
-			c.mu.Unlock()
-			return AuthenticatedWebAccount{
-				UserID:      userID,
-				Username:    username,
-				DisplayName: firstNonEmptyString(displayName, username),
-				RateLimit:   obs,
-			}, nil
-		}
-		lastErr = fmt.Errorf("%s did not return user id and screen_name", p)
-	}
-	if lastErr != nil {
-		return AuthenticatedWebAccount{}, &WebSessionAuthError{Message: lastErr.Error()}
-	}
-	return AuthenticatedWebAccount{}, &WebSessionAuthError{Message: "X web session is not signed in"}
 }
 
 func (c *Client) FetchBookmarksPage(ctx context.Context, count int, cursor string) (WebTimelinePage, error) {

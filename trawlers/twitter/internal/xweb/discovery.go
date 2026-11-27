@@ -284,7 +284,6 @@ func appendImportedBundleURLs(queue []string, scriptURL, source string, seen map
 	if err != nil {
 		return queue
 	}
-	added := false
 	for _, dep := range jsImportPattern.FindAllStringSubmatch(source, -1) {
 		if len(dep) < 2 {
 			continue
@@ -299,11 +298,7 @@ func appendImportedBundleURLs(queue []string, scriptURL, source string, seen map
 		}
 		if _, already := seen[resolvedStr]; !already {
 			queue = append(queue, resolvedStr)
-			added = true
 		}
-	}
-	if added {
-		sortBundlesForDiscovery(queue)
 	}
 	return queue
 }
